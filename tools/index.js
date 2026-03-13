@@ -32,9 +32,5 @@ export const TOOLS = TOOL_DEFINITIONS.reduce((acc, tool) => {
 
 // 导出函数
 export {
-  queryOrder,
-  queryUser,
-  applyRefund,
-  calculatePoints,
   searchKnowledgeBase,
 };

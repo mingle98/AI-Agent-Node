@@ -1,5 +1,5 @@
 // ========== 技能路由（带元数据） ==========
-import { skillComplaintHandling } from './complaint.js';
+// import { skillComplaintHandling } from './complaint.js';
 
 // 技能定义（包含函数和元数据）
 export const SKILL_DEFINITIONS = [
@@ -25,9 +25,5 @@ export const SKILLS = SKILL_DEFINITIONS.reduce((acc, skill) => {
 
 // 导出函数
 export {
-  skillCompleteRefund,
-  skillVipService,
-  skillIntelligentRecommendation,
-  skillComplaintHandling,
-  skillDataAnalysis,
+  // skillComplaintHandling,
 };

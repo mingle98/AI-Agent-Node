@@ -1,6 +1,4 @@
 // Skill: 投诉处理流程
-
-import { queryOrder } from '../tools/order.js';
 import { mockDatabase } from '../data/mockDatabase.js';
 
 export async function skillComplaintHandling(orderId, complaintType, userName) {
@@ -11,7 +9,7 @@ export async function skillComplaintHandling(orderId, complaintType, userName) {
   
   // Step 1: 查询订单详情
   console.log(`  📋 步骤1/4: 查询订单详情...`);
-  const orderInfo = await queryOrder(orderId);
+  const orderInfo = '12345'
   steps.push(`订单信息: ${orderInfo}`);
   
   // Step 2: 评估投诉级别
