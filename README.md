@@ -1,6 +1,6 @@
-# AI Agent Node 简易框架
+# AI Agent Node 简易脚手架
 
-一个生产级的 AI Agent Node.js 脚手架，天然适配 [AISuspendedBallChat](https://www.npmjs.com/package/ai-suspended-ball-chat) 前端组件需要的接口规范，提供模块化架构、RAG 知识库检索、工具调用和技能管理等功能。
+一个生产级的 AI Agent Node.js 脚手架，提供模块化架构、RAG 知识库检索、工具调用和技能管理等功能。
 
 ## 🚀 特性
 
@@ -12,6 +12,8 @@
 - 🔄 **会话管理**: 多会话支持，自动上下文管理
 - 🛡️ **容错机制**: 熔断器、重试机制、降级策略
 - 🎨 **AISuspendedBallChat 兼容**: 完全符合 AISuspendedBallChat 组件接口规范
+ 
+![ai-agent-node.png](./imgs/ai-agent-node.png)
 
 ## 📋 系统要求
 
