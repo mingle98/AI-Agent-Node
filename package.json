@@ -1,0 +1,43 @@
+{
+  "name": "production-agent",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "生产级 AI Agent - 模块化架构（智能客服助手）",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js customer",
+    "demo:full": "node index.js",
+    "demo:customer": "node index.js customer",
+    "demo:skill": "node index.js skill",
+    "build:rag": "node scripts/buildRAG.js",
+    "rebuild:rag": "node scripts/buildRAG.js --force"
+  },
+  "keywords": [
+    "ai-agent",
+    "langchain",
+    "rag",
+    "chatbot",
+    "customer-service",
+    "tools",
+    "skills"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@langchain/classic": "^1.0.23",
+    "@langchain/community": "^1.1.23",
+    "@langchain/core": "^1.1.32",
+    "@langchain/openai": "^1.2.13",
+    "@langchain/textsplitters": "^1.0.1",
+    "dotenv": "^17.3.1",
+    "epub2": "^3.0.2",
+    "faiss-node": "^0.5.1",
+    "html-to-text": "^9.0.5",
+    "langchain": "^1.2.32",
+    "pdf-parse": "^2.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
