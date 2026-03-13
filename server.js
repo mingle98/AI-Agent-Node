@@ -170,8 +170,8 @@ app.post("/api/session/reset", async (req, res, next) => {
   try {
     const agent = await getAgent();
     const sessionId =
-      typeof req.body?.sessionId === "string" && req.body.sessionId.trim()
-        ? req.body.sessionId.trim()
+      typeof req.body?.session_id === "string" && req.body.session_id.trim()
+        ? req.body.session_id.trim()
         : "default";
     agent.reset(sessionId);
     res.json({ ok: true, sessionId });
