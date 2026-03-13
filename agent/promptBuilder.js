@@ -108,12 +108,14 @@ ${skillsList}`;
  */
 function buildRulesSection() {
   return `📋 使用规则：
-1. 简单查询 → 使用基础工具（如单纯查订单）
-2. 复杂流程 → 使用高级技能（如退款流程、投诉处理）
-3. 优先使用技能处理复杂场景，它们会自动完成多个步骤
-4. 需要调用能力时，优先选择最匹配的工具或技能
-5. 参数要完整、准确，避免无效调用
-6. 给出准确、友好、专业的回答`;
+1. 知识查询 → 使用 search_knowledge 工具（AI Agent资料、组件文档）
+2. 代码分析 → 使用 analyze_code 工具（解释逻辑、问题排查）
+3. 文档生成 → 使用 generate_document 工具（API文档、教程、README）
+4. 网络搜索 → 使用 web_search 工具（获取最新信息）
+5. 复杂场景 → 使用高级技能（教学、咨询、问答、对话管理）
+6. 优先使用技能处理综合场景，它们会自动完成多个步骤
+7. 参数要完整、准确，避免无效调用
+8. 给出准确、友好、专业的回答`;
 }
 
 /**
@@ -122,7 +124,10 @@ function buildRulesSection() {
 function buildExamplesSection(skillDefinitions) {
   // 可以根据技能定义自动生成示例
   const examples = [
-    '- "查询订单ORD001" → 用 query_order 工具',
+    '- "AI Agent是什么？" → 用 search_knowledge 工具查询',
+    '- "解释这段代码" → 用 analyze_code 工具分析',
+    '- "生成API文档" → 用 generate_document 工具创建',
+    '- "最新AI框架有哪些" → 用 web_search 工具搜索',
   ];
   
   // 从技能中提取示例
@@ -144,11 +149,11 @@ ${examples.join('\n')}`;
  */
 function generateSkillExample(skill) {
   const exampleMap = {
-    'complete_refund': '- "我要退款" → 用 complete_refund 技能（自动完成全流程）',
-    'vip_service': '- "我是VIP，有什么权益" → 用 vip_service 技能',
-    'intelligent_recommendation': '- "帮我推荐商品" → 用 intelligent_recommendation 技能',
-    'complaint_handling': '- "商品有问题，我要投诉" → 用 complaint_handling 技能',
-    'data_analysis': '- "帮我分析订单数据" → 用 data_analysis 技能',
+    'ai_agent_teaching': '- "教我AI Agent架构" → 用 ai_agent_teaching 技能（自动完成教学流程）',
+    'component_consulting': '- "如何配置流式响应" → 用 component_consulting 技能（组件使用指导）',
+    'code_explanation': '- "详细解释这段代码" → 用 code_explanation 技能（深度代码分析）',
+    'intelligent_qa': '- "AI Agent的规划能力是什么" → 用 intelligent_qa 技能（智能问答）',
+    'conversation_manage': '- "总结我们的对话" → 用 conversation_manage 技能（对话管理）',
   };
   
   return exampleMap[skill.name] || null;

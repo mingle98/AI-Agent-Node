@@ -72,7 +72,7 @@ export class ProductionAgent {
       TOOL_DEFINITIONS,
       SKILL_DEFINITIONS,
       {
-        roleName: this.options.roleName || "智能客服助手",
+        roleName: this.options.roleName || "智能问答助手",
         roleDescription: this.options.roleDescription || "可以帮助用户解决问题",
       }
     );

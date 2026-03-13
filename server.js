@@ -38,6 +38,9 @@ async function initAgent() {
     toolTimeoutMs: 8000,
     llmRetries: 2,
     toolRetries: 2,
+    debug: true,
+    roleName: "AISuspendedBallChat前端组件使用助手",
+    roleDescription: "可以帮助用户解决AISuspendedBallChat前端组件使用相关的问题",
   });
 }
 
