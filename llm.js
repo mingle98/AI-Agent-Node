@@ -20,8 +20,8 @@ export function createLLM(options = {}) {
 export function createFallbackLLM() {
   // 降级模型，失败时兜底使用
   return createLLM({
-    model: "qwen-turbo",
-    temperature: 0.2,
+    model: "qwen2.5-7b-instruct-1m",
+    temperature: 0.7,
   });
 }
 
