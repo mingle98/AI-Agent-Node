@@ -60,7 +60,7 @@ export class ProductionAgent {
 
     this.systemPrompt = this.buildSystemPrompt();
     this.callableDefinitions = this.buildCallableDefinitions();
-    console.log('🧧callableDefinitions:', JSON.stringify(this.callableDefinitions, null, 2));
+    // console.log('🧧callableDefinitions:', JSON.stringify(this.callableDefinitions, null, 2));
 
     // 兼容旧代码读取 this.messages
     this.sessions = new Map();
@@ -93,7 +93,7 @@ export class ProductionAgent {
       ...TOOL_DEFINITIONS.map((def) => ({ ...def, kind: "tool" })),
       ...SKILL_DEFINITIONS.map((def) => ({ ...def, kind: "skill" })),
     ];
-    console.log('🧧buildCallableDefinitions 所有定义:', allDefs);
+    // console.log('🧧buildCallableDefinitions 所有定义:', allDefs);
 
     const callableMap = new Map();
     for (const def of allDefs) {

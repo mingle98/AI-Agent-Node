@@ -60,7 +60,13 @@ app.use(express.json({ limit: "1mb" }));
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", CORS_ORIGIN);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+  const requestedHeaders = req.headers["access-control-request-headers"];
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    typeof requestedHeaders === "string" && requestedHeaders.trim()
+      ? requestedHeaders
+      : "Content-Type,Authorization,X-Requested-With"
+  );
   if (req.method === "OPTIONS") {
     res.status(204).end();
     return;
@@ -85,12 +91,12 @@ app.get("/health", async (req, res, next) => {
 app.post("/api/chat", async (req, res, next) => {
   try {
     const agent = await getAgent();
-    const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
+    const message = typeof req.body?.query === "string" ? req.body.query.trim() : "";
     const sessionId =
-      typeof req.body?.sessionId === "string" && req.body.sessionId.trim()
-        ? req.body.sessionId.trim()
+      typeof req.body?.session_id === "string" && req.body.session_id.trim()
+        ? req.body.session_id.trim()
         : "default";
-    const stream = req.body?.stream === true;
+    const stream = req.body?.isStream === true;
 
     if (!message) {
       res.status(400).json({ error: "message 不能为空" });
@@ -111,16 +117,13 @@ app.post("/api/chat", async (req, res, next) => {
     res.status(200);
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-transform");
-    res.setHeader("Connection", "keep-alive");
+    res.setHeader("Connection", "close");
     res.flushHeaders?.();
 
-    const sendEvent = (event, data) => {
-      res.write(`event: ${event}\n`);
-      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    const sendChunk = (payload) => {
+      res.write(`${JSON.stringify(payload)}\n\n`);
     };
-    let hasSentDone = false;
-
-    sendEvent("ready", { sessionId });
+    let hasSentEnd = false;
 
     try {
       const finalResponse = await agent.chat(
@@ -130,36 +133,28 @@ app.post("/api/chat", async (req, res, next) => {
             return;
           }
           if (chunk.type === "done") {
-            hasSentDone = true;
-            sendEvent("done", {
-              sessionId,
-              response: chunk.finalText || "",
-              stats: agent.getStats(sessionId),
-            });
+            hasSentEnd = true;
+            sendChunk({ code: 0, result: chunk.finalText || "", is_end: true });
             return;
           }
           if (chunk.type === "error") {
-            sendEvent("error", { message: chunk.message || "未知错误" });
+            hasSentEnd = true;
+            sendChunk({ code: 1, result: chunk.message || "未知错误", is_end: true });
             return;
           }
           if (chunk?.content) {
-            const eventName = chunk.type === "status" ? "status" : "chunk";
-            sendEvent(eventName, { content: chunk.content });
+            sendChunk({ code: 0, result: chunk.content, is_end: false });
           }
         },
         null,
         sessionId
       );
       // 兼容旧行为：如果底层没有发 done 事件，兜底补发一次
-      if (!hasSentDone) {
-        sendEvent("done", {
-          sessionId,
-          response: finalResponse,
-          stats: agent.getStats(sessionId),
-        });
+      if (!hasSentEnd) {
+        sendChunk({ code: 0, result: finalResponse, is_end: true });
       }
     } catch (error) {
-      sendEvent("error", { message: error.message || "未知错误" });
+      sendChunk({ code: 1, result: error.message || "未知错误", is_end: true });
     } finally {
       res.end();
     }
