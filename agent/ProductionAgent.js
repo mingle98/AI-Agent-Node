@@ -450,14 +450,14 @@ export class ProductionAgent {
           session.messages.push(aiResponse);
 
           if (CONFIG.streamEnabled) {
-            emitStreamEvent(chunkCallback, { type: "status", content: "\n[正在调用工具/技能...]\n" });
+            emitStreamEvent(chunkCallback, { type: "status", content: "\n --- \n⌛️  正在调用工具/技能... \n" });
           }
 
           for (const toolCall of toolCalls) {
             if (CONFIG.streamEnabled) {
               emitStreamEvent(chunkCallback, {
                 type: "status",
-                content: `\n[执行 ${toolCall.name}]\n`,
+                content: `\n🚀  执行 ${toolCall.name}...\n`,
               });
             }
             const result = await this.executeCallableWithResilience(
@@ -466,7 +466,12 @@ export class ProductionAgent {
               toolCall.args || {}
             );
             const content = typeof result === "string" ? result : JSON.stringify(result, null, 2);
-
+            if (CONFIG.streamEnabled) {
+              emitStreamEvent(chunkCallback, {
+                type: "status",
+                content: `\n✅  执行 ${toolCall.name} 完成\n\n --- \n`,
+              });
+            }
             session.messages.push(new ToolMessage({
               content,
               tool_call_id: toolCall.id,
