@@ -65,6 +65,9 @@ export class ProductionAgent {
     // 兼容旧代码读取 this.messages
     this.sessions = new Map();
     this.messages = this.getOrCreateSession(this.defaultSessionId).messages;
+
+    // 是否支持多模态（图片解析）
+    this.multimodalEnabled = options.multimodalEnabled !== false; // 默认开启
   }
 
   buildSystemPrompt() {
@@ -340,6 +343,60 @@ export class ProductionAgent {
     };
   }
 
+  /**
+   * 构建多模态 HumanMessage 内容
+   * @param {string|Object} input - 用户输入，可以是纯文本字符串或包含图片的对象
+   * @param {string} input.text - 用户输入的文本
+   * @param {Array<string>} input.images - 图片 URL 或 base64 编码数组
+   * @returns {HumanMessage} LangChain HumanMessage 实例
+   */
+  buildHumanMessage(input) {
+    // 纯文本输入（向后兼容）
+    if (typeof input === "string") {
+      return new HumanMessage(input);
+    }
+
+    // 多模态输入处理
+    if (input && typeof input === "object") {
+      const { text = "", images = [] } = input;
+      
+      // 如果没有图片或未启用多模态，按纯文本处理
+      if (!this.multimodalEnabled || !images || images.length === 0) {
+        return new HumanMessage(text);
+      }
+
+      // 构建多模态 content 数组
+      const content = [];
+      
+      if (text) {
+        content.push({ type: "text", text });
+      }
+
+      // 支持多种图片格式：URL 或 base64
+      for (const image of images) {
+        if (typeof image === "string") {
+          // 判断是 URL 还是 base64
+          if (image.startsWith("http://") || image.startsWith("https://") || image.startsWith("data:image/")) {
+            content.push({
+              type: "image_url",
+              image_url: { url: image },
+            });
+          } else {
+            // 假设是 base64，添加 data URI 前缀
+            content.push({
+              type: "image_url",
+              image_url: { url: `data:image/jpeg;base64,${image}` },
+            });
+          }
+        }
+      }
+
+      return new HumanMessage({ content });
+    }
+
+    return new HumanMessage(String(input));
+  }
+
   async chat(userInput, chunkCallback = null, fullResponseCallback = null, sessionId = this.defaultSessionId) {
     const session = this.getOrCreateSession(sessionId);
     this.messages = session.messages;
@@ -347,8 +404,14 @@ export class ProductionAgent {
     return withSessionLock(session, async () => {
       try {
         this.touchSession(session);
-        console.log(`👤 [${sessionId}] 用户: ${userInput}`);
-        session.messages.push(new HumanMessage(userInput));
+        // 记录日志时只显示文本部分
+        const logText = typeof userInput === "string" ? userInput : (userInput?.text || "[多模态输入]");
+        console.log(`👤 [${sessionId}] 用户: ${logText}`);
+        const addMessage = this.buildHumanMessage(userInput);
+        if (this.options.debug) {
+          console.log(`👤 [${sessionId}] 用户消息:`, addMessage);
+        }
+        session.messages.push(addMessage);
         await this.manageContext(session);
 
         let iterations = 0;

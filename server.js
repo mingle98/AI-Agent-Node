@@ -95,6 +95,8 @@ app.post("/api/chat", async (req, res, next) => {
   try {
     const agent = await getAgent();
     const message = typeof req.body?.query === "string" ? req.body.query.trim() : "";
+    const images = req.body?.images || [];
+    const imgBase64 = req.body?.imgBase64 || "";
     const sessionId =
       typeof req.body?.session_id === "string" && req.body.session_id.trim()
         ? req.body.session_id.trim()
@@ -105,12 +107,29 @@ app.post("/api/chat", async (req, res, next) => {
       res.status(400).json({ error: "message 不能为空" });
       return;
     }
+    let userMessages = message;
+      if (images && images.length > 0) {
+        userMessages = {
+          text: message,
+          images: images,
+        };
+    }
+    if (imgBase64) {
+      userMessages = {
+        text: message,
+        images: [imgBase64],
+      };
+    }
 
     if (!stream) {
-      const response = await agent.chat(message, null, null, sessionId);
+      const response = await agent.chat(userMessages, null, null, sessionId);
       res.json({
+        code: 0,
+        result: {
+           answer: response,
+        },
         sessionId,
-        message,
+        response,
         response,
         stats: agent.getStats(sessionId),
       });
@@ -130,14 +149,14 @@ app.post("/api/chat", async (req, res, next) => {
 
     try {
       const finalResponse = await agent.chat(
-        message,
+        userMessages,
         (chunk) => {
           if (!chunk) {
             return;
           }
           if (chunk.type === "done") {
             hasSentEnd = true;
-            sendChunk({ code: 0, result: chunk.finalText || "", is_end: true });
+            sendChunk({ code: 0, result: chunk.content || "", is_end: true });
             return;
           }
           if (chunk.type === "error") {
@@ -203,3 +222,21 @@ app.listen(PORT, HOST, () => {
   console.log("  POST /api/chat");
   console.log("  POST /api/session/reset");
 });
+
+
+// 测试代码
+// const testMain = async () => {
+//   const agent = await getAgent();
+//   const result = await agent.chat({
+//     text: "这个图片中有什么?",
+//     images: [
+//       'https://gips0.baidu.com/it/u=3602773692,1512483864&fm=3028&app=3028&f=JPEG&fmt=auto?w=960&h=1280'
+//     ]
+//   }, chunk => {
+//     // console.log(chunk);
+//     process.stdout.write(chunk.content);
+//   });
+//   // console.log(result);
+// };
+
+// testMain();
