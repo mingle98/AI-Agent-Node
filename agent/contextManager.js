@@ -81,10 +81,50 @@ export class ContextManager {
     }
 
     const conversationMessages = messages.filter(m => m._getType() !== 'system');
-    const keepCount = Math.min(this.config.maxHistoryMessages - 1, conversationMessages.length);
-    const recentMessages = conversationMessages.slice(-keepCount);
+    const desiredKeepCount = Math.min(this.config.maxHistoryMessages - 1, conversationMessages.length);
+    let startIndex = Math.max(0, conversationMessages.length - desiredKeepCount);
+
+    // LangChain/OpenAI 约束：role=tool 必须紧跟在带 tool_calls 的 assistant 消息之后。
+    // 简单 slice 可能会截断掉对应的 assistant(tool_calls) 或同一轮其它 tool 消息，导致 400。
+    // 这里在裁剪窗口左边界命中 tool 消息时，向前扩展到该轮 tool 调用开始的 assistant。
+    if (startIndex > 0) {
+      while (startIndex > 0 && conversationMessages[startIndex]._getType() === 'tool') {
+        let i = startIndex - 1;
+        while (i >= 0 && conversationMessages[i]._getType() === 'tool') {
+          i -= 1;
+        }
+        if (i >= 0 && conversationMessages[i]._getType() === 'ai') {
+          startIndex = i;
+        } else {
+          break;
+        }
+      }
+
+      // 同一轮 tool 调用：assistant(tool_calls) 后面可能有多个 tool 消息。
+      // 如果窗口起点已经包含该 assistant，则确保把其后的 tool 消息也包含在窗口里（避免只保留部分 tool）。
+      const firstKept = conversationMessages[startIndex];
+      if (firstKept && firstKept._getType() === 'ai') {
+        const hasToolCalls = Array.isArray(firstKept.tool_calls) && firstKept.tool_calls.length > 0;
+        if (hasToolCalls) {
+          let j = startIndex + 1;
+          while (j < conversationMessages.length && conversationMessages[j]._getType() === 'tool') {
+            j += 1;
+          }
+          // 保持总体条数不超过 maxHistoryMessages - 1：必要时把 startIndex 往后推
+          const expandedCount = conversationMessages.length - startIndex;
+          const maxKeep = this.config.maxHistoryMessages - 1;
+          if (expandedCount > maxKeep) {
+            startIndex = conversationMessages.length - maxKeep;
+          }
+        }
+      }
+    }
+
+    const recentMessages = conversationMessages.slice(startIndex);
+    const maxKeep = this.config.maxHistoryMessages - 1;
+    const boundedRecentMessages = recentMessages.length > maxKeep ? recentMessages.slice(-maxKeep) : recentMessages;
     
-    const result = [firstSystemMessage, ...recentMessages];
+    const result = [firstSystemMessage, ...boundedRecentMessages];
     console.log(`  ✅ 剪裁完成，保留 ${result.length} 条消息（丢弃 ${messages.length - result.length} 条）\n`);
     
     return result;
