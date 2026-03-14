@@ -47,14 +47,20 @@ async function initAgent() {
 const agentPromise = initAgent().catch((error) => {
   agentInitError = error;
   console.error("❌ Agent 初始化失败:", error.message);
-  throw error;
+  console.log("💡 服务将继续运行，但AI功能将受限");
+  // 不抛出错误，让服务继续运行
+  return null;
 });
 
 async function getAgent() {
   if (agentInitError) {
     throw agentInitError;
   }
-  return agentPromise;
+  const agent = await agentPromise;
+  if (!agent) {
+    throw new Error("Agent 初始化失败，请检查配置后重启服务");
+  }
+  return agent;
 }
 
 const app = express();
@@ -220,6 +226,17 @@ app.listen(PORT, HOST, () => {
   console.log("  GET  /health");
   console.log("  POST /api/chat");
   console.log("  POST /api/session/reset");
+});
+
+// 添加进程错误处理，防止服务意外退出
+process.on('uncaughtException', (error) => {
+  console.error('❌ 未捕获的异常:', error.message);
+  console.log('💡 服务继续运行...');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ 未处理的 Promise 拒绝:', reason);
+  console.log('💡 服务继续运行...');
 });
 
 
