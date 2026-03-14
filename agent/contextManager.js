@@ -111,6 +111,27 @@ export class ContextManager {
     return { oldTurns, recentTurns };
   }
 
+  ensureNoOrphanToolMessages(messages) {
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return messages;
+    }
+    // 如果截断后的首条是 tool，则向前查找最近的 ai(tool_calls) 并从那里开始
+    if (messages[0]?._getType?.() !== 'tool') {
+      return messages;
+    }
+    for (let i = 0; i < messages.length; i += 1) {
+      const msg = messages[i];
+      if (msg?._getType?.() !== 'ai') {
+        continue;
+      }
+      const hasToolCalls = Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0;
+      if (hasToolCalls) {
+        return messages.slice(i);
+      }
+    }
+    return messages;
+  }
+
   /**
    * 管理上下文（根据策略）
    * @param {Array} messages - 当前消息列表
@@ -229,6 +250,7 @@ export class ContextManager {
     if (recentMessages.length > keepRecent) {
       recentMessages = recentMessages.slice(-keepRecent);
     }
+    recentMessages = this.ensureNoOrphanToolMessages(recentMessages);
     const oldMessages = oldTurns.flat();
 
     if (oldMessages.length === 0) {
@@ -278,6 +300,7 @@ export class ContextManager {
     if (recentMessages.length > keepRecent) {
       recentMessages = recentMessages.slice(-keepRecent);
     }
+    recentMessages = this.ensureNoOrphanToolMessages(recentMessages);
     const oldMessages = oldTurns.flat();
 
     // 将旧对话存入向量库
@@ -339,6 +362,7 @@ export class ContextManager {
     if (recentMessages.length > keepRecent) {
       recentMessages = recentMessages.slice(-keepRecent);
     }
+    recentMessages = this.ensureNoOrphanToolMessages(recentMessages);
     const oldMessages = oldTurns.flat();
 
     if (oldMessages.length === 0) {
