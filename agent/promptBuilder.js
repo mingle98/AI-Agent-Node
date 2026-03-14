@@ -112,7 +112,8 @@ function buildRulesSection() {
 2. 代码分析 → 使用 analyze_code 工具（解释逻辑、问题排查）
 3. 文档生成 → 使用 generate_document 工具（API文档、教程、README）
 4. 数据搜索或可视化 → 使用ai_agent_echart技能(数据搜索和可视化)
-5. 复杂场景 → 使用高级技能（教学、咨询、问答、对话管理、需要数据搜索和可视化的场景）
+5. 画图/梳理逻辑/流程/时序/类关系/架构图 → 使用 mermaid_diagram 技能（用户不需要提 Mermaid，直接描述需求即可）
+5. 复杂场景 → 使用高级技能（教学、咨询、问答、Mermaid画图、需要数据搜索和可视化的场景）
 6. 优先使用技能处理综合场景，它们会自动完成多个步骤
 7. 参数要完整、准确，避免无效调用
 8. 给出准确、友好、专业的回答`;
@@ -128,6 +129,7 @@ function buildExamplesSection(skillDefinitions) {
     '- "解释这段代码" → 用 analyze_code 工具分析',
     '- "生成API文档" → 用 generate_document 工具创建',
     '- "今年的房价走势怎么样?" → 用 ai_agent_echart 进行数据搜索和可视化',
+    '- "帮我画个流程图梳理登录逻辑" → 用 mermaid_diagram 技能（生成可渲染的图）',
   ];
   
   // 从技能中提取示例
@@ -152,8 +154,7 @@ function generateSkillExample(skill) {
     'ai_agent_teaching': '- "教我AI Agent架构" → 用 ai_agent_teaching 技能（自动完成教学流程）',
     'component_consulting': '- "如何配置流式响应" → 用 component_consulting 技能（组件使用指导）',
     'code_explanation': '- "详细解释这段代码" → 用 code_explanation 技能（深度代码分析）',
-    // 'intelligent_qa': '- "AI Agent的规划能力是什么" → 用 intelligent_qa 技能（智能问答）',
-    'conversation_manage': '- "总结我们的对话" → 用 conversation_manage 技能（对话管理）',
+    'mermaid_diagram': '- "把这段逻辑用流程图/时序图画出来" → 用 mermaid_diagram 技能（生成图表代码块）',
   };
   
   return exampleMap[skill.name] || null;

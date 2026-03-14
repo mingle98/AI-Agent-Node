@@ -3,8 +3,8 @@ import { skillAIAgentTeaching } from './aiAgentTeaching.js';
 import { skillComponentConsulting } from './componentConsulting.js';
 import { skillCodeExplanation } from './codeExplanation.js';
 import { skillIntelligentQA } from './intelligentQA.js';
-import { skillConversationManage } from './conversationManage.js';
 import { skillAIAgentEchart } from './aiEchart.js';
+import { skillMermaidDiagram } from './mermaidDiagram.js';
 
 // 技能定义（包含函数和元数据）
 export const SKILL_DEFINITIONS = [
@@ -53,17 +53,6 @@ export const SKILL_DEFINITIONS = [
   //   example: 'intelligent_qa("什么是AI Agent的规划能力", "ai_agent")',
   // },
   {
-    name: "conversation_manage",
-    func: skillConversationManage,
-    description: "对话上下文管理",
-    functionality: "总结对话、澄清意图、维护多轮对话连贯性",
-    params: [
-      { name: "操作类型", type: "string", example: "summarize", options: ["summarize", "clarify", "continue", "reset"] },
-      { name: "上下文信息", type: "string", example: "用户想了解AI Agent架构", required: false }
-    ],
-    example: 'conversation_manage("summarize", "用户想了解AI Agent架构")',
-  },
-  {
     name: "ai_agent_echart",
     func: skillAIAgentEchart,
     description: "AI Agent ECharts 数据可视化",
@@ -72,6 +61,17 @@ export const SKILL_DEFINITIONS = [
       { name: "数据查询与可视化", type: "string", example: "2026年房价走势" },
     ],
     example: 'ai_agent_echart("2026年房价走势")',
+  },
+  {
+    name: "mermaid_diagram",
+    func: skillMermaidDiagram,
+    description: "Mermaid 图生成（从自然语言需求生成可渲染的 Mermaid 代码块）",
+    functionality: "用于'梳理逻辑/画流程图/画时序图/画类图'等场景，返回标准 ```mermaid 代码块 以便前端渲染",
+    params: [
+      { name: "图表需求描述", type: "string", example: "帮我梳理下这段代码的逻辑，并画出流程图" },
+      { name: "图表类型", type: "string", example: "auto", options: ["auto", "flowchart", "sequence", "gantt", "pie", "class", "state", "er", "journey", "mindmap", "timeline", "gitgraph"] }
+    ],
+    example: 'mermaid_diagram("帮我梳理下代码的逻辑", "auto")',
   },
 ];
 
@@ -87,6 +87,6 @@ export {
   skillComponentConsulting,
   skillCodeExplanation,
   skillIntelligentQA,
-  skillConversationManage,
   skillAIAgentEchart,
+  skillMermaidDiagram,
 };

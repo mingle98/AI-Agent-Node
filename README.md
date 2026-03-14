@@ -175,13 +175,14 @@ import { SuspendedBallChat } from 'ai-suspended-ball-chat'
 
 ### 已支持的技能
 
-| 技能名称　　　　　　　 | 功能描述　　　　　　　　　　 | 参数　　　　　　　　 | 示例　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　|
-| ------------------------| ------------------------------| ----------------------| -----------------------------------------------------------------|
-| `ai_agent_teaching`　　| AI Agent 知识教学　　　　　　| 教学主题, 难度级别　 | `ai_agent_teaching("ReAct架构", "beginner")`　　　　　　　　　　|
-| `component_consulting` | AISuspendedBallChat 组件咨询 | 咨询问题, 组件名称　 | `component_consulting("如何配置流式响应", "SuspendedBallChat")` |
-| `code_explanation`　　 | 代码解释与教学　　　　　　　 | 代码内容, 详细程度　 | `code_explanation("async function fetchData()", "detailed")`　　|
-| `conversation_manage`　| 对话上下文管理　　　　　　　 | 操作类型, 上下文信息 | `conversation_manage("summarize", "用户想了解AI Agent架构")`　　|
-| `ai_agent_echart`　　　| 数据查询与可视化　　　　　　 | 相关数据需求　　　　 | `ai_agent_echart("今年的金价走势怎么样?")`　　　　　　　　　　　|
+| 技能名称　　　　　　　 | 功能描述　　　　　　　　　　 | 参数　　　　　　　 | 示例　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　|
+| ------------------------| ------------------------------| --------------------| -----------------------------------------------------------------|
+| `ai_agent_teaching`　　| AI Agent 知识教学　　　　　　| 教学主题, 难度级别 | `ai_agent_teaching("ReAct架构", "beginner")`　　　　　　　　　　|
+| `component_consulting` | AISuspendedBallChat 组件咨询 | 咨询问题, 组件名称 | `component_consulting("如何配置流式响应", "SuspendedBallChat")` |
+| `code_explanation`　　 | 代码解释与教学　　　　　　　 | 代码内容, 详细程度 | `code_explanation("async function fetchData()", "detailed")`　　|
+| `mermaid_diagram`　　　| 画流程/时序/类关系/架构图　　 | 图表需求描述, 图表类型 | `mermaid_diagram("帮我把登录逻辑梳理成流程图", "auto")`　　　　|
+| `ai_agent_echart`　　　| 数据查询与可视化　　　　　　 | 相关数据需求　　　 | `ai_agent_echart("今年的金价走势怎么样?")`　　　　　　　　　　　|
+
 
 ### 配置选项
 
