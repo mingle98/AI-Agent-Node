@@ -111,8 +111,8 @@ function buildRulesSection() {
 1. 知识查询 → 使用 search_knowledge 工具（AI Agent资料、组件文档）
 2. 代码分析 → 使用 analyze_code 工具（解释逻辑、问题排查）
 3. 文档生成 → 使用 generate_document 工具（API文档、教程、README）
-4. 网络搜索 → 使用 web_search 工具（获取最新信息）
-5. 复杂场景 → 使用高级技能（教学、咨询、问答、对话管理）
+4. 数据搜索或可视化 → 使用ai_agent_echart技能(数据搜索和可视化)
+5. 复杂场景 → 使用高级技能（教学、咨询、问答、对话管理、需要数据搜索和可视化的场景）
 6. 优先使用技能处理综合场景，它们会自动完成多个步骤
 7. 参数要完整、准确，避免无效调用
 8. 给出准确、友好、专业的回答`;
@@ -127,7 +127,7 @@ function buildExamplesSection(skillDefinitions) {
     '- "AI Agent是什么？" → 用 search_knowledge 工具查询',
     '- "解释这段代码" → 用 analyze_code 工具分析',
     '- "生成API文档" → 用 generate_document 工具创建',
-    '- "最新AI框架有哪些" → 用 web_search 工具搜索',
+    '- "今年的房价走势怎么样?" → 用 ai_agent_echart 进行数据搜索和可视化',
   ];
   
   // 从技能中提取示例

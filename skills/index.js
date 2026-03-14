@@ -4,6 +4,7 @@ import { skillComponentConsulting } from './componentConsulting.js';
 import { skillCodeExplanation } from './codeExplanation.js';
 import { skillIntelligentQA } from './intelligentQA.js';
 import { skillConversationManage } from './conversationManage.js';
+import { skillAIAgentEchart } from './aiEchart.js';
 
 // 技能定义（包含函数和元数据）
 export const SKILL_DEFINITIONS = [
@@ -62,6 +63,16 @@ export const SKILL_DEFINITIONS = [
     ],
     example: 'conversation_manage("summarize", "用户想了解AI Agent架构")',
   },
+  {
+    name: "ai_agent_echart",
+    func: skillAIAgentEchart,
+    description: "AI Agent ECharts 数据可视化",
+    functionality: "根据用户有关数据查询场景的需求生成可渲染的 ECharts option（JSON）",
+    params: [
+      { name: "数据查询与可视化", type: "string", example: "2026年房价走势" },
+    ],
+    example: 'ai_agent_echart("2026年房价走势")',
+  },
 ];
 
 // 生成技能映射表
@@ -77,4 +88,5 @@ export {
   skillCodeExplanation,
   skillIntelligentQA,
   skillConversationManage,
+  skillAIAgentEchart,
 };

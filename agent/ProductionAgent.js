@@ -51,8 +51,8 @@ export class ProductionAgent {
     this.maxSessions = options.maxSessions || 300; // 默认最多保留300个会话
 
     this.resilience = {
-      llmTimeoutMs: options.llmTimeoutMs || 25000,
-      toolTimeoutMs: options.toolTimeoutMs || 8000,
+      llmTimeoutMs: options.llmTimeoutMs || 5 * 60 * 1000,
+      toolTimeoutMs: options.toolTimeoutMs || 5 * 60 * 1000,
       llmRetries: options.llmRetries || 2,
       toolRetries: options.toolRetries || 2,
       retryBaseDelayMs: options.retryBaseDelayMs || 250,
@@ -465,6 +465,7 @@ export class ProductionAgent {
               toolCall.name,
               toolCall.args || {}
             );
+            console.log(`【TOOL】执行 ${toolCall.name}结果:${JSON.stringify(result)}`)
             const content = typeof result === "string" ? result : JSON.stringify(result, null, 2);
             if (CONFIG.streamEnabled) {
               emitStreamEvent(chunkCallback, {

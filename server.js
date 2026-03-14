@@ -34,8 +34,8 @@ async function initAgent() {
   return new ProductionAgent(llm, vectorStore, embeddings, {
     contextStrategy: "trim",
     fallbackLlm,
-    llmTimeoutMs: 25000,
-    toolTimeoutMs: 8000,
+    llmTimeoutMs: 5 * 60000,
+    toolTimeoutMs: 5 * 60000,
     llmRetries: 2,
     toolRetries: 2,
     debug: true,

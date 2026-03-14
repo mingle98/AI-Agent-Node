@@ -1,6 +1,5 @@
 // ========== 工具路由（带元数据） ==========
 import { searchKnowledgeBase } from './knowledge.js';
-import { webSearch } from './webSearch.js';
 import { analyzeCode } from './codeAnalyzer.js';
 import { generateDocument } from './document.js';
 
@@ -15,15 +14,6 @@ export const TOOL_DEFINITIONS = [
     ],
     example: 'search_knowledge("AI Agent架构设计")',
     special: true,
-  },
-  {
-    name: "web_search",
-    func: (query) => webSearch(query),
-    description: "搜索互联网获取最新信息，补充知识库以外的内容",
-    params: [
-      { name: "搜索关键词", type: "string", example: "最新AI Agent框架2024" }
-    ],
-    example: 'web_search("最新AI Agent框架2024")',
   },
   {
     name: "analyze_code",
@@ -57,7 +47,6 @@ export const TOOLS = TOOL_DEFINITIONS.reduce((acc, tool) => {
 // 导出函数
 export {
   searchKnowledgeBase,
-  webSearch,
   analyzeCode,
   generateDocument,
 };

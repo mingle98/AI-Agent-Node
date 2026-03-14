@@ -167,22 +167,22 @@ import { SuspendedBallChat } from 'ai-suspended-ball-chat'
 
 ### 已支持的工具
 
-| 工具名称 | 功能描述 | 参数 | 示例 |
-|---------|---------|------|------|
-| `search_knowledge` | 搜索本地知识库 | 查询内容 | `search_knowledge("AI Agent架构设计")` |
-| `web_search` | 互联网搜索 | 搜索关键词 | `web_search("最新AI Agent框架2024")` |
-| `analyze_code` | 代码分析 | 代码内容, 编程语言 | `analyze_code("function add(a,b){return a+b}", "javascript")` |
-| `generate_document` | 文档生成 | 文档主题, 文档类型, 大纲 | `generate_document("AI Agent快速入门", "tutorial", "1.简介 2.安装")` |
+| 工具名称　　　　　　| 功能描述　　　 | 参数　　　　　　　　　　 | 示例　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 |
+| ---------------------| ----------------| --------------------------| ----------------------------------------------------------------------|
+| `search_knowledge`　| 搜索本地知识库 | 查询内容　　　　　　　　 | `search_knowledge("AI Agent架构设计")`　　　　　　　　　　　　　　　 |
+| `analyze_code`　　　| 代码分析　　　 | 代码内容, 编程语言　　　 | `analyze_code("function add(a,b){return a+b}", "javascript")`　　　　|
+| `generate_document` | 文档生成　　　 | 文档主题, 文档类型, 大纲 | `generate_document("AI Agent快速入门", "tutorial", "1.简介 2.安装")` |
 
 ### 已支持的技能
 
-| 技能名称 | 功能描述 | 参数 | 示例 |
-|---------|---------|------|------|
-| `ai_agent_teaching` | AI Agent 知识教学 | 教学主题, 难度级别 | `ai_agent_teaching("ReAct架构", "beginner")` |
-| `component_consulting` | AISuspendedBallChat 组件咨询 | 咨询问题, 组件名称 | `component_consulting("如何配置流式响应", "SuspendedBallChat")` |
-| `code_explanation` | 代码解释与教学 | 代码内容, 详细程度 | `code_explanation("async function fetchData()", "detailed")` |
-| `intelligent_qa` | 智能问答 | 问题, 知识领域 | `intelligent_qa("什么是AI Agent的规划能力", "ai_agent")` |
-| `conversation_manage` | 对话上下文管理 | 操作类型, 上下文信息 | `conversation_manage("summarize", "用户想了解AI Agent架构")` |
+| 技能名称　　　　　　　 | 功能描述　　　　　　　　　　 | 参数　　　　　　　　 | 示例　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　|
+| ------------------------| ------------------------------| ----------------------| -----------------------------------------------------------------|
+| `ai_agent_teaching`　　| AI Agent 知识教学　　　　　　| 教学主题, 难度级别　 | `ai_agent_teaching("ReAct架构", "beginner")`　　　　　　　　　　|
+| `component_consulting` | AISuspendedBallChat 组件咨询 | 咨询问题, 组件名称　 | `component_consulting("如何配置流式响应", "SuspendedBallChat")` |
+| `code_explanation`　　 | 代码解释与教学　　　　　　　 | 代码内容, 详细程度　 | `code_explanation("async function fetchData()", "detailed")`　　|
+| `intelligent_qa`　　　 | 智能问答　　　　　　　　　　 | 问题, 知识领域　　　 | `intelligent_qa("什么是AI Agent的规划能力", "ai_agent")`　　　　|
+| `conversation_manage`　| 对话上下文管理　　　　　　　 | 操作类型, 上下文信息 | `conversation_manage("summarize", "用户想了解AI Agent架构")`　　|
+| `ai_agent_echart`　　　| 数据查询与可视化 | 相关数据需求 | `ai_agent_echart("今年的金价走势怎么样?")`　　|
 
 ### 配置选项
 
@@ -303,8 +303,8 @@ ${skillDefinitions.map(skill => `- ${skill.name}: ${skill.description}`).join('\
 const agent = new ProductionAgent(llm, vectorStore, embeddings, {
   contextStrategy: "trim",           // 上下文策略: trim, summarize, vector, hybrid
   fallbackLlm: fallbackLlm,           // 降级模型
-  llmTimeoutMs: 25000,               // LLM 超时时间
-  toolTimeoutMs: 8000,                // 工具执行超时时间
+  llmTimeoutMs: 5 * 60 * 1000,               // LLM 超时时间
+  toolTimeoutMs: 5 * 60 * 1000,                 // 工具执行超时时间
   llmRetries: 2,                     // LLM 重试次数
   toolRetries: 2,                    // 工具重试次数
   debug: true,                       // 调试模式

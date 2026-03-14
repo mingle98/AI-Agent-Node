@@ -29,7 +29,7 @@ export async function retryWithBackoff(fn, options = {}) {
   const {
     maxAttempts = 2,
     baseDelayMs = 200,
-    maxDelayMs = 2000,
+    maxDelayMs = 3 * 60 * 1000,
     factor = 2,
     shouldRetry = () => true,
   } = options;
