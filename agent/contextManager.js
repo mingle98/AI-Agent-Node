@@ -81,51 +81,93 @@ export class ContextManager {
     }
 
     const conversationMessages = messages.filter(m => m._getType() !== 'system');
-    const desiredKeepCount = Math.min(this.config.maxHistoryMessages - 1, conversationMessages.length);
-    let startIndex = Math.max(0, conversationMessages.length - desiredKeepCount);
+    const maxKeep = this.config.maxHistoryMessages - 1;
+    if (conversationMessages.length <= maxKeep) {
+      return [firstSystemMessage, ...conversationMessages];
+    }
 
-    // LangChain/OpenAI 约束：role=tool 必须紧跟在带 tool_calls 的 assistant 消息之后。
-    // 简单 slice 可能会截断掉对应的 assistant(tool_calls) 或同一轮其它 tool 消息，导致 400。
-    // 这里在裁剪窗口左边界命中 tool 消息时，向前扩展到该轮 tool 调用开始的 assistant。
-    if (startIndex > 0) {
-      while (startIndex > 0 && conversationMessages[startIndex]._getType() === 'tool') {
-        let i = startIndex - 1;
-        while (i >= 0 && conversationMessages[i]._getType() === 'tool') {
-          i -= 1;
+    // 按 turn 裁剪：一个 turn 从 human 开始，到下一个 human 之前结束。
+    // turn 内可能包含 tool 调用序列（ai(tool_calls) + tool... + ai），必须整体保留/整体丢弃。
+    const turns = [];
+    let current = [];
+    for (const msg of conversationMessages) {
+      const type = msg?._getType?.() || 'unknown';
+      if (type === 'human') {
+        if (current.length > 0) {
+          turns.push(current);
         }
-        if (i >= 0 && conversationMessages[i]._getType() === 'ai') {
-          startIndex = i;
+        current = [msg];
+      } else {
+        if (current.length === 0) {
+          // 没有 human 起点的残留消息（例如历史不完整），放入一个“前置段”turn，避免丢结构
+          current = [msg];
         } else {
-          break;
-        }
-      }
-
-      // 同一轮 tool 调用：assistant(tool_calls) 后面可能有多个 tool 消息。
-      // 如果窗口起点已经包含该 assistant，则确保把其后的 tool 消息也包含在窗口里（避免只保留部分 tool）。
-      const firstKept = conversationMessages[startIndex];
-      if (firstKept && firstKept._getType() === 'ai') {
-        const hasToolCalls = Array.isArray(firstKept.tool_calls) && firstKept.tool_calls.length > 0;
-        if (hasToolCalls) {
-          let j = startIndex + 1;
-          while (j < conversationMessages.length && conversationMessages[j]._getType() === 'tool') {
-            j += 1;
-          }
-          // 保持总体条数不超过 maxHistoryMessages - 1：必要时把 startIndex 往后推
-          const expandedCount = conversationMessages.length - startIndex;
-          const maxKeep = this.config.maxHistoryMessages - 1;
-          if (expandedCount > maxKeep) {
-            startIndex = conversationMessages.length - maxKeep;
-          }
+          current.push(msg);
         }
       }
     }
+    if (current.length > 0) {
+      turns.push(current);
+    }
 
-    const recentMessages = conversationMessages.slice(startIndex);
-    const maxKeep = this.config.maxHistoryMessages - 1;
-    const boundedRecentMessages = recentMessages.length > maxKeep ? recentMessages.slice(-maxKeep) : recentMessages;
+    // 从后往前累加 turns，直到达到 maxKeep
+    const keptTurnsReversed = [];
+    let total = 0;
+    for (let i = turns.length - 1; i >= 0; i -= 1) {
+      const turn = turns[i];
+      if (total + turn.length > maxKeep) {
+        break;
+      }
+      keptTurnsReversed.push(turn);
+      total += turn.length;
+    }
+
+    // 如果一个 turn 都塞不下（极端情况：单轮太长），则退化为从该 turn 末尾截取 maxKeep，
+    // 并在截取时确保 tool 消息不会孤立：若截断点落在 tool 上，则向前补齐到 ai(tool_calls)。
+    let boundedRecentMessages;
+    if (keptTurnsReversed.length === 0) {
+      const lastTurn = turns[turns.length - 1] || [];
+      boundedRecentMessages = lastTurn.slice(-maxKeep);
+
+      // tool 安全截断：如果起点是 tool，回溯到该轮最近的 ai(tool_calls)
+      while (boundedRecentMessages.length > 0 && boundedRecentMessages[0]?._getType?.() === 'tool') {
+        const idxInTurn = lastTurn.indexOf(boundedRecentMessages[0]);
+        let k = idxInTurn - 1;
+        while (k >= 0) {
+          const candidate = lastTurn[k];
+          if (candidate?._getType?.() === 'ai') {
+            const hasToolCalls = Array.isArray(candidate.tool_calls) && candidate.tool_calls.length > 0;
+            if (hasToolCalls) {
+              boundedRecentMessages = lastTurn.slice(k).slice(-maxKeep);
+            }
+            break;
+          }
+          k -= 1;
+        }
+        break;
+      }
+    } else {
+      const keptTurns = keptTurnsReversed.reverse();
+      boundedRecentMessages = keptTurns.flat();
+    }
     
     const result = [firstSystemMessage, ...boundedRecentMessages];
     console.log(`  ✅ 剪裁完成，保留 ${result.length} 条消息（丢弃 ${messages.length - result.length} 条）\n`);
+
+    // 辅助定位：输出裁剪后消息类型序列（仅用于排查 tool/tool_calls 配对问题）
+    try {
+      const types = result.map((m) => {
+        const t = m?._getType?.() || 'unknown';
+        if (t === 'ai') {
+          const hasToolCalls = Array.isArray(m.tool_calls) && m.tool_calls.length > 0;
+          return hasToolCalls ? 'ai(tool_calls)' : 'ai';
+        }
+        return t;
+      });
+      console.log(`  🧩 剪裁后消息序列: ${types.join(' -> ')}`);
+    } catch (e) {
+      // ignore
+    }
     
     return result;
   }
