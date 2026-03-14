@@ -144,6 +144,7 @@ data: {"code":0,"result":"、做出决策并执行行动的智能系统。","is_
           const processedParams = {
             ...baseParams,
             ...customParams,
+            isStream: true,  // 启用流式响应
             session_id: sessionId,
             timestamp: timestamp,
             request_id: 'req_' + timestamp + '_' + Math.random().toString(36).substr(2, 6),
