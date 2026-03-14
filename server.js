@@ -130,7 +130,6 @@ app.post("/api/chat", async (req, res, next) => {
         },
         sessionId,
         response,
-        response,
         stats: agent.getStats(sessionId),
       });
       return;
@@ -143,7 +142,7 @@ app.post("/api/chat", async (req, res, next) => {
     res.flushHeaders?.();
 
     const sendChunk = (payload) => {
-      res.write(`${JSON.stringify(payload)}\n\n`);
+      res.write(`data: ${JSON.stringify(payload)}\n\n`);
     };
     let hasSentEnd = false;
 

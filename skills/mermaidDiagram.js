@@ -28,8 +28,14 @@ export async function skillMermaidDiagram(request, diagramType = "auto") {
 
 生成要求（必须严格遵守）：
 1)、你需要根据用户需求，生成一个 Mermaid 图（优先使用最能表达逻辑的图类型；如果 diagramType=auto 则你自行选择）。
-2)、最终只输出 Mermaid 代码块，不要输出任何额外解释/说明文字，以便前端直接渲染。
-3)、输出格式必须是：\n\n\u0060\u0060\u0060mermaid\n...\n\u0060\u0060\u0060\n\n4)、常见映射：
+2)、你必须使用“两段式输出”：
+   - 第一步：先生成 Mermaid 源码（只生成 mermaid 源码文本，不要包含 \u0060\u0060\u0060mermaid 代码块包裹）。
+   - 第二步：调用 render_mermaid 工具，将“图表类型 + Mermaid 源码”传入，由工具返回标准 \u0060\u0060\u0060mermaid 代码块。
+3)、禁止直接在对话里输出 Mermaid 代码块；必须通过 render_mermaid 工具的返回值来输出最终结果。
+4)、render_mermaid 调用参数规范：
+   - arg1: 图表类型（flowchart/sequence/gantt/pie/class/...；如果 diagramType=auto，请你根据生成内容选择一种最合适的类型传入）
+   - arg2: Mermaid 源码主体（不含开头 \u0060\u0060\u0060mermaid 和结尾 \u0060\u0060\u0060）
+5)、常见映射：
 - 流程/逻辑/分支/步骤 → flowchart（graph TD）
 - 交互时序/请求响应 → sequence（sequenceDiagram）
 - 进度排期 → gantt（gantt）
@@ -121,7 +127,7 @@ classDiagram
     ChatPanel --> SuspendedBallChat : contains
 \u0060\u0060\u0060
 
-如果用户信息不足以生成准确图，请先在同一次回复中把图做成“合理假设版”（仍然只输出 Mermaid 代码块），并在图中用节点/注释表达假设点（但不要在代码块外写解释）。`;
+如果用户信息不足以生成准确图，请先把图做成“合理假设版”，并在 Mermaid 源码中用节点/注释表达假设点。`;
   } catch (error) {
     return `Mermaid图生成技能执行失败: ${error.message}`;
   }

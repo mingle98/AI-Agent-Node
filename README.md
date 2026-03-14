@@ -42,7 +42,13 @@ yarn install
 
 复制并编辑 `.env` 文件：
 
+安全提示：
+- 请勿将真实的 API Key（例如 DashScope/OpenAI）提交到 Git 仓库
+- 建议仅提交 `.env.example`，本地使用 `.env`
+
 ```bash
+cp .env.example .env
+
 # 如果使用阿里云的模型请前往"阿里云官网"获取你的API_KEY: https://bailian.console.aliyun.com/cn-beijing/?tab=model#/api-key
 
 # 选择 Embedding 提供商: openai 或 aliyun
@@ -88,10 +94,14 @@ Content-Type: application/json
 
 **流式响应示例：**
 ```
-{"code":0,"result":"AI Agent","is_end":false}
-{"code":0,"result":" 是一种","is_end":false}
-{"code":0,"result":"能够自主感知环境","is_end":false}
-{"code":0,"result":"、做出决策并执行行动的智能系统。","is_end":true}
+data: {"code":0,"result":"AI Agent","is_end":false}
+
+data: {"code":0,"result":" 是一种","is_end":false}
+
+data: {"code":0,"result":"能够自主感知环境","is_end":false}
+
+data: {"code":0,"result":"、做出决策并执行行动的智能系统。","is_end":true}
+
 ```
 
 ## 🎯 与 AISuspendedBallChat 组件集成

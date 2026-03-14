@@ -2,6 +2,7 @@
 import { searchKnowledgeBase } from './knowledge.js';
 import { analyzeCode } from './codeAnalyzer.js';
 import { generateDocument } from './document.js';
+import { renderMermaid } from './mermaid.js';
 
 // 工具定义（包含函数和元数据）
 export const TOOL_DEFINITIONS = [
@@ -36,6 +37,16 @@ export const TOOL_DEFINITIONS = [
     ],
     example: 'generate_document("AI Agent快速入门", "tutorial", "1.简介 2.安装 3.快速开始")',
   },
+  {
+    name: "render_mermaid",
+    func: (diagramOrType, body) => renderMermaid(diagramOrType, body),
+    description: "将 Mermaid 源码渲染为标准 ```mermaid 代码块（支持直接传源码，或传 图表类型+内容 自动拼装）",
+    params: [
+      { name: "Mermaid源码或图表类型", type: "string", example: "sequence" },
+      { name: "图表内容(可选)", type: "string", example: "participant U as 用户\nU->>F: 发送消息", required: false }
+    ],
+    example: 'render_mermaid("sequence", "participant U as 用户\\nU->>F: 发送消息")',
+  },
 ];
 
 // 生成工具映射表
@@ -49,4 +60,5 @@ export {
   searchKnowledgeBase,
   analyzeCode,
   generateDocument,
+  renderMermaid,
 };
