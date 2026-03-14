@@ -400,6 +400,9 @@ export class ProductionAgent {
   async chat(userInput, chunkCallback = null, fullResponseCallback = null, sessionId = this.defaultSessionId) {
     const session = this.getOrCreateSession(sessionId);
     this.messages = session.messages;
+    if (this.options.debug) {
+      console.log(`messages length is:`, this.messages?.length);
+    }
 
     return withSessionLock(session, async () => {
       try {

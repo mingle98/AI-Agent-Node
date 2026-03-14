@@ -134,8 +134,8 @@ data: {"code":0,"result":"、做出决策并执行行动的智能系统。","is_
           retryDelay: 1000
         },
         requestParamProcessor: (baseParams, customParams) => {
-          // 生成会话ID
-          const sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
+          // 生成会话ID-每个用户唯一的,不能变,通过这个id管理每个用户的上下文记忆
+          const sessionId = 'session_123456'
           
           // 添加时间戳
           const timestamp = Date.now()
