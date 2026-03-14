@@ -194,3 +194,137 @@ test("hybridStrategy: recent/old split should not split a tool chain (no orphan 
   assert.ok(Array.isArray(result));
   assertNoOrphanTools(result);
 });
+
+test("getStrategyName: should return correct strategy names", () => {
+  const strategies = ["trim", "summarize", "vector", "hybrid"];
+  const expectedNames = {
+    trim: "剪裁策略",
+    summarize: "摘要策略",
+    vector: "向量检索策略",
+    hybrid: "混合策略",
+  };
+
+  for (const strategy of strategies) {
+    const cm = createContextManager(strategy);
+    assert.equal(cm.getStrategyName(), expectedNames[strategy]);
+  }
+});
+
+test("getStrategyName: should return unknown for invalid strategy", () => {
+  const cm = createContextManager("invalid");
+  assert.equal(cm.getStrategyName(), "未知策略");
+});
+
+test("getLastUserMessage: should return last human message", () => {
+  const cm = createContextManager("trim");
+  const messages = [
+    new SystemMessage("sys"),
+    new HumanMessage("first"),
+    new AIMessage({ content: "response" }),
+    new HumanMessage("last"),
+    new AIMessage({ content: "final" }),
+  ];
+  const lastUser = cm.getLastUserMessage(messages);
+  assert.ok(lastUser);
+  assert.equal(lastUser._getType(), "human");
+  assert.equal(lastUser.content, "last");
+});
+
+test("getLastUserMessage: should return null when no human messages", () => {
+  const cm = createContextManager("trim");
+  const messages = [
+    new SystemMessage("sys"),
+    new AIMessage({ content: "only ai" }),
+  ];
+  const lastUser = cm.getLastUserMessage(messages);
+  assert.equal(lastUser, null);
+});
+
+test("reset: should reset vector store and index", () => {
+  const cm = createContextManager("vector");
+  cm.conversationVectorStore = { test: "data" };
+  cm.conversationIndex = 10;
+  cm.summaries = ["summary1", "summary2"];
+  cm.lastSummaryIndex = 5;
+
+  cm.reset();
+
+  assert.equal(cm.conversationVectorStore, null);
+  assert.equal(cm.conversationIndex, 0);
+  assert.equal(cm.summaries.length, 0);
+  assert.equal(cm.lastSummaryIndex, 0);
+});
+
+test("getLatestSummary: should extract summary from system message", () => {
+  const cm = createContextManager("summarize");
+  const messages = [
+    new SystemMessage("[历史对话摘要]\n之前的摘要内容\n\n[以下是最近的对话]"),
+    new HumanMessage("q"),
+    new AIMessage({ content: "a" }),
+  ];
+  const summary = cm.getLatestSummary(messages);
+  assert.equal(summary, "之前的摘要内容");
+});
+
+test("getLatestSummary: should return empty when no summary", () => {
+  const cm = createContextManager("trim");
+  const messages = [
+    new SystemMessage("normal system prompt"),
+    new HumanMessage("q"),
+    new AIMessage({ content: "a" }),
+  ];
+  const summary = cm.getLatestSummary(messages);
+  assert.equal(summary, "");
+});
+
+test("generateSummary: should generate summary from messages", async () => {
+  const cm = new ContextManager({ invoke: async () => ({ content: "生成的摘要" }) }, null, {
+    strategy: "summarize",
+  });
+  const messages = [
+    new HumanMessage("用户问题"),
+    new AIMessage({ content: "助手回答" }),
+  ];
+  const summary = await cm.generateSummary(messages);
+  assert.equal(summary, "生成的摘要");
+});
+
+test("generateSummary: should handle empty messages", async () => {
+  const cm = createContextManager("summarize");
+  const summary = await cm.generateSummary([]);
+  assert.equal(summary, "暂无历史对话");
+});
+
+test("generateSummary: should use previous summary when available", async () => {
+  const cm = new ContextManager({ invoke: async () => ({ content: "更新的摘要" }) }, null, {
+    strategy: "summarize",
+  });
+  const messages = [
+    new HumanMessage("新问题"),
+    new AIMessage({ content: "新回答" }),
+  ];
+  const summary = await cm.generateSummary(messages, "之前的摘要");
+  assert.equal(summary, "更新的摘要");
+});
+
+test("trimStrategy: should return all messages when under limit", () => {
+  const cm = createContextManager("trim");
+  const messages = [
+    new SystemMessage("sys"),
+    new HumanMessage("q1"),
+    new AIMessage({ content: "a1" }),
+  ];
+  const result = cm.trimStrategy(messages);
+  assert.equal(result.length, 3);
+});
+
+test("trimStrategy: should handle messages without system message", () => {
+  const cm = createContextManager("trim");
+  const messages = [
+    new HumanMessage("q1"),
+    new AIMessage({ content: "a1" }),
+  ];
+  const result = cm.trimStrategy(messages);
+  // Should return original if no system message found
+  assert.ok(result.length >= 2);
+});

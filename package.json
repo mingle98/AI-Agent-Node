@@ -6,7 +6,9 @@
   "main": "index.js",
   "scripts": {
     "dev": "node server.js",
-    "test": "node --test"
+    "test": "c8 --reporter=lcov --reporter=text --reporter=html --exclude=test/** --exclude=node_modules/** --exclude=demos/** --exclude=scripts/** node --test",
+    "test:coverage": "c8 --reporter=text-summary --check-coverage --lines=98 --functions=98 --branches=95 --statements=98 --exclude=demos/** --exclude=scripts/** node --test",
+    "prepare": "husky"
   },
   "keywords": [
     "ai-agent",
@@ -33,6 +35,10 @@
     "html-to-text": "^9.0.5",
     "langchain": "^1.2.32",
     "pdf-parse": "^1.1.1"
+  },
+  "devDependencies": {
+    "c8": "^10.1.2",
+    "husky": "^9.1.6"
   },
   "engines": {
     "node": ">=18.0.0"
