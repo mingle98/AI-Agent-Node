@@ -39,8 +39,8 @@ async function initAgent() {
     llmRetries: 2,
     toolRetries: 2,
     debug: true,
-    roleName: "AISuspendedBallChat前端组件使用助手",
-    roleDescription: "可以帮助用户解决AISuspendedBallChat前端组件使用相关的问题",
+    roleName: "AI只能助手",
+    roleDescription: "可以帮助用户解决AISuspendedBallChat前端组件使用相关的问题,以及提供AI Agent学习指导、编程指导、数据查询以及流程图绘制等服务.",
   });
 }
 
