@@ -152,7 +152,7 @@ function generateSkillExample(skill) {
     'ai_agent_teaching': '- "教我AI Agent架构" → 用 ai_agent_teaching 技能（自动完成教学流程）',
     'component_consulting': '- "如何配置流式响应" → 用 component_consulting 技能（组件使用指导）',
     'code_explanation': '- "详细解释这段代码" → 用 code_explanation 技能（深度代码分析）',
-    'intelligent_qa': '- "AI Agent的规划能力是什么" → 用 intelligent_qa 技能（智能问答）',
+    // 'intelligent_qa': '- "AI Agent的规划能力是什么" → 用 intelligent_qa 技能（智能问答）',
     'conversation_manage': '- "总结我们的对话" → 用 conversation_manage 技能（对话管理）',
   };
   

@@ -41,17 +41,17 @@ export const SKILL_DEFINITIONS = [
     ],
     example: 'code_explanation("async function fetchData() {...}", "detailed")',
   },
-  {
-    name: "intelligent_qa",
-    func: skillIntelligentQA,
-    description: "智能问答",
-    functionality: "基于知识库回答AI Agent和组件相关问题",
-    params: [
-      { name: "问题", type: "string", example: "什么是AI Agent的规划能力" },
-      { name: "知识领域", type: "string", example: "ai_agent", options: ["ai_agent", "component", "general"] }
-    ],
-    example: 'intelligent_qa("什么是AI Agent的规划能力", "ai_agent")',
-  },
+  // {
+  //   name: "intelligent_qa",
+  //   func: skillIntelligentQA,
+  //   description: "智能问答",
+  //   functionality: "基于知识库回答AI Agent和组件相关问题",
+  //   params: [
+  //     { name: "问题", type: "string", example: "什么是AI Agent的规划能力" },
+  //     { name: "知识领域", type: "string", example: "ai_agent", options: ["ai_agent", "component", "general"] }
+  //   ],
+  //   example: 'intelligent_qa("什么是AI Agent的规划能力", "ai_agent")',
+  // },
   {
     name: "conversation_manage",
     func: skillConversationManage,
