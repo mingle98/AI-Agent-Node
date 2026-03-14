@@ -5,7 +5,8 @@
   "description": "生产级 AI Agent - 模块化架构（智能客服助手）",
   "main": "index.js",
   "scripts": {
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "test": "node --test"
   },
   "keywords": [
     "ai-agent",

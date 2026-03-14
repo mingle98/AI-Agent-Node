@@ -34,6 +34,83 @@ export class ContextManager {
     this.lastSummaryIndex = 0;
   }
 
+  splitIntoTurns(conversationMessages) {
+    const turns = [];
+    let current = [];
+    for (const msg of conversationMessages) {
+      const type = msg?._getType?.() || 'unknown';
+      if (type === 'human') {
+        if (current.length > 0) {
+          turns.push(current);
+        }
+        current = [msg];
+      } else {
+        if (current.length === 0) {
+          current = [msg];
+        } else {
+          current.push(msg);
+        }
+      }
+    }
+    if (current.length > 0) {
+      turns.push(current);
+    }
+    return turns;
+  }
+
+  takeRecentTurnsWithinCount(turns, maxMessages) {
+    if (!Array.isArray(turns) || turns.length === 0) {
+      return [];
+    }
+    const safeMax = Math.max(1, Number(maxMessages) || 1);
+    const keptReversed = [];
+    let total = 0;
+    for (let i = turns.length - 1; i >= 0; i -= 1) {
+      const turn = turns[i] || [];
+      if (total + turn.length > safeMax) {
+        break;
+      }
+      keptReversed.push(turn);
+      total += turn.length;
+    }
+    if (keptReversed.length === 0) {
+      const lastTurn = turns[turns.length - 1] || [];
+      return lastTurn.slice(-safeMax);
+    }
+    return keptReversed.reverse().flat();
+  }
+
+  splitTurnsByRecentMessageLimit(turns, maxMessages) {
+    if (!Array.isArray(turns) || turns.length === 0) {
+      return { oldTurns: [], recentTurns: [] };
+    }
+    const safeMax = Math.max(1, Number(maxMessages) || 1);
+    const recentTurnsReversed = [];
+    let total = 0;
+    for (let i = turns.length - 1; i >= 0; i -= 1) {
+      const turn = turns[i] || [];
+      if (total + turn.length > safeMax) {
+        break;
+      }
+      recentTurnsReversed.push(turn);
+      total += turn.length;
+    }
+
+    if (recentTurnsReversed.length === 0) {
+      // 极端情况：单个 turn 太长，无法整段保留。此时 recentTurns 仍然以 turn 为单位保留最后一轮，
+      // 但 recentMessages 会在该 turn 内截取尾部 safeMax 条（由调用方处理）。
+      const lastTurn = turns[turns.length - 1] || [];
+      return {
+        oldTurns: turns.slice(0, Math.max(0, turns.length - 1)),
+        recentTurns: [lastTurn],
+      };
+    }
+
+    const recentTurns = recentTurnsReversed.reverse();
+    const oldTurns = turns.slice(0, Math.max(0, turns.length - recentTurns.length));
+    return { oldTurns, recentTurns };
+  }
+
   /**
    * 管理上下文（根据策略）
    * @param {Array} messages - 当前消息列表
@@ -86,69 +163,25 @@ export class ContextManager {
       return [firstSystemMessage, ...conversationMessages];
     }
 
-    // 按 turn 裁剪：一个 turn 从 human 开始，到下一个 human 之前结束。
-    // turn 内可能包含 tool 调用序列（ai(tool_calls) + tool... + ai），必须整体保留/整体丢弃。
-    const turns = [];
-    let current = [];
-    for (const msg of conversationMessages) {
-      const type = msg?._getType?.() || 'unknown';
-      if (type === 'human') {
-        if (current.length > 0) {
-          turns.push(current);
-        }
-        current = [msg];
-      } else {
-        if (current.length === 0) {
-          // 没有 human 起点的残留消息（例如历史不完整），放入一个“前置段”turn，避免丢结构
-          current = [msg];
-        } else {
-          current.push(msg);
-        }
-      }
-    }
-    if (current.length > 0) {
-      turns.push(current);
-    }
+    const turns = this.splitIntoTurns(conversationMessages);
+    let boundedRecentMessages = this.takeRecentTurnsWithinCount(turns, maxKeep);
 
-    // 从后往前累加 turns，直到达到 maxKeep
-    const keptTurnsReversed = [];
-    let total = 0;
-    for (let i = turns.length - 1; i >= 0; i -= 1) {
-      const turn = turns[i];
-      if (total + turn.length > maxKeep) {
-        break;
-      }
-      keptTurnsReversed.push(turn);
-      total += turn.length;
-    }
-
-    // 如果一个 turn 都塞不下（极端情况：单轮太长），则退化为从该 turn 末尾截取 maxKeep，
-    // 并在截取时确保 tool 消息不会孤立：若截断点落在 tool 上，则向前补齐到 ai(tool_calls)。
-    let boundedRecentMessages;
-    if (keptTurnsReversed.length === 0) {
+    // tool 安全截断：如果起点是 tool，回溯到该轮最近的 ai(tool_calls)
+    if (boundedRecentMessages.length > 0 && boundedRecentMessages[0]?._getType?.() === 'tool') {
       const lastTurn = turns[turns.length - 1] || [];
-      boundedRecentMessages = lastTurn.slice(-maxKeep);
-
-      // tool 安全截断：如果起点是 tool，回溯到该轮最近的 ai(tool_calls)
-      while (boundedRecentMessages.length > 0 && boundedRecentMessages[0]?._getType?.() === 'tool') {
-        const idxInTurn = lastTurn.indexOf(boundedRecentMessages[0]);
-        let k = idxInTurn - 1;
-        while (k >= 0) {
-          const candidate = lastTurn[k];
-          if (candidate?._getType?.() === 'ai') {
-            const hasToolCalls = Array.isArray(candidate.tool_calls) && candidate.tool_calls.length > 0;
-            if (hasToolCalls) {
-              boundedRecentMessages = lastTurn.slice(k).slice(-maxKeep);
-            }
-            break;
+      const idxInTurn = lastTurn.indexOf(boundedRecentMessages[0]);
+      let k = idxInTurn - 1;
+      while (k >= 0) {
+        const candidate = lastTurn[k];
+        if (candidate?._getType?.() === 'ai') {
+          const hasToolCalls = Array.isArray(candidate.tool_calls) && candidate.tool_calls.length > 0;
+          if (hasToolCalls) {
+            boundedRecentMessages = lastTurn.slice(k).slice(-maxKeep);
           }
-          k -= 1;
+          break;
         }
-        break;
+        k -= 1;
       }
-    } else {
-      const keptTurns = keptTurnsReversed.reverse();
-      boundedRecentMessages = keptTurns.flat();
     }
     
     const result = [firstSystemMessage, ...boundedRecentMessages];
@@ -187,11 +220,16 @@ export class ContextManager {
 
     const previousSummary = this.getLatestSummary(messages);
     const conversationMessages = messages.filter(m => m._getType() !== 'system');
-    
-    // 保留最近的 N 条对话
+
     const keepRecent = this.config.keepRecentMessages;
-    const recentMessages = conversationMessages.slice(-keepRecent);
-    const oldMessages = conversationMessages.slice(0, -keepRecent);
+    const turns = this.splitIntoTurns(conversationMessages);
+    const { oldTurns, recentTurns } = this.splitTurnsByRecentMessageLimit(turns, keepRecent);
+
+    let recentMessages = recentTurns.flat();
+    if (recentMessages.length > keepRecent) {
+      recentMessages = recentMessages.slice(-keepRecent);
+    }
+    const oldMessages = oldTurns.flat();
 
     if (oldMessages.length === 0) {
       return messages;
@@ -232,10 +270,15 @@ export class ContextManager {
       await this.initializeVectorStore();
     }
 
-    // 保留最近的 N 条对话
     const keepRecent = this.config.keepRecentMessages;
-    const recentMessages = conversationMessages.slice(-keepRecent);
-    const oldMessages = conversationMessages.slice(0, -keepRecent);
+    const turns = this.splitIntoTurns(conversationMessages);
+    const { oldTurns, recentTurns } = this.splitTurnsByRecentMessageLimit(turns, keepRecent);
+
+    let recentMessages = recentTurns.flat();
+    if (recentMessages.length > keepRecent) {
+      recentMessages = recentMessages.slice(-keepRecent);
+    }
+    const oldMessages = oldTurns.flat();
 
     // 将旧对话存入向量库
     if (oldMessages.length > 0) {
@@ -287,11 +330,16 @@ export class ContextManager {
 
     const previousSummary = this.getLatestSummary(messages);
     const conversationMessages = messages.filter(m => m._getType() !== 'system');
-    
-    // 保留最近的 N 条对话
+
     const keepRecent = this.config.keepRecentMessages;
-    const recentMessages = conversationMessages.slice(-keepRecent);
-    const oldMessages = conversationMessages.slice(0, -keepRecent);
+    const turns = this.splitIntoTurns(conversationMessages);
+    const { oldTurns, recentTurns } = this.splitTurnsByRecentMessageLimit(turns, keepRecent);
+
+    let recentMessages = recentTurns.flat();
+    if (recentMessages.length > keepRecent) {
+      recentMessages = recentMessages.slice(-keepRecent);
+    }
+    const oldMessages = oldTurns.flat();
 
     if (oldMessages.length === 0) {
       return messages;
