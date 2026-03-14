@@ -94,7 +94,7 @@ ${echartDataText}
 ---
 
 2)、输出说明：
-- 如果Echart数据为有效的JSON格式，请直接输出如下内容:"我已经给你生成了关于${targetText}的图标,数据展示如下:\n${echartDataText}\n,数据来源于网络,仅供参考."，禁止输出任何多余的解释、说明文本，以便前端能够正确解析和渲染图表。
+- 如果Echart数据为有效的JSON格式，请直接输出如下内容:"我已经给你生成了关于${targetText}的图标,数据展示如下:\n\`\`\`echarts\n${echartDataText}\n\`\`\`\n以上数据来源于网络,仅供参考."，禁止输出任何多余的解释、说明文本，以便前端能够正确解析和渲染图表。
 - 如果Echart数据是空对象或无效数据，请直接输出"暂无关于${targetText}的图表化的数据"。`;
 
     return echartDataContent;
