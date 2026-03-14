@@ -35,8 +35,7 @@ export async function skillMermaidDiagram(request, diagramType = "auto") {
 4)、render_mermaid 调用参数规范：
    - arg1: 图表类型（flowchart/sequence/gantt/pie/class/...；如果 diagramType=auto，请你根据生成内容选择一种最合适的类型传入）
    - arg2: Mermaid 源码主体（不含开头 \u0060\u0060\u0060mermaid 和结尾 \u0060\u0060\u0060）
-5)、Mermaid 代码块前后可以有必要的文本说明，但禁止有任何多余的解释或与图表无关的内容，以确保前端能够正确解析和渲染图表。
-6)、常见映射：
+5)、常见映射：
 - 流程/逻辑/分支/步骤 → flowchart（graph TD）
 - 交互时序/请求响应 → sequence（sequenceDiagram）
 - 进度排期 → gantt（gantt）
