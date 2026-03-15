@@ -34,6 +34,7 @@
     "faiss-node": "^0.5.1",
     "html-to-text": "^9.0.5",
     "langchain": "^1.2.32",
+    "neo4j-driver": "^5.28.1",
     "pdf-parse": "^1.1.1"
   },
   "devDependencies": {
