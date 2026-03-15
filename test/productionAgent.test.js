@@ -313,7 +313,7 @@ test("ProductionAgent.buildHumanMessage: should handle data URI images", async (
 });
 
 
-test("ProductionAgent: should respect maxIterations limit", async () => {
+test("ProductionAgent: should return fallback text when maxIterations is reached", async () => {
   const aiTool = new AIMessage({ content: "" });
   aiTool.tool_calls = [{ name: "render_mermaid", id: "t-loop", args: { arg1: "sequence", arg2: "A-->B" } }];
   const llm = new MockLLM([
@@ -325,12 +325,32 @@ test("ProductionAgent: should respect maxIterations limit", async () => {
   ]);
   const agent = createAgentWithMockLLM(llm, { maxIterations: 3 });
 
-  try {
-    await agent.chat("loop test", null, null, "loop-test");
-    assert.fail("should throw max iterations error");
-  } catch (error) {
-    assert.ok(error.message.includes("最大迭代次数") || error.message.includes("max") || error.message.includes("iteration"));
-  }
+  const result = await agent.chat("loop test", null, null, "loop-test");
+  assert.equal(result, "抱歉，服务暂时繁忙，请稍后重试。");
+});
+
+test("ProductionAgent.chat: should emit error and done when stream mode hits maxIterations", async () => {
+  const aiTool = new AIMessage({ content: "" });
+  aiTool.tool_calls = [{ name: "render_mermaid", id: "t-stream-loop", args: { arg1: "sequence", arg2: "A-->B" } }];
+  const llm = new MockLLM([
+    { chunks: [aiTool] },
+    { chunks: [aiTool] },
+  ]);
+  const agent = createAgentWithMockLLM(llm, { maxIterations: 1 });
+
+  const events = [];
+  const result = await agent.chat("loop test", (e) => events.push(e), null, "loop-stream-test");
+
+  assert.equal(result, "抱歉，服务暂时繁忙，请稍后重试。");
+
+  const errorIndex = events.findIndex((e) => e.type === "error");
+  const doneIndex = events.findIndex((e) => e.type === "done");
+  assert.ok(errorIndex >= 0, "should emit error event");
+  assert.ok(doneIndex >= 0, "should emit done event");
+  assert.ok(doneIndex > errorIndex, "done event should be emitted after error event");
+
+  const doneEvent = events[doneIndex];
+  assert.equal(doneEvent.finalText, "抱歉，服务暂时繁忙，请稍后重试。");
 });
 
 test("ProductionAgent.invokeLLMWithResilience: should handle LLM errors with fallback", async () => {

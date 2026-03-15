@@ -159,6 +159,9 @@ app.post("/api/chat", async (req, res, next) => {
           if (!chunk) {
             return;
           }
+          if (hasSentEnd) {
+            return;
+          }
           if (chunk.type === "done") {
             hasSentEnd = true;
             sendChunk({ code: 0, result: chunk.content || "", is_end: true });

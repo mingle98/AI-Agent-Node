@@ -485,14 +485,26 @@ export class ProductionAgent {
 
         throw new Error("达到最大迭代次数");
       } catch (error) {
+        const errorMessage = error?.message || "未知错误";
+        const fallbackText = "抱歉，服务暂时繁忙，请稍后重试。";
+
         if (CONFIG.streamEnabled) {
           emitStreamEvent(chunkCallback, {
             type: "error",
             content: "",
-            message: error?.message || "未知错误",
+            message: errorMessage,
           });
+          // 关键兜底：错误事件后补发终态事件，避免前端只监听 done 时一直等待
+          emitStreamEvent(chunkCallback, {
+            type: "done",
+            content: fallbackText,
+            finalText: fallbackText,
+          });
+          return fallbackText;
         }
-        throw error;
+
+        fullResponseCallback?.(fallbackText);
+        return fallbackText;
       }
     });
   }
