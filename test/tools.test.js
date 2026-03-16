@@ -23,6 +23,7 @@ test("TOOLS: should map tool names to functions", () => {
   assert.equal(typeof TOOLS.analyze_code, "function");
   assert.equal(typeof TOOLS.generate_document, "function");
   assert.equal(typeof TOOLS.render_mermaid, "function");
+  assert.equal(typeof TOOLS.daily_news, "function");
 });
 
 test("search_knowledge tool: should be defined", () => {
@@ -45,4 +46,10 @@ test("generate_document tool: should have optional outline param", () => {
   const outlineParam = tool.params.find(p => p.name === "文档大纲");
   assert.ok(outlineParam);
   assert.equal(outlineParam.required, false);
+});
+
+test("daily_news tool: should be defined", () => {
+  const tool = TOOL_DEFINITIONS.find(t => t.name === "daily_news");
+  assert.ok(tool);
+  assert.equal(tool.params.length, 2);
 });

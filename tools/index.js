@@ -4,6 +4,7 @@ import { analyzeCode } from './codeAnalyzer.js';
 import { generateDocument } from './document.js';
 import { renderMermaid } from './mermaid.js';
 import { analyzeChart } from './chartAnalyzer.js';
+import { getDailyNews } from './dailyNews.js';
 
 // 工具定义（包含函数和元数据）
 export const TOOL_DEFINITIONS = [
@@ -59,6 +60,16 @@ export const TOOL_DEFINITIONS = [
     ],
     example: 'render_mermaid("sequence", "participant U as 用户\\nU->>F: 发送消息")',
   },
+  {
+    name: "daily_news",
+    func: (platform, limit) => getDailyNews(platform, limit),
+    description: "查询今日热点新闻列表（默认：腾讯网）",
+    params: [
+      { name: "平台(可选)", type: "string", example: "tenxunwang", options: ["tenxunwang", "weibo"], required: false },
+      { name: "返回条数(可选)", type: "number", example: 10, required: false }
+    ],
+    example: 'daily_news("tenxunwang", 10)',
+  },
 ];
 
 // 生成工具映射表
@@ -74,4 +85,5 @@ export {
   analyzeChart,
   generateDocument,
   renderMermaid,
+  getDailyNews,
 };
