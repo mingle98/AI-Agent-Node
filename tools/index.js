@@ -3,6 +3,7 @@ import { searchKnowledgeBase } from './knowledge.js';
 import { analyzeCode } from './codeAnalyzer.js';
 import { generateDocument } from './document.js';
 import { renderMermaid } from './mermaid.js';
+import { analyzeChart } from './chartAnalyzer.js';
 
 // 工具定义（包含函数和元数据）
 export const TOOL_DEFINITIONS = [
@@ -25,6 +26,17 @@ export const TOOL_DEFINITIONS = [
       { name: "编程语言", type: "string", example: "javascript", options: ["javascript", "python", "java", "cpp", "go", "rust", "typescript", "other"] }
     ],
     example: 'analyze_code("function add(a, b) { return a + b; }", "javascript")',
+  },
+  {
+    name: "analyze_chart",
+    func: (chartType, source, userGoal) => analyzeChart(chartType, source, userGoal),
+    description: "分析图表源码/配置（Mermaid/ECharts），输出结构讲解、要点与总结，帮助用户理解图表表达的含义",
+    params: [
+      { name: "图表类型", type: "string", example: "mermaid", options: ["mermaid", "echarts"] },
+      { name: "图表源码/配置", type: "string", example: "graph TD\nA-->B" },
+      { name: "分析目标(可选)", type: "string", example: "解释业务流程与关键分支", required: false }
+    ],
+    example: 'analyze_chart("mermaid", "graph TD\\nA-->B", "解释流程")',
   },
   {
     name: "generate_document",
@@ -59,6 +71,7 @@ export const TOOLS = TOOL_DEFINITIONS.reduce((acc, tool) => {
 export {
   searchKnowledgeBase,
   analyzeCode,
+  analyzeChart,
   generateDocument,
   renderMermaid,
 };

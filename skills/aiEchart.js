@@ -94,8 +94,19 @@ ${echartDataText}
 ---
 
 2)、输出说明：
-- 如果Echart数据为有效的JSON格式，请直接输出如下内容:"我已经给你生成了关于${targetText}的图表,数据展示如下:\n\`\`\`echarts\n${echartDataText}\n\`\`\`\n ,以上数据来源于网络,仅供参考."，禁止输出任何多余的解释、说明文本，以便前端能够正确解析和渲染图表。
-- 如果Echart数据是空对象或无效数据，请直接输出"暂无关于${targetText}的图表化的数据"。`;
+
+- 如果Echart数据为有效的JSON格式，你必须按以下流程输出，使内容更易理解且仍可被前端渲染：
+  1. 调用 analyze_chart 工具对 option 做一次结构化分析讲解与总结
+     - arg1: 固定传 echarts
+     - arg2: ECharts option JSON（即上面的 echartDataText）
+     - arg3: 分析目标（建议传入："解释该图表表达的含义、关键指标/维度、可能的误读点，并给出总结"）
+  2. 最终输出必须包含两部分，且顺序固定：
+     - 先输出一个可渲染的 echarts 代码块（\`\`\`echarts ... \`\`\`），内容为原始 option JSON
+     - 再输出 analyze_chart 返回的分析讲解与总结文本
+  3. 允许在分析中补充必要说明（例如数据口径假设、维度解释、如何阅读图表），不再要求“只能输出固定句式”。
+  4. 代码块必须保持为严格 JSON（不要在 JSON 内添加注释/尾逗号/非标准字段）。
+
+- 如果Echart数据是空对象或无效数据，请直接输出："暂无关于${targetText}的图表化的数据"。`;
 
     return echartDataContent;
   } catch (error) {

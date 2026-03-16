@@ -28,16 +28,24 @@ export async function skillMermaidDiagram(request, diagramType = "auto") {
 
 生成要求（必须严格遵守）：
 1)、你需要根据用户需求，生成一个 Mermaid 图（优先使用最能表达逻辑的图类型；如果 diagramType=auto 则你自行选择）。
-2)、你必须使用“两段式输出”：
+2)、你必须使用“三段式流程”：
    - 第一步：先生成 Mermaid 源码（只生成 mermaid 源码文本，不要包含 \u0060\u0060\u0060mermaid 代码块包裹）。
-   - 第二步：调用 render_mermaid 工具，将“图表类型 + Mermaid 源码”传入，由工具返回标准 \u0060\u0060\u0060mermaid 代码块。
-3)、禁止直接在对话里输出 Mermaid 代码块；必须通过 render_mermaid 工具的返回值来输出最终结果。
-4)、render_mermaid 调用参数规范：
+   - 第二步：调用 analyze_chart 工具，对 Mermaid 源码做结构化分析讲解与总结。
+   - 第三步：调用 render_mermaid 工具，将“图表类型 + Mermaid 源码”传入，由工具返回标准 \u0060\u0060\u0060mermaid 代码块。
+3)、禁止直接在对话里输出 Mermaid 代码块；必须通过 render_mermaid 工具的返回值来输出最终的 Mermaid 代码块。
+4)、analyze_chart 调用参数规范：
+   - arg1: 图表类型，固定传 mermaid
+   - arg2: Mermaid 源码全文（与第一步产出一致，不包含 \u0060\u0060\u0060mermaid 代码块包裹）
+   - arg3: 分析目标（可选，但建议传入："解释该图表达的流程/结构、关键分支与注意事项，并给出总结"）
+5)、render_mermaid 调用参数规范：
    - arg1: 图表类型（flowchart/sequence/gantt/pie/class/...；如果 diagramType=auto，请你根据生成内容选择一种最合适的类型传入）
    - arg2: Mermaid 源码主体（不含开头 \u0060\u0060\u0060mermaid 和结尾 \u0060\u0060\u0060）
-5)、render_mermaid 最多只允许调用 1 次。严禁重复调用同一个工具（即使你认为还可优化格式，也不能再次调用）。
-6)、当 render_mermaid 返回结果后，必须立刻将该结果作为最终答案输出并结束，不得再发起任何工具/技能调用。
-7)、常见映射：
+6)、render_mermaid 最多只允许调用 1 次。严禁重复调用同一个工具（即使你认为还可优化格式，也不能再次调用）。
+7)、最终输出要求：
+   - 先输出 analyze_chart 返回的“分析讲解与总结”文本
+   - 再紧接着输出 render_mermaid 返回的 Mermaid 代码块
+   - render_mermaid 调用完成后不得再发起任何工具/技能调用。
+8)、常见映射：
 - 流程/逻辑/分支/步骤 → flowchart（graph TD）
 - 交互时序/请求响应 → sequence（sequenceDiagram）
 - 进度排期 → gantt（gantt）
