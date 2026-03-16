@@ -22,11 +22,15 @@ test("skillMermaidDiagram: should return error for unsupported type", async () =
   assert.ok(result.includes("不支持"));
 });
 
-test("skillMermaidDiagram: should include all format examples", async () => {
+test("skillMermaidDiagram: should not include embedded mermaid examples", async () => {
   const result = await skillMermaidDiagram("需求", "auto");
-  assert.ok(result.includes("流程图"));
-  assert.ok(result.includes("序列图"));
-  assert.ok(result.includes("甘特图"));
-  assert.ok(result.includes("饼图"));
-  assert.ok(result.includes("类图"));
+  assert.ok(result.includes("Mermaid图生成技能流程"));
+  assert.ok(result.includes("三段式流程"));
+  assert.ok(result.includes("render_mermaid"));
+  assert.ok(!result.includes("```mermaid"), "Should not embed mermaid code blocks in the skill guide");
+  assert.ok(result.includes("graph TD"), "Should include flowchart syntax example");
+  assert.ok(result.includes("sequenceDiagram"), "Should include sequence syntax example");
+  assert.ok(result.includes("gantt"), "Should include gantt syntax example");
+  assert.ok(result.includes("pie"), "Should include pie syntax example");
+  assert.ok(result.includes("classDiagram"), "Should include class syntax example");
 });
