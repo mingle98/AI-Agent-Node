@@ -17,7 +17,7 @@
 
 ## 📋 系统要求
 
-- **Node.js**: >= 22.6.0 (推荐使用最新 LTS 版本)
+- **Node.js**: >= 20.6.0 (推荐使用最新 LTS 版本)
 - **内存**: 最少 2GB RAM
 - **存储**: 至少 1GB 可用空间（用于向量数据库）
 
@@ -102,6 +102,38 @@ data: {"code":0,"result":"能够自主感知环境","is_end":false}
 
 data: {"code":0,"result":"、做出决策并执行行动的智能系统。","is_end":true}
 
+```
+
+## 🧭 架构与目录结构
+
+### 目录结构（核心）
+
+```text
+AI-Agent-Node/
+  agent/                 # Agent 核心：会话、上下文、工具/技能调用编排
+  tools/                 # 工具：单一能力（如 daily_news、analyze_chart 等）
+  skills/                # 技能：组合能力（多步骤流程）
+  utils/                 # 通用工具（如 RAG 构建、custom component 渲染）
+  knowledge_base/        # 本地知识库源文件（md/pdf/epub/...）
+  vector_db/             # 向量数据库（运行时生成/加载）
+  public/                # 调试页面（如 aisbc-debug.html）
+  server.js              # Express API 入口
+```
+
+### 运行时数据流（高层）
+
+```mermaid
+flowchart TD
+  U[Client / AISuspendedBallChat] -->|POST /api/chat| S[Express server.js]
+  S --> A[ProductionAgent.chat]
+  A -->|RAG| VS[(Vector Store)]
+  A -->|Tools| T[tools/*]
+  A -->|Skills| K[skills/*]
+  A -->|LLM| L[LLM Provider]
+  A -->|tool results| R[customComponentRenderer]
+  R -->|stream: SSE custom-component| U
+  A -->|answer| S
+  S -->|JSON or SSE| U
 ```
 
 ## 🎯 与 AISuspendedBallChat 组件集成

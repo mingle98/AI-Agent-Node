@@ -21,7 +21,7 @@
     "skills"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "Apache-2.0",
   "dependencies": {
     "@langchain/classic": "^1.0.23",
     "@langchain/community": "^1.1.23",
@@ -43,6 +43,6 @@
     "husky": "^9.1.6"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.6.0"
   }
 }
