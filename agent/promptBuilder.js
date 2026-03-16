@@ -47,11 +47,12 @@ function buildToolsSection(toolDefinitions) {
   }
 
   const toolsList = toolDefinitions.map((tool, index) => {
-    const paramsDesc = tool.params.map(p => {
+    const paramsDesc = (tool.params || []).map(p => {
+      const optionalMark = p.required === false ? "(可选)" : "";
       if (p.options) {
-        return `${p.name}（${p.options.join('、')}）`;
+        return `${p.name}${optionalMark}（${p.options.join('、')}）`;
       }
-      return p.name;
+      return `${p.name}${optionalMark}`;
     }).join(', ');
     
     return `${index + 1}. ${tool.name}(${paramsDesc}) - ${tool.description}
@@ -72,11 +73,12 @@ function buildSkillsSection(skillDefinitions) {
   }
 
   const skillsList = skillDefinitions.map((skill, index) => {
-    const paramsDesc = skill.params.map(p => {
+    const paramsDesc = (skill.params || []).map(p => {
+      const optionalMark = p.required === false ? "(可选)" : "";
       if (p.options) {
-        return `${p.name}（${p.options.join('、')}）`;
+        return `${p.name}${optionalMark}（${p.options.join('、')}）`;
       }
-      return p.name;
+      return `${p.name}${optionalMark}`;
     }).join(', ');
     
     let description = `${index + 1}. ${skill.name}(${paramsDesc}) - ${skill.description}`;
@@ -86,7 +88,7 @@ function buildSkillsSection(skillDefinitions) {
     }
     
     // 如果有特殊参数说明（如投诉类型）
-    const specialParams = skill.params.filter(p => p.options);
+    const specialParams = (skill.params || []).filter(p => p.options);
     if (specialParams.length > 0) {
       specialParams.forEach(p => {
         description += `\n   ${p.name}：${p.options.join('、')}`;
@@ -111,13 +113,14 @@ function buildRulesSection() {
 1. 知识查询 → 使用 search_knowledge 工具（AI Agent资料、组件文档）
 2. 代码分析 → 使用 analyze_code 工具（解释逻辑、问题排查）
 3. 文档生成 → 使用 generate_document 工具（API文档、教程、README）
-4. 数据搜索或可视化 → 使用ai_agent_echart技能(数据搜索和可视化)
-5. 画图/梳理逻辑/流程/时序/类关系/架构图 → 必须先使用 mermaid_diagram 技能（用户不需要提 Mermaid，直接描述需求即可）
-6. 图表场景禁止首轮直接调用 render_mermaid；只能在 mermaid_diagram 技能返回绘图指令后再调用 render_mermaid
-7. 复杂场景 → 使用高级技能（教学、咨询、问答、Mermaid画图、需要数据搜索和可视化的场景）
-8. 优先使用技能处理综合场景，它们会自动完成多个步骤
-9. 参数要完整、准确，避免无效调用
-10. 给出准确、友好、专业的回答`;
+4. 图表分析讲解 → 使用 analyze_chart 工具（Mermaid/ECharts 源码或配置解析、要点与总结）
+5. 数据搜索或可视化 → 使用ai_agent_echart技能(数据搜索和可视化)
+6. 画图/梳理逻辑/流程/时序/类关系/架构图 → 必须先使用 mermaid_diagram 技能（用户不需要提 Mermaid，直接描述需求即可）
+7. 图表场景禁止首轮直接调用 render_mermaid；只能在 mermaid_diagram 技能返回绘图指令后再调用 render_mermaid
+8. 复杂场景 → 使用高级技能（教学、咨询、问答、Mermaid画图、需要数据搜索和可视化的场景）
+9. 优先使用技能处理综合场景，它们会自动完成多个步骤
+10. 参数要完整、准确，避免无效调用
+11. 给出准确、友好、专业的回答`;
 }
 
 /**
