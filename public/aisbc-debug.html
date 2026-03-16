@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AISuspendedBallChat Debug</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      #app {
+        height: 100%;
+      }
+      .page {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+      .topbar {
+        padding: 10px 12px;
+        border-bottom: 1px solid #e5e7eb;
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: center;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
+          "Apple Color Emoji", "Segoe UI Emoji";
+      }
+      .topbar label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+      }
+      .topbar input[type="text"] {
+        width: 320px;
+        max-width: 60vw;
+        padding: 6px 8px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+      }
+      .topbar button {
+        padding: 6px 10px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        background: #fff;
+        cursor: pointer;
+      }
+      .topbar button:active {
+        transform: translateY(1px);
+      }
+      .hint {
+        font-size: 12px;
+        color: #6b7280;
+      }
+      .body {
+        position: relative;
+        flex: 1;
+        overflow: hidden;
+      }
+    </style>
+
+    <!-- Optional: enable mermaid parsing in assistant messages -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11.10.1/dist/mermaid.min.js"></script>
+
+    <!-- Optional: enable echarts rendering in markdown code blocks -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+
+    <!-- Vue 3 (global build) -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+
+    <script>
+      window.Vue = window.Vue || {};
+      window.Vue.component = window.Vue.component || function () {};
+    </script>
+
+    <!-- lodash-es (UMD expects global _) -->
+    <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
+
+    <!-- AISuspendedBallChat UMD -->
+    <script src="https://unpkg.com/ai-suspended-ball-chat@0.2.73/dist/suspended-ball-chat.umd.js"></script>
+  </head>
+
+  <body>
+    <div id="app"></div>
+
+    <script>
+      (function () {
+        const { createApp, ref, computed, h } = window.Vue;
+
+        // UMD export name observed in the bundle:
+        // globalThis.SuspendedBallChat = { SuspendedBallChat, ChatPanel, ... }
+        const AiChat = window.SuspendedBallChat;
+        if (!AiChat) {
+          document.getElementById('app').innerHTML =
+            '<pre>SuspendedBallChat UMD not loaded. Check network tab.</pre>';
+          return;
+        }
+
+        const SuspendedBallChat = AiChat.SuspendedBallChat;
+
+        const App = {
+          setup() {
+            const apiUrl = ref('http://localhost:3000/api/chat');
+            const appName = ref('ai-agent-node');
+            const domainName = ref('debug_user');
+            const enableStreaming = ref(true);
+
+            const chatRef = ref(null);
+
+            const callbacks = {
+              onUserMessage: (message) => {
+                console.log('[AISBC] user:', message);
+              },
+              onAssistantMessage: (message, res) => {
+                console.log('[AISBC] assistant:', message, res);
+              },
+              onPresetTaskClick: (task) => {
+                console.log('[AISBC] preset task click:', task);
+                const question = (task && (task.question || task.title)) || '';
+                if (question && chatRef.value && typeof chatRef.value.sendMessage === 'function') {
+                  chatRef.value.sendMessage(question);
+                }
+              },
+              onError: (error) => {
+                console.error('[AISBC] error:', error);
+              },
+            };
+
+            const presetTasks = [
+              {
+                id: 'task_flow',
+                icon: '🧭',
+                title: '帮我生成一个注册流程图',
+                description: '输出一个清晰的注册流程（适合用 Mermaid 渲染）',
+                question: '帮我生成一个注册流程图',
+              },
+              {
+                id: 'task_house_price',
+                icon: '📈',
+                title: '帮我查询近十年的房价变化趋势',
+                description: '给出趋势结论，并尽量附带数据/可视化建议',
+                question: '帮我查询近十年的房价变化趋势',
+              },
+              {
+                id: 'task_hot',
+                icon: '🔥',
+                title: '今日热点有什么?',
+                description: '总结今日热点并给出要点',
+                question: '今日热点有什么?',
+              },
+            ];
+
+            const customRequestConfig = {
+              customParams: {
+                session_id: 'test123456',
+              },
+            };
+
+            const statusText = computed(() => {
+              return enableStreaming.value ? 'streaming' : 'non-streaming';
+            });
+
+            const clearHistory = () => {
+              if (chatRef.value && typeof chatRef.value.clearHistory === 'function') {
+                chatRef.value.clearHistory();
+              }
+            };
+
+            const getState = () => {
+              if (chatRef.value && typeof chatRef.value.getChatState === 'function') {
+                console.log('[AISBC] state:', chatRef.value.getChatState());
+              }
+            };
+
+            return {
+              apiUrl,
+              appName,
+              domainName,
+              enableStreaming,
+              callbacks,
+              presetTasks,
+              customRequestConfig,
+              chatRef,
+              clearHistory,
+              getState,
+              statusText,
+            };
+          },
+          render() {
+            return h('div', { class: 'page' }, [
+              h('div', { class: 'topbar' }, [
+                h('label', null, [
+                  h('span', null, 'API'),
+                  h('input', {
+                    type: 'text',
+                    value: this.apiUrl,
+                    onInput: (e) => (this.apiUrl = e.target.value),
+                  }),
+                ]),
+                h('label', null, [
+                  h('span', null, 'appName'),
+                  h('input', {
+                    type: 'text',
+                    value: this.appName,
+                    onInput: (e) => (this.appName = e.target.value),
+                  }),
+                ]),
+                h('label', null, [
+                  h('span', null, 'domainName'),
+                  h('input', {
+                    type: 'text',
+                    value: this.domainName,
+                    onInput: (e) => (this.domainName = e.target.value),
+                  }),
+                ]),
+                h('label', null, [
+                  h('input', {
+                    type: 'checkbox',
+                    checked: this.enableStreaming,
+                    onChange: (e) => (this.enableStreaming = e.target.checked),
+                  }),
+                  h('span', null, 'Streaming'),
+                ]),
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    onClick: this.clearHistory,
+                    title: 'ref.clearHistory()',
+                  },
+                  'Clear history'
+                ),
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    onClick: this.getState,
+                    title: 'ref.getChatState()',
+                  },
+                  'Log state'
+                ),
+                h('span', { class: 'hint' }, `mode: ${this.statusText}`),
+              ]),
+              h('div', { class: 'body' }, [
+                h(SuspendedBallChat, {
+                  ref: 'chatRef',
+                  url: this.apiUrl,
+                  appName: this.appName,
+                  domainName: this.domainName,
+                  enableStreaming: this.enableStreaming,
+                  enableContext: true,
+                  enableLocalStorage: true,
+                  enableVoiceInput: true,
+                  callbacks: this.callbacks,
+                  customRequestConfig: this.customRequestConfig,
+                  showClearButton: true,
+                  presetTasks: this.presetTasks,
+                }),
+              ]),
+            ]);
+          },
+        };
+
+        createApp(App).mount('#app');
+      })();
+    </script>
+  </body>
+</html>
