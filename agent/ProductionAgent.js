@@ -494,7 +494,7 @@ export class ProductionAgent {
           session.messages.push(aiResponse);
 
           if (streamEnabled) {
-            emitStreamEvent(chunkCallback, { type: "status", content: "\n --- \n>⌛️ 【TOOL】正在调用工具/技能... \n" });
+            emitStreamEvent(chunkCallback, { type: "status", content: "\n>⌛️ 【TOOL】正在调用工具/技能... \n" });
           }
 
           for (const toolCall of toolCalls) {
