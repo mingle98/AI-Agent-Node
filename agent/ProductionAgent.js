@@ -43,7 +43,7 @@ function emitToolEvent(callback, toolExcResult) {
     return;
   }
   try {
-    callback({type: 'tool', toolExcResult}, toolExcResult);
+    callback(null, toolExcResult);
   } catch (error) {
     // ignore callback errors to avoid breaking chat flow
   }
@@ -291,14 +291,18 @@ export class ProductionAgent {
     }
   }
 
-  async invokeLLMWithResilience(session, messages, onChunk = null) {
+  async invokeLLMWithResilience(session, messages, options = {}) {
+    const { onChunk = null, streamEnabled = true } = options || {};
     const tools = this.getStructuredTools();
     const invokePrimary = async () => {
       if (!this.llm?.bindTools) {
         throw new Error("LLM does not support bindTools");
       }
       const model = this.llm.bindTools(tools, { tool_choice: "auto" });
-      return withTimeout(this.collectFromStream(model, messages, onChunk), this.resilience.llmTimeoutMs, "LLM stream");
+      if (streamEnabled) {
+        return withTimeout(this.collectFromStream(model, messages, onChunk), this.resilience.llmTimeoutMs, "LLM stream");
+      }
+      return withTimeout(this.collectFromInvoke(model, messages), this.resilience.llmTimeoutMs, "LLM invoke");
     };
 
     const invokeFallback = async () => {
@@ -309,10 +313,17 @@ export class ProductionAgent {
         return { message: new AIMessage("抱歉，服务暂时繁忙，请稍后重试。"), streamedText: false };
       }
       const fallbackModel = this.fallbackLlm.bindTools(tools, { tool_choice: "auto" });
+      if (streamEnabled) {
+        return withTimeout(
+          this.collectFromStream(fallbackModel, messages, onChunk),
+          this.resilience.llmTimeoutMs,
+          "Fallback LLM stream"
+        );
+      }
       return withTimeout(
-        this.collectFromStream(fallbackModel, messages, onChunk),
+        this.collectFromInvoke(fallbackModel, messages),
         this.resilience.llmTimeoutMs,
-        "Fallback LLM stream"
+        "Fallback LLM invoke"
       );
     };
 
@@ -351,6 +362,15 @@ export class ProductionAgent {
     return {
       message: full || new AIMessage(""),
       streamedText,
+    };
+  }
+
+  async collectFromInvoke(model, messages) {
+    const message = await model.invoke(messages);
+    console.log('🏷️ 模型非流式调用====》', message);
+    return {
+      message: message || new AIMessage(""),
+      streamedText: false,
     };
   }
 
@@ -408,9 +428,16 @@ export class ProductionAgent {
     return new HumanMessage(String(input));
   }
 
-  async chat(userInput, chunkCallback = null, fullResponseCallback = null, sessionId = this.defaultSessionId) {
+  async chat(
+    userInput,
+    chunkCallback = null,
+    fullResponseCallback = null,
+    sessionId = this.defaultSessionId,
+    requestOptions = {}
+  ) {
     const session = this.getOrCreateSession(sessionId);
     this.messages = session.messages;
+    const streamEnabled = requestOptions?.streamEnabled ?? CONFIG.streamEnabled;
     if (this.options.debug) {
       console.log(`messages length is:`, this.messages?.length);
     }
@@ -437,9 +464,12 @@ export class ProductionAgent {
           const { message: aiResponse, streamedText } = await this.invokeLLMWithResilience(
             session,
             session.messages,
-            CONFIG.streamEnabled
-              ? (chunk) => emitStreamEvent(chunkCallback, { type: "chunk", content: chunk?.content || "" })
-              : null
+            {
+              streamEnabled,
+              onChunk: streamEnabled
+                ? (chunk) => emitStreamEvent(chunkCallback, { type: "chunk", content: chunk?.content || "" })
+                : null,
+            }
           );
           const toolCalls = aiResponse.tool_calls || [];
 
@@ -447,7 +477,7 @@ export class ProductionAgent {
 
           if (toolCalls.length === 0) {
             session.messages.push(aiResponse);
-            if (CONFIG.streamEnabled) {
+            if (streamEnabled) {
               if (!streamedText) {
                 emitStreamEvent(chunkCallback, { type: "chunk", content: aiText });
               }
@@ -463,12 +493,12 @@ export class ProductionAgent {
 
           session.messages.push(aiResponse);
 
-          if (CONFIG.streamEnabled) {
+          if (streamEnabled) {
             emitStreamEvent(chunkCallback, { type: "status", content: "\n --- \n>⌛️ 【TOOL】正在调用工具/技能... \n" });
           }
 
           for (const toolCall of toolCalls) {
-            if (CONFIG.streamEnabled) {
+            if (streamEnabled) {
               emitStreamEvent(chunkCallback, {
                 type: "status",
                 content: `\n>🚀  【TOOL】执行 ${toolCall.name}...\n`,
@@ -497,7 +527,7 @@ export class ProductionAgent {
             emitToolEvent(chunkCallback, toolExcResult);
             console.log(`【TOOL】执行 ${toolCall.name}结果:${JSON.stringify(result)}`)
             const content = typeof result === "string" ? result : JSON.stringify(result, null, 2);
-            if (CONFIG.streamEnabled) {
+            if (streamEnabled) {
               emitStreamEvent(chunkCallback, {
                 type: "status",
                 content: `\n>✅  【TOOL】执行 ${toolCall.name} 完成\n\n --- \n`,
@@ -515,7 +545,7 @@ export class ProductionAgent {
         const errorMessage = error?.message || "未知错误";
         const fallbackText = "抱歉，服务暂时繁忙，请稍后重试。";
 
-        if (CONFIG.streamEnabled) {
+        if (streamEnabled) {
           emitStreamEvent(chunkCallback, {
             type: "error",
             content: "",

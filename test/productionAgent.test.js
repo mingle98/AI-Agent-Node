@@ -339,7 +339,11 @@ test("ProductionAgent.chat: should emit error and done when stream mode hits max
   const agent = createAgentWithMockLLM(llm, { maxIterations: 1 });
 
   const events = [];
-  const result = await agent.chat("loop test", (e) => events.push(e), null, "loop-stream-test");
+  const result = await agent.chat("loop test", (e) => {
+    if (e) {
+      events.push(e);
+    }
+  }, null, "loop-stream-test");
 
   assert.equal(result, "抱歉，服务暂时繁忙，请稍后重试。");
 

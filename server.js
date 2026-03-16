@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import { ProductionAgent } from "./agent/ProductionAgent.js";
 import { createLLM, createEmbeddings, createFallbackLLM } from "./llm.js";
 import { loadOrBuildVectorStore } from "./utils/ragBuilder.js";
+import { CONFIG } from "./config.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -108,7 +109,7 @@ app.post("/api/chat", async (req, res, next) => {
       typeof req.body?.session_id === "string" && req.body.session_id.trim()
         ? req.body.session_id.trim()
         : "default";
-    const stream = req.body?.isStream === true;
+    const stream = typeof req.body?.isStream === "boolean" ? req.body.isStream : CONFIG.streamEnabled;
 
     if (!message) {
       res.status(400).json({ error: "message 不能为空" });
@@ -137,8 +138,10 @@ app.post("/api/chat", async (req, res, next) => {
           if (Array.isArray(toolResults)) {
             toolExcResult = toolResults;
           }
+          console.log('🧮 普通请求模式结束:', toolResults)
         },
-        sessionId
+        sessionId,
+        { streamEnabled: stream }
       );
       res.json({
         code: 0,
@@ -193,9 +196,10 @@ app.post("/api/chat", async (req, res, next) => {
           }
         },
         (fallbackText, toolExcResult) => {
-          console.log('🆑流结束===》',  toolExcResult);
+          console.log('🆑流结束===》', toolExcResult);
         },
-        sessionId
+        sessionId,
+        { streamEnabled: stream }
       );
       // 兼容旧行为：如果底层没有发 done 事件，兜底补发一次
       if (!hasSentEnd) {
