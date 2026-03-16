@@ -129,14 +129,26 @@ app.post("/api/chat", async (req, res, next) => {
     }
 
     if (!stream) {
-      const response = await agent.chat(userMessages, null, null, sessionId);
+      let toolExcResult = [];
+      const response = await agent.chat(
+        userMessages,
+        null,
+        (finalText, toolResults) => {
+          if (Array.isArray(toolResults)) {
+            toolExcResult = toolResults;
+          }
+        },
+        sessionId
+      );
       res.json({
         code: 0,
         result: {
            answer: response,
+           toolExcResult,
         },
         sessionId,
         response,
+        toolExcResult,
         stats: agent.getStats(sessionId),
       });
       return;
@@ -156,7 +168,10 @@ app.post("/api/chat", async (req, res, next) => {
     try {
       const finalResponse = await agent.chat(
         userMessages,
-        (chunk) => {
+        (chunk, toolExcResult) => {
+          if (toolExcResult) {
+            console.log(`⏳⏳⏳工具调用结果: 调用工具是${toolExcResult.toolName}`);
+          }
           if (!chunk) {
             return;
           }
@@ -177,7 +192,9 @@ app.post("/api/chat", async (req, res, next) => {
             sendChunk({ code: 0, result: chunk.content, is_end: false });
           }
         },
-        null,
+        (fallbackText, toolExcResult) => {
+          console.log('🆑流结束===》',  toolExcResult);
+        },
         sessionId
       );
       // 兼容旧行为：如果底层没有发 done 事件，兜底补发一次

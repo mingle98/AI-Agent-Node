@@ -38,6 +38,17 @@ function emitStreamEvent(callback, payload) {
   callback(payload);
 }
 
+function emitToolEvent(callback, toolExcResult) {
+  if (!callback || !toolExcResult) {
+    return;
+  }
+  try {
+    callback({type: 'tool', toolExcResult}, toolExcResult);
+  } catch (error) {
+    // ignore callback errors to avoid breaking chat flow
+  }
+}
+
 export class ProductionAgent {
   constructor(llm, vectorStore, embeddings, options = {}) {
     this.llm = llm;
@@ -407,6 +418,7 @@ export class ProductionAgent {
     return withSessionLock(session, async () => {
       try {
         this.touchSession(session);
+        const toolExcResults = [];
         // 记录日志时只显示文本部分
         const logText = typeof userInput === "string" ? userInput : (userInput?.text || "[多模态输入]");
         console.log(`👤 [${sessionId}] 用户: ${logText}`);
@@ -444,9 +456,8 @@ export class ProductionAgent {
                 content: "",
                 finalText: aiText,
               });
-            } else {
-              fullResponseCallback?.(aiText);
             }
+            fullResponseCallback?.(aiText, toolExcResults);
             return aiText;
           }
 
@@ -463,11 +474,27 @@ export class ProductionAgent {
                 content: `\n>🚀  【TOOL】执行 ${toolCall.name}...\n`,
               });
             }
+            const callable = this.callableDefinitions.get(toolCall.name);
+            const startAt = Date.now();
             const result = await this.executeCallableWithResilience(
               session,
               toolCall.name,
               toolCall.args || {}
             );
+            const endAt = Date.now();
+            const toolExcResult = {
+              toolName: toolCall.name,
+              kind: callable?.kind || "tool",
+              params: toolCall.args || {},
+              toolCallId: toolCall.id,
+              result,
+              startAt,
+              endAt,
+              durationMs: endAt - startAt,
+              ok: !(typeof result === "string" && result.includes("执行失败")),
+            };
+            toolExcResults.push(toolExcResult);
+            emitToolEvent(chunkCallback, toolExcResult);
             console.log(`【TOOL】执行 ${toolCall.name}结果:${JSON.stringify(result)}`)
             const content = typeof result === "string" ? result : JSON.stringify(result, null, 2);
             if (CONFIG.streamEnabled) {
@@ -500,10 +527,11 @@ export class ProductionAgent {
             content: fallbackText,
             finalText: fallbackText,
           });
+          fullResponseCallback?.(fallbackText, []);
           return fallbackText;
         }
 
-        fullResponseCallback?.(fallbackText);
+        fullResponseCallback?.(fallbackText, []);
         return fallbackText;
       }
     });
