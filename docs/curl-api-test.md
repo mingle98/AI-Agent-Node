@@ -57,6 +57,32 @@ curl -N -X POST 'http://127.0.0.1:3000/api/chat' \
 - `query`: 用户输入文本
 - `session_id`: 可选，用于保持会话上下文
 
+## 2.1) 工具触发示例（daily_news / analyze_chart）
+
+说明：本项目的工具调用由 Agent 根据你的 `query` 自动决策。以下示例用于快速验证工具是否能被触发。
+
+### 2.1.1 触发 `daily_news`（今日热点）
+
+```bash
+curl -X POST 'http://127.0.0.1:3000/api/chat' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": "今日热点有什么？",
+    "session_id": "curl-tool-daily-news"
+  }'
+```
+
+### 2.1.2 触发 `analyze_chart`（图表分析：Mermaid/ECharts）
+
+```bash
+curl -X POST 'http://127.0.0.1:3000/api/chat' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": "帮我分析这个 mermaid 图：graph TD\\nA-->B\\nB-->C，并总结关键路径",
+    "session_id": "curl-tool-analyze-chart"
+  }'
+```
+
 ## 3) 带图片问答（图片 URL）
 
 当请求体包含 `images` 且数组非空时，服务端会将输入组装为多模态消息:

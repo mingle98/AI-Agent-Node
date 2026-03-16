@@ -6,6 +6,11 @@ import { fileURLToPath } from "url";
 import { ProductionAgent } from "./agent/ProductionAgent.js";
 import { createLLM, createEmbeddings, createFallbackLLM } from "./llm.js";
 import { loadOrBuildVectorStore } from "./utils/ragBuilder.js";
+import {
+  renderCustomComponents,
+  buildCustomComponents,
+  ensureAnswerHasCustomComponentPlaceholders,
+} from "./utils/customComponentRenderer.js";
 import { CONFIG } from "./config.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -143,10 +148,14 @@ app.post("/api/chat", async (req, res, next) => {
         sessionId,
         { streamEnabled: stream }
       );
+
+      const customComponents = buildCustomComponents(toolExcResult);
+      const answer = ensureAnswerHasCustomComponentPlaceholders(response, customComponents);
       res.json({
         code: 0,
         result: {
-           answer: response,
+           answer,
+           customComponents,
            toolExcResult,
         },
         sessionId,
@@ -167,40 +176,52 @@ app.post("/api/chat", async (req, res, next) => {
       res.write(`data: ${JSON.stringify(payload)}\n\n`);
     };
     let hasSentEnd = false;
+    const toolExcResults = [];
+    let pending = Promise.resolve();
 
     try {
       const finalResponse = await agent.chat(
         userMessages,
         (chunk, toolExcResult) => {
-          if (toolExcResult) {
-            console.log(`⏳⏳⏳工具调用结果: 调用工具是${toolExcResult.toolName}`);
-          }
-          if (!chunk) {
-            return;
-          }
-          if (hasSentEnd) {
-            return;
-          }
-          if (chunk.type === "done") {
-            hasSentEnd = true;
-            sendChunk({ code: 0, result: chunk.content || "", is_end: true });
-            return;
-          }
-          if (chunk.type === "error") {
-            hasSentEnd = true;
-            sendChunk({ code: 1, result: chunk.message || "未知错误", is_end: true });
-            return;
-          }
-          if (chunk?.content) {
-            sendChunk({ code: 0, result: chunk.content, is_end: false });
-          }
+          pending = pending
+            .then(async () => {
+              if (toolExcResult) {
+                console.log(`⏳⏳⏳工具调用结果: 调用工具是${toolExcResult.toolName}`);
+                toolExcResults.push(toolExcResult);
+              }
+              if (!chunk) {
+                return;
+              }
+              if (hasSentEnd) {
+                return;
+              }
+              if (chunk.type === "done") {
+                await renderCustomComponents(toolExcResults, sendChunk, { sleepMs: 1000 });
+                hasSentEnd = true;
+                sendChunk({ code: 0, result: chunk.content || "", is_end: true });
+                return;
+              }
+              if (chunk.type === "error") {
+                hasSentEnd = true;
+                sendChunk({ code: 1, result: chunk.message || "未知错误", is_end: true });
+                return;
+              }
+              if (chunk?.content) {
+                sendChunk({ code: 0, result: chunk.content, is_end: false });
+              }
+            })
+            .catch((e) => {
+              console.log('stream callback err', e);
+            });
         },
         (fallbackText, toolExcResult) => {
-          console.log('🆑流结束===》', toolExcResult);
+          // console.log('🆑流结束===》', toolExcResult);
         },
         sessionId,
         { streamEnabled: stream }
       );
+
+      await pending;
       // 兼容旧行为：如果底层没有发 done 事件，兜底补发一次
       if (!hasSentEnd) {
         sendChunk({ code: 0, result: finalResponse, is_end: true });

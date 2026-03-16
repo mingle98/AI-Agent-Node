@@ -182,7 +182,9 @@ import { SuspendedBallChat } from 'ai-suspended-ball-chat'
 | ---------------------| ----------------| --------------------------| ----------------------------------------------------------------------|
 | `search_knowledge`　| 搜索本地知识库 | 查询内容　　　　　　　　 | `search_knowledge("AI Agent架构设计")`　　　　　　　　　　　　　　　 |
 | `analyze_code`　　　| 代码分析　　　 | 代码内容, 编程语言　　　 | `analyze_code("function add(a,b){return a+b}", "javascript")`　　　　|
+| `analyze_chart`　　 | 图表分析讲解　 | 图表类型, 图表源码/配置, 分析目标(可选) | `analyze_chart("mermaid", "graph TD\\nA-->B", "解释流程")` |
 | `generate_document` | 文档生成　　　 | 文档主题, 文档类型, 大纲 | `generate_document("AI Agent快速入门", "tutorial", "1.简介 2.安装")` |
+| `daily_news`　　　　| 今日热点　　　 | 平台(可选), 返回条数(可选) | `daily_news("tenxunwang", 10)` |
 
 ### 已支持的技能
 
