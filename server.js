@@ -13,6 +13,7 @@ import {
 } from "./utils/customComponentRenderer.js";
 import { CONFIG } from "./config.js";
 import { resolveThinkingMode } from "./utils/thinkingMode.js";
+import { escapeHtml, wrapThinkingOpen, wrapThinkingClose } from "./utils/thinkingRenderer.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -176,15 +177,36 @@ app.post("/api/chat", async (req, res, next) => {
     res.setHeader("Connection", "close");
     res.flushHeaders?.();
 
+    let clientAborted = false;
+    const onDisconnect = (reason) => {
+      if (clientAborted) return;
+      clientAborted = true;
+      console.log("⛓️‍💥 SSE 客户端断开:", reason);
+    };
+    // fetch AbortController / network abort usually triggers 'aborted'
+    req.on("aborted", () => onDisconnect("req.aborted"));
+    // close fires when underlying connection closes
+    req.on("close", () => onDisconnect("req.close"));
+    // response close is often the most reliable signal for SSE
+    res.on("close", () => onDisconnect("res.close"));
+    // socket close for extra safety
+    req.socket?.on?.("close", () => onDisconnect("socket.close"));
+
     const sendChunk = (payload) => {
-      res.write(`data: ${JSON.stringify(payload)}\n\n`);
+      if (clientAborted || res.writableEnded) {
+        return;
+      }
+      try {
+        res.write(`data: ${JSON.stringify(payload)}\n\n`);
+      } catch (e) {
+        onDisconnect("res.write.error");
+      }
     };
     let hasSentEnd = false;
     const toolExcResults = [];
     let pending = Promise.resolve();
     // 是否正在思考中
     let isThinking = false;
-    let thinkResult = '';
 
     try {
       const finalResponse = await agent.chat(
@@ -192,6 +214,9 @@ app.post("/api/chat", async (req, res, next) => {
         (chunk, toolExcResult) => {
           pending = pending
             .then(async () => {
+              if (clientAborted || res.writableEnded || hasSentEnd) {
+                return;
+              }
               if (toolExcResult) {
                 console.log(`⏳⏳⏳工具调用结果: 调用工具是${toolExcResult.toolName}`);
                 toolExcResults.push(toolExcResult);
@@ -203,12 +228,20 @@ app.post("/api/chat", async (req, res, next) => {
                 return;
               }
               if (chunk.type === "done") {
+                if (isThinking) {
+                  sendChunk({ code: 0, result: wrapThinkingClose(), is_end: false });
+                  isThinking = false;
+                }
                 await renderCustomComponents(toolExcResults, sendChunk, { sleepMs: 1000 });
                 hasSentEnd = true;
                 sendChunk({ code: 0, result: chunk.content || "", is_end: true });
                 return;
               }
               if (chunk.type === "error") {
+                if (isThinking) {
+                  sendChunk({ code: 0, result: wrapThinkingClose(), is_end: false });
+                  isThinking = false;
+                }
                 hasSentEnd = true;
                 sendChunk({ code: 1, result: chunk.message || "未知错误", is_end: true });
                 return;
@@ -217,13 +250,14 @@ app.post("/api/chat", async (req, res, next) => {
                 if (chunk.type === "reasoning") {
                   if (!isThinking) {
                     console.log('=========思考内容=======');
+                    isThinking = true;
+                    sendChunk({ code: 0, result: wrapThinkingOpen(), is_end: false });
                   }
-                  isThinking = true;
-                  thinkResult += chunk?.content;
-                  // console.log(chunk?.content);
+                  sendChunk({ code: 0, result: escapeHtml(chunk.content), is_end: false });
                 } else {
                   if (isThinking) {
                     console.log('=========🤔 思考模式-正式内容=======');
+                    sendChunk({ code: 0, result: wrapThinkingClose(), is_end: false });
                   }
                   isThinking = false;
                   sendChunk({ code: 0, result: chunk.content, is_end: false });
@@ -244,9 +278,17 @@ app.post("/api/chat", async (req, res, next) => {
       await pending;
       // 兼容旧行为：如果底层没有发 done 事件，兜底补发一次
       if (!hasSentEnd) {
-        sendChunk({ code: 0, result: finalResponse, is_end: true });
+        if (isThinking) {
+          sendChunk({ code: 0, result: wrapThinkingClose(), is_end: false });
+          isThinking = false;
+        }
+        sendChunk({ code: 0, result: '', is_end: true });
       }
     } catch (error) {
+      if (isThinking) {
+        sendChunk({ code: 0, result: wrapThinkingClose(), is_end: false });
+        isThinking = false;
+      }
       sendChunk({ code: 1, result: error.message || "未知错误", is_end: true });
     } finally {
       res.end();
