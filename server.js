@@ -12,6 +12,7 @@ import {
   ensureAnswerHasCustomComponentPlaceholders,
 } from "./utils/customComponentRenderer.js";
 import { CONFIG } from "./config.js";
+import { resolveThinkingMode } from "./utils/thinkingMode.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,6 +25,7 @@ let agentInitError = null;
 
 async function initAgent() {
   const llm = createLLM();
+  const thinkingLlm = createLLM({ enableThinking: true });
   const fallbackLlm = createFallbackLLM();
   const embeddings = createEmbeddings();
 
@@ -40,6 +42,7 @@ async function initAgent() {
   return new ProductionAgent(llm, vectorStore, embeddings, {
     contextStrategy: "trim",
     fallbackLlm,
+    thinkingLlm,
     llmTimeoutMs: 5 * 60000,
     toolTimeoutMs: 5 * 60000,
     llmRetries: 2,
@@ -115,6 +118,7 @@ app.post("/api/chat", async (req, res, next) => {
         ? req.body.session_id.trim()
         : "default";
     const stream = typeof req.body?.isStream === "boolean" ? req.body.isStream : CONFIG.streamEnabled;
+    const { enableThinking } = resolveThinkingMode(req.body, stream);
 
     if (!message) {
       res.status(400).json({ error: "message 不能为空" });
@@ -178,6 +182,9 @@ app.post("/api/chat", async (req, res, next) => {
     let hasSentEnd = false;
     const toolExcResults = [];
     let pending = Promise.resolve();
+    // 是否正在思考中
+    let isThinking = false;
+    let thinkResult = '';
 
     try {
       const finalResponse = await agent.chat(
@@ -207,7 +214,20 @@ app.post("/api/chat", async (req, res, next) => {
                 return;
               }
               if (chunk?.content) {
-                sendChunk({ code: 0, result: chunk.content, is_end: false });
+                if (chunk.type === "reasoning") {
+                  if (!isThinking) {
+                    console.log('=========思考内容=======');
+                  }
+                  isThinking = true;
+                  thinkResult += chunk?.content;
+                  // console.log(chunk?.content);
+                } else {
+                  if (isThinking) {
+                    console.log('=========🤔 思考模式-正式内容=======');
+                  }
+                  isThinking = false;
+                  sendChunk({ code: 0, result: chunk.content, is_end: false });
+                }
               }
             })
             .catch((e) => {
@@ -218,7 +238,7 @@ app.post("/api/chat", async (req, res, next) => {
           // console.log('🆑流结束===》', toolExcResult);
         },
         sessionId,
-        { streamEnabled: stream }
+        { streamEnabled: stream, enableThinking }
       );
 
       await pending;

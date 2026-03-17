@@ -49,10 +49,20 @@ function emitToolEvent(callback, toolExcResult) {
   }
 }
 
+function extractReasoningContent(chunk) {
+  const raw = chunk?.additional_kwargs?.__raw_response;
+  const delta = raw?.choices?.[0]?.delta;
+  if (!delta) {
+    return "";
+  }
+  return typeof delta?.reasoning_content === "string" ? delta?.reasoning_content : "";
+}
+
 export class ProductionAgent {
   constructor(llm, vectorStore, embeddings, options = {}) {
     this.llm = llm;
     this.fallbackLlm = options.fallbackLlm || null;
+    this.thinkingLlm = options.thinkingLlm || null;
     this.vectorStore = vectorStore;
     this.embeddings = embeddings;
     this.options = options;
@@ -292,13 +302,18 @@ export class ProductionAgent {
   }
 
   async invokeLLMWithResilience(session, messages, options = {}) {
-    const { onChunk = null, streamEnabled = true } = options || {};
+    const { onChunk = null, streamEnabled = true, enableThinking } = options || {};
     const tools = this.getStructuredTools();
+
     const invokePrimary = async () => {
       if (!this.llm?.bindTools) {
         throw new Error("LLM does not support bindTools");
       }
-      const model = this.llm.bindTools(tools, { tool_choice: "auto" });
+      const baseLlm =
+        streamEnabled && enableThinking === true && this.thinkingLlm
+          ? this.thinkingLlm
+          : this.llm;
+      const model = baseLlm.bindTools(tools, { tool_choice: "auto" });
       if (streamEnabled) {
         return withTimeout(this.collectFromStream(model, messages, onChunk), this.resilience.llmTimeoutMs, "LLM stream");
       }
@@ -353,9 +368,12 @@ export class ProductionAgent {
     for await (const chunk of stream) {
       full = full ? concat(full, chunk) : chunk;
       const textPart = normalizeTextContent(chunk.content);
-      if (onChunk && textPart) {
-        streamedText = true;
-        onChunk({ content: textPart });
+      const reasoningPart = extractReasoningContent(chunk);
+      if (onChunk && (textPart || reasoningPart)) {
+        if (textPart) {
+          streamedText = true;
+        }
+        onChunk({ content: textPart, reasoning: reasoningPart });
       }
     }
 
@@ -438,6 +456,7 @@ export class ProductionAgent {
     const session = this.getOrCreateSession(sessionId);
     this.messages = session.messages;
     const streamEnabled = requestOptions?.streamEnabled ?? CONFIG.streamEnabled;
+    const enableThinking = streamEnabled ? requestOptions?.enableThinking : undefined;
     if (this.options.debug) {
       console.log(`messages length is:`, this.messages?.length);
     }
@@ -466,8 +485,16 @@ export class ProductionAgent {
             session.messages,
             {
               streamEnabled,
+              enableThinking,
               onChunk: streamEnabled
-                ? (chunk) => emitStreamEvent(chunkCallback, { type: "chunk", content: chunk?.content || "" })
+                ? (chunk) => {
+                  if (chunk?.reasoning) {
+                    emitStreamEvent(chunkCallback, { type: "reasoning", content: chunk.reasoning });
+                  }
+                  if (chunk?.content) {
+                    emitStreamEvent(chunkCallback, { type: "chunk", content: chunk.content });
+                  }
+                }
                 : null,
             }
           );

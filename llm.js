@@ -9,8 +9,16 @@ dotenv.config();
 export function createLLM(options = {}) {
   return new ChatOpenAI({
     apiKey: process.env.DASHSCOPE_API_KEY,
-    model: options.model || "qwen-flash",// qwen-plus支持工具调用但是不支持图片, qwen-omni-turbo支持图片但是不支持工具调用 按需选择
+    model: options.model || "qwen-plus",// qwen-plus支持工具调用但是不支持图片, qwen-omni-turbo支持图片但是不支持工具调用 按需选择
     temperature: options.temperature ?? 0.7,
+    // Qwen 非 OpenAI 标准参数，放在 modelKwargs 里透传
+    modelKwargs: {
+      enable_search: options.enableSearch ?? true,
+      enable_thinking: options.enableThinking ?? false,
+      ...(options.modelKwargs ?? {}),
+
+    },
+    __includeRawResponse: options.includeRawResponse ?? true,
     configuration: {
       baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     },
@@ -20,7 +28,7 @@ export function createLLM(options = {}) {
 export function createFallbackLLM() {
   // 降级模型，失败时兜底使用
   return createLLM({
-    model: "qwen-plus",
+    model: "qwen-flash",
     temperature: 0.7,
   });
 }
