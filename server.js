@@ -118,7 +118,7 @@ app.post("/api/chat", async (req, res, next) => {
       typeof req.body?.session_id === "string" && req.body.session_id.trim()
         ? req.body.session_id.trim()
         : "default";
-    const stream = typeof req.body?.isStream === "boolean" ? req.body.isStream : CONFIG.streamEnabled;
+    const stream = typeof req.body?.isStream === "boolean" ? req.body.isStream : false;
     const { enableThinking } = resolveThinkingMode(req.body, stream);
 
     if (!message) {
