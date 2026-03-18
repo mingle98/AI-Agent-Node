@@ -305,10 +305,11 @@ app.post("/api/session/reset", async (req, res, next) => {
       typeof req.body?.session_id === "string" && req.body.session_id.trim()
         ? req.body.session_id.trim()
         : "default";
-    agent.reset(sessionId);
+    await agent.reset(sessionId);
     res.json({ ok: true, sessionId });
   } catch (error) {
-    next(error);
+    console.log('session/reset error:', error);
+    res.json({ ok: false, error: error?.message || '重置会话失败' });
   }
 });
 

@@ -108,7 +108,7 @@ test("ProductionAgent.reset: should reset session messages", async () => {
   const beforeStats = agent.getStats("reset-test");
   assert.ok(beforeStats.totalMessages > 0);
 
-  agent.reset("reset-test");
+  await agent.reset("reset-test");
   const afterStats = agent.getStats("reset-test");
   assert.equal(afterStats.totalMessages, 1); // only system message left
 });

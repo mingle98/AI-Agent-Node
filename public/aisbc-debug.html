@@ -108,6 +108,8 @@
             const domainName = ref('debug_user');
             const enableStreaming = ref(true);
 
+            const resetApiUrl = ref('http://localhost:3000/api/session/reset');
+
             const chatRef = ref(null);
 
             const callbacks = {
@@ -122,6 +124,31 @@
                 const question = (task && (task.question || task.title)) || '';
                 if (question && chatRef.value && typeof chatRef.value.sendMessage === 'function') {
                   chatRef.value.sendMessage(question);
+                }
+              },
+              // 历史会话已清除时候触发
+              onClearHistory: async () => {
+                try {
+                  const sessionId = (customRequestConfig?.customParams?.session_id || 'default').trim() || 'default';
+
+                  const resp = await fetch(resetApiUrl.value, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ session_id: sessionId }),
+                  });
+                  const data = await resp.json().catch(() => ({}));
+                  if (!resp.ok || !data?.ok) {
+                    console.error('清除历史会话失败:', data);
+                    alert('接口清除历史会话失败');
+                    return;
+                  }
+                  console.log('历史会话已清除', data);
+                  // alert('历史会话清除成功');
+                } catch (error) {
+                  console.error('清除历史会话失败:', error);
+                  alert(error?.message || '清除历史会话失败(-999)');
                 }
               },
               onError: (error) => {
@@ -178,6 +205,7 @@
 
             return {
               apiUrl,
+              resetApiUrl,
               appName,
               domainName,
               enableStreaming,

@@ -608,12 +608,15 @@ export class ProductionAgent {
     };
   }
 
-  reset(sessionId = this.defaultSessionId) {
+  async reset(sessionId = this.defaultSessionId) {
     const session = this.getOrCreateSession(sessionId);
-    const firstSystemMessage = session.messages.find((m) => m._getType() === "system");
-    session.messages = firstSystemMessage ? [firstSystemMessage] : [];
-    session.contextManager.reset();
-    console.log(`🔄 会话已重置: ${sessionId}`);
+    return withSessionLock(session, async () => {
+      this.touchSession(session);
+      const firstSystemMessage = session.messages.find((m) => m._getType() === "system");
+      session.messages = firstSystemMessage ? [firstSystemMessage] : [];
+      session.contextManager.reset();
+      console.log(`🔄 会话已重置: ${sessionId}`);
+    });
   }
 
   getContextStrategy(sessionId = this.defaultSessionId) {
