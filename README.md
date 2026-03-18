@@ -18,8 +18,27 @@
 ## 📋 系统要求
 
 - **Node.js**: >= 20.6.0 (推荐使用最新 LTS 版本)
+- **Python**: >= 3.7 (用于执行 python_executor 生成的脚本)
 - **内存**: 最少 2GB RAM
 - **存储**: 至少 1GB 可用空间（用于向量数据库）
+
+### Python 环境要求
+
+`python_executor` 技能和 `exec_code` 工具需要 Python 3 环境。请确保已安装：
+
+```bash
+# 检查 Python 版本
+python3 --version
+
+# 如未安装，macOS 可通过 Homebrew 安装
+brew install python3
+
+# Ubuntu/Debian
+sudo apt-get install python3
+
+# CentOS/RHEL
+sudo yum install python3
+```
 
 ## 🛠️ 安装与配置
 
@@ -210,13 +229,16 @@ import { SuspendedBallChat } from 'ai-suspended-ball-chat'
 
 ### 已支持的工具
 
-| 工具名称　　　　　　| 功能描述　　　 | 参数　　　　　　　　　　 | 示例　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 |
-| ---------------------| ----------------| --------------------------| ----------------------------------------------------------------------|
-| `search_knowledge`　| 搜索本地知识库 | 查询内容　　　　　　　　 | `search_knowledge("AI Agent架构设计")`　　　　　　　　　　　　　　　 |
-| `analyze_code`　　　| 代码分析　　　 | 代码内容, 编程语言　　　 | `analyze_code("function add(a,b){return a+b}", "javascript")`　　　　|
-| `analyze_chart`　　 | 图表分析讲解　 | 图表类型, 图表源码/配置, 分析目标(可选) | `analyze_chart("mermaid", "graph TD\\nA-->B", "解释流程")` |
-| `generate_document` | 文档生成　　　 | 文档主题, 文档类型, 大纲 | `generate_document("AI Agent快速入门", "tutorial", "1.简介 2.安装")` |
-| `daily_news`　　　　| 今日热点　　　 | 平台(可选), 返回条数(可选) | `daily_news("tenxunwang", 10)` |
+| 工具名称　　　　　　| 功能描述　　　 | 参数　　　　　　　　　　　　　　　　　　 | 示例　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 |
+| ---------------------| ----------------| ------------------------------------------| ----------------------------------------------------------------------|
+| `search_knowledge`　| 搜索本地知识库 | 查询内容　　　　　　　　　　　　　　　　 | `search_knowledge("AI Agent架构设计")`　　　　　　　　　　　　　　　 |
+| `analyze_code`　　　| 代码分析　　　 | 代码内容, 编程语言　　　　　　　　　　　 | `analyze_code("function add(a,b){return a+b}", "javascript")`　　　　|
+| `analyze_chart`　　 | 图表分析讲解　 | 图表类型, 图表源码/配置, 分析目标(可选)　| `analyze_chart("mermaid", "graph TD\nA-->B", "解释流程")`　　　　　　|
+| `generate_document` | 文档生成　　　 | 文档主题, 文档类型, 大纲　　　　　　　　 | `generate_document("AI Agent快速入门", "tutorial", "1.简介 2.安装")` |
+| `daily_news`　　　　| 今日热点　　　 | 平台(可选), 返回条数(可选)　　　　　　　 | `daily_news("tenxunwang", 10)`　　　　　　　　　　　　　　　　　　　 |
+| `exec_code`　　　　 | 代码执行　　　 | 代码内容, 编程语言(可选)　　　　　　　　 | `exec_code("console.log(2+3)", "javascript")`　　　　　　　　　　　　|
+| `render_mermaid`　　| Mermaid渲染　　| Mermaid源码或图表类型, 图表内容　　　　　| `render_mermaid("sequence", "participant A\nA->>B: msg")`　　　　　　|
+| `script_generator`　| Python脚本生成　　　 | 任务描述, 输入数据(可选), 输出格式(可选) | `script_generator("计算平均值", "10,20,30", "auto")`　　　　　　　　 |
 
 ### 已支持的技能
 
@@ -227,6 +249,12 @@ import { SuspendedBallChat } from 'ai-suspended-ball-chat'
 | `code_explanation`　　 | 代码解释与教学　　　　　　　 | 代码内容, 详细程度 | `code_explanation("async function fetchData()", "detailed")`　　|
 | `mermaid_diagram`　　　| 画流程/时序/类关系/架构图　　 | 图表需求描述, 图表类型 | `mermaid_diagram("帮我把登录逻辑梳理成流程图", "auto")`　　　　|
 | `ai_agent_echart`　　　| 数据查询与可视化　　　　　　 | 相关数据需求　　　 | `ai_agent_echart("今年的金价走势怎么样?")`　　　　　　　　　　　|
+| `python_executor`　　　| Python脚本生成+执行+分析　　　| 任务描述, 输入数据(可选), 输出格式(可选) | `python_executor("计算漏斗转化率", "exposure=1000,click=100", "auto")` |
+| `debug_assistant`　　　| Debug 调试助手　　　　　　　 | 错误信息, 上下文环境 | `debug_assistant("TypeError: Cannot read property...", "React")` |
+| `code_review`　　　　　| 代码审查助手　　　　　　　　 | 代码内容, 审查重点 | `code_review("function add(a,b){...}", "all")` |
+| `excel_helper`　　　　 | Excel 助手　　　　　　　　　 | 需求描述, 数据类型 | `excel_helper("计算A列平均值", "numbers")` |
+| `decision_helper`　　　| 决策助手　　　　　　　　　　 | 决策场景, 可选方案 | `decision_helper("是否换工作", "接受, 拒绝, 再谈条件")` |
+| `email_writer`　　　　 | 邮件写作助手　　　　　　　　 | 邮件目的, 背景信息, 语气风格 | `email_writer("跟进", "上周会议方案", "formal")` |
 
 
 ### 配置选项

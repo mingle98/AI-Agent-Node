@@ -25,6 +25,12 @@ test("SKILLS: should map skill names to functions", () => {
   assert.equal(typeof SKILLS.code_explanation, "function");
   assert.equal(typeof SKILLS.ai_agent_echart, "function");
   assert.equal(typeof SKILLS.mermaid_diagram, "function");
+  assert.equal(typeof SKILLS.debug_assistant, "function");
+  assert.equal(typeof SKILLS.code_review, "function");
+  assert.equal(typeof SKILLS.excel_helper, "function");
+  assert.equal(typeof SKILLS.decision_helper, "function");
+  assert.equal(typeof SKILLS.email_writer, "function");
+  assert.equal(typeof SKILLS.python_executor, "function");
 });
 
 test("ai_agent_teaching skill: should have difficulty options", () => {

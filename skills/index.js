@@ -5,6 +5,12 @@ import { skillCodeExplanation } from './codeExplanation.js';
 import { skillIntelligentQA } from './intelligentQA.js';
 import { skillAIAgentEchart } from './aiEchart.js';
 import { skillMermaidDiagram } from './mermaidDiagram.js';
+import { skillDebugAssistant } from './debugAssistant.js';
+import { skillCodeReview } from './codeReview.js';
+import { skillExcelHelper } from './excelHelper.js';
+import { skillDecisionHelper } from './decisionHelper.js';
+import { skillEmailWriter } from './emailWriter.js';
+import { skillPythonExecutor } from './pythonExecutor.js';
 
 // 技能定义（包含函数和元数据）
 export const SKILL_DEFINITIONS = [
@@ -73,6 +79,74 @@ export const SKILL_DEFINITIONS = [
     ],
     example: 'mermaid_diagram("帮我梳理下代码的逻辑", "auto")',
   },
+  {
+    name: "debug_assistant",
+    func: skillDebugAssistant,
+    description: "Debug 调试助手",
+    functionality: "分析错误日志、诊断问题根因、提供修复建议和调试策略",
+    params: [
+      { name: "错误信息", type: "string", example: "TypeError: Cannot read property 'name' of undefined" },
+      { name: "上下文环境", type: "string", example: "React 18, Node.js 16", options: ["React", "Vue", "Node.js", "Python", "Java", ""] }
+    ],
+    example: 'debug_assistant("TypeError: Cannot read property...", "React 18")',
+  },
+  {
+    name: "code_review",
+    func: skillCodeReview,
+    description: "代码审查助手",
+    functionality: "检查代码质量、发现潜在问题、提供改进建议（安全/性能/风格/可维护性）",
+    params: [
+      { name: "代码内容", type: "string", example: "function add(a, b) { return a + b; }" },
+      { name: "审查重点", type: "string", example: "all", options: ["all", "security", "performance", "style"] }
+    ],
+    example: 'code_review("function add(a,b)...", "all")',
+  },
+  {
+    name: "excel_helper",
+    func: skillExcelHelper,
+    description: "Excel 助手",
+    functionality: "自然语言转 Excel 公式、函数推荐、操作指导和数据处理技巧",
+    params: [
+      { name: "需求描述", type: "string", example: "计算A列的平均值，排除空值" },
+      { name: "数据类型", type: "string", example: "mixed", options: ["numbers", "text", "date", "mixed"] }
+    ],
+    example: 'excel_helper("计算A列平均值", "numbers")',
+  },
+  {
+    name: "decision_helper",
+    func: skillDecisionHelper,
+    description: "决策助手",
+    functionality: "辅助决策分析，提供利弊权衡、风险评估、方案对比和决策框架",
+    params: [
+      { name: "决策场景", type: "string", example: "是否接受新的工作机会" },
+      { name: "可选方案", type: "string", example: "接受, 拒绝, 再谈条件" }
+    ],
+    example: 'decision_helper("是否换工作", "接受, 拒绝, 再谈条件")',
+  },
+  {
+    name: "email_writer",
+    func: skillEmailWriter,
+    description: "邮件写作助手",
+    functionality: "生成各类商务邮件模板（跟进、道歉、拒绝、邀约、感谢等）",
+    params: [
+      { name: "邮件目的", type: "string", example: "跟进项目进度", options: ["跟进", "道歉", "拒绝", "邀请", "感谢"] },
+      { name: "背景信息", type: "string", example: "上周会议讨论的方案" },
+      { name: "语气风格", type: "string", example: "formal", options: ["formal", "friendly", "urgent"] }
+    ],
+    example: 'email_writer("跟进", "上周会议方案", "formal")',
+  },
+  {
+    name: "python_executor",
+    func: skillPythonExecutor,
+    description: "Python 脚本执行器（LLM生成脚本+执行+智能分析）",
+    functionality: "复杂场景下由LLM自动生成Python脚本并执行，实现数据统计、漏斗转化、加权决策等，然后智能分析结果返回给用户",
+    params: [
+      { name: "任务描述", type: "string", example: "计算加权评分：产品A(成本80,质量90,交付75)，产品B(成本70,质量85,交付90)，权重成本0.4,质量0.3,交付0.3" },
+      { name: "输入数据", type: "string", example: "exposure=120000, click=8400, signup=2100, pay=315", required: false },
+      { name: "输出格式", type: "string", example: "auto", options: ["auto", "summary", "json", "csv", "chart_data"], required: false }
+    ],
+    example: 'python_executor("计算漏斗转化率并找出最大流失环节", "exposure=120000, click=8400, signup=2100, pay=315", "auto")',
+  },
 ];
 
 // 生成技能映射表
@@ -89,4 +163,10 @@ export {
   skillIntelligentQA,
   skillAIAgentEchart,
   skillMermaidDiagram,
+  skillDebugAssistant,
+  skillCodeReview,
+  skillExcelHelper,
+  skillDecisionHelper,
+  skillEmailWriter,
+  skillPythonExecutor,
 };

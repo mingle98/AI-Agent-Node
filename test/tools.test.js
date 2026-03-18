@@ -24,13 +24,29 @@ test("TOOLS: should map tool names to functions", () => {
   assert.equal(typeof TOOLS.generate_document, "function");
   assert.equal(typeof TOOLS.render_mermaid, "function");
   assert.equal(typeof TOOLS.daily_news, "function");
+  assert.equal(typeof TOOLS.exec_code, "function");
+  assert.equal(typeof TOOLS.script_generator, "function");
 });
 
-test("search_knowledge tool: should be defined", () => {
-  const tool = TOOL_DEFINITIONS.find(t => t.name === "search_knowledge");
+test("exec_code tool: should have language options", () => {
+  const tool = TOOL_DEFINITIONS.find(t => t.name === "exec_code");
   assert.ok(tool);
-  assert.equal(tool.params.length, 1);
-  assert.ok(tool.special);
+  assert.equal(tool.params.length, 2);
+  const langParam = tool.params.find(p => p.name === "编程语言");
+  assert.ok(langParam);
+  assert.ok(langParam.options.includes("javascript"));
+  assert.ok(langParam.options.includes("python"));
+});
+
+test("script_generator tool: should have output format options", () => {
+  const tool = TOOL_DEFINITIONS.find(t => t.name === "script_generator");
+  assert.ok(tool);
+  assert.equal(tool.params.length, 3);
+  const formatParam = tool.params.find(p => p.name === "输出格式");
+  assert.ok(formatParam);
+  assert.ok(formatParam.options.includes("auto"));
+  assert.ok(formatParam.options.includes("json"));
+  assert.ok(formatParam.options.includes("summary"));
 });
 
 test("analyze_code tool: should have language options", () => {

@@ -5,6 +5,8 @@ import { generateDocument } from './document.js';
 import { renderMermaid } from './mermaid.js';
 import { analyzeChart } from './chartAnalyzer.js';
 import { getDailyNews } from './dailyNews.js';
+import { execCode } from './execCode.js';
+import { generatePythonScript, analyzeScriptResult, setScriptGeneratorLLM, checkScriptSafety } from './scriptGenerator.js';
 
 // 工具定义（包含函数和元数据）
 export const TOOL_DEFINITIONS = [
@@ -70,6 +72,27 @@ export const TOOL_DEFINITIONS = [
     ],
     example: 'daily_news("tenxunwang", 10)',
   },
+  {
+    name: "exec_code",
+    func: (code, language) => execCode(code, language),
+    description: "在服务端沙箱环境中执行代码（支持 JavaScript/TypeScript/Python），用于数据转换、算法验证、脚本执行",
+    params: [
+      { name: "代码内容", type: "string", example: "console.log('Hello World')" },
+      { name: "编程语言", type: "string", example: "javascript", options: ["javascript", "typescript", "python"], required: false }
+    ],
+    example: 'exec_code("console.log(2+3)", "javascript")',
+  },
+  {
+    name: "script_generator",
+    func: (task, dataInput, outputFormat) => generatePythonScript(task, dataInput, outputFormat),
+    description: "使用 LLM 根据需求生成 Python 脚本，支持数据统计、转换、算法验证等场景",
+    params: [
+      { name: "任务描述", type: "string", example: "计算这组数据的平均值和标准差" },
+      { name: "输入数据", type: "string", example: "10, 20, 30, 40, 50", required: false },
+      { name: "输出格式", type: "string", example: "auto", options: ["auto", "summary", "json", "csv", "chart_data"], required: false }
+    ],
+    example: 'script_generator("计算平均值", "10, 20, 30", "auto")',
+  },
 ];
 
 // 生成工具映射表
@@ -86,4 +109,9 @@ export {
   generateDocument,
   renderMermaid,
   getDailyNews,
+  execCode,
+  generatePythonScript,
+  analyzeScriptResult,
+  setScriptGeneratorLLM,
+  checkScriptSafety,
 };

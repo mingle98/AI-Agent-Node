@@ -3,7 +3,7 @@
 import { SystemMessage, HumanMessage, AIMessage, ToolMessage } from "@langchain/core/messages";
 import { concat } from "@langchain/core/utils/stream";
 import { CONFIG } from "../config.js";
-import { TOOLS, TOOL_DEFINITIONS } from "../tools/index.js";
+import { TOOLS, TOOL_DEFINITIONS, setScriptGeneratorLLM } from "../tools/index.js";
 import { searchKnowledgeBase } from "../tools/knowledge.js";
 import { SKILLS, SKILL_DEFINITIONS } from "../skills/index.js";
 import { buildSystemPrompt } from "./promptBuilder.js";
@@ -82,6 +82,9 @@ export class ProductionAgent {
     this.systemPrompt = this.buildSystemPrompt();
     this.callableDefinitions = this.buildCallableDefinitions();
     // console.log('🧧callableDefinitions:', JSON.stringify(this.callableDefinitions, null, 2));
+
+    // 为 pythonExecutor 注入 LLM 实例，启用 LLM 驱动的脚本生成
+    setScriptGeneratorLLM(llm);
 
     // 兼容旧代码读取 this.messages
     this.sessions = new Map();

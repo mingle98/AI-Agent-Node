@@ -117,10 +117,12 @@ function buildRulesSection() {
 5. 数据搜索或可视化 → 使用ai_agent_echart技能(数据搜索和可视化)
 6. 画图/梳理逻辑/流程/时序/类关系/架构图 → 必须先使用 mermaid_diagram 技能（用户不需要提 Mermaid，直接描述需求即可）
 7. 图表场景禁止首轮直接调用 render_mermaid；只能在 mermaid_diagram 技能返回绘图指令后再调用 render_mermaid
-8. 复杂场景 → 使用高级技能（教学、咨询、问答、Mermaid画图、需要数据搜索和可视化的场景）
-9. 优先使用技能处理综合场景，它们会自动完成多个步骤
-10. 参数要完整、准确，避免无效调用
-11. 给出准确、友好、专业的回答`;
+8. 执行代码/数据转换/算法验证 → 使用 exec_code 工具（沙箱执行 JS/TS/Python）
+9. 复杂场景 → 使用高级技能（教学、咨询、问答、Mermaid画图、需要数据搜索和可视化、可用python_executor创建python脚本解决问题的场景）
+10. 如果问题过于复杂或没有可用的能力就优先使用python_executor技能自动创建python脚本尝试解决
+11. 优先使用技能处理综合场景，它们会自动完成多个步骤
+12. 参数要完整、准确，避免无效调用
+13. 给出准确、友好、专业的回答`;
 }
 
 /**
@@ -134,6 +136,13 @@ function buildExamplesSection(skillDefinitions) {
     '- "生成API文档" → 用 generate_document 工具创建',
     '- "今年的房价走势怎么样?" → 用 ai_agent_echart 进行数据搜索和可视化',
     '- "帮我画个流程图梳理登录逻辑" → 用 mermaid_diagram 技能（生成可渲染的图）',
+    '- "这段代码报错了帮我看看" → 用 debug_assistant 技能诊断',
+    '- "帮我review下这段代码" → 用 code_review 技能检查质量',
+    '- "Excel怎么统计销售额" → 用 excel_helper 技能获取公式',
+    '- "纠结选哪个offer" → 用 decision_helper 技能分析',
+    '- "帮我写封邮件跟进客户" → 用 email_writer 技能生成',
+    '- "执行这段js代码看看结果" → 用 exec_code 工具沙箱执行',
+    '- "这是上周数据：访问=50000, 加购=3500, 下单=800, 支付=210。帮我计算每步转化率，并找出最大流失环节" → 用 python_executor 技能自动生成脚本执行分析',
   ];
   
   // 从技能中提取示例
@@ -159,6 +168,12 @@ function generateSkillExample(skill) {
     'component_consulting': '- "如何配置流式响应" → 用 component_consulting 技能（组件使用指导）',
     'code_explanation': '- "详细解释这段代码" → 用 code_explanation 技能（深度代码分析）',
     'mermaid_diagram': '- "把这段逻辑用流程图/时序图画出来" → 用 mermaid_diagram 技能（生成图表代码块）',
+    'debug_assistant': '- "报错了：Cannot read property of undefined" → 用 debug_assistant 技能（错误诊断）',
+    'code_review': '- "帮我review这段代码有没有问题" → 用 code_review 技能（代码质量检查）',
+    'excel_helper': '- "Excel怎么计算平均值排除空值" → 用 excel_helper 技能（公式和操作指导）',
+    'decision_helper': '- "纠结要不要换工作" → 用 decision_helper 技能（决策分析框架）',
+    'email_writer': '- "帮我写封跟进邮件" → 用 email_writer 技能（生成邮件模板）',
+    'python_executor': '- "分析这组数据的统计指标" → 用 python_executor 技能（自动生成脚本执行分析）',
   };
   
   return exampleMap[skill.name] || null;
