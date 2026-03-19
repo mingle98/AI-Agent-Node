@@ -80,7 +80,7 @@
     <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
 
     <!-- AISuspendedBallChat UMD -->
-    <script src="https://unpkg.com/ai-suspended-ball-chat@0.2.76/dist/suspended-ball-chat.umd.js"></script>
+    <script src="https://unpkg.com/ai-suspended-ball-chat@0.2.77-alpha.1/dist/suspended-ball-chat.umd.js"></script>
   </head>
 
   <body>
@@ -88,7 +88,7 @@
 
     <script>
       (function () {
-        const { createApp, ref, computed, h } = window.Vue;
+        const { createApp, ref, computed, h, watch } = window.Vue;
 
         // UMD export name observed in the bundle:
         // globalThis.SuspendedBallChat = { SuspendedBallChat, ChatPanel, ... }
@@ -111,6 +111,14 @@
             const resetApiUrl = ref('http://localhost:3000/api/session/reset');
 
             const chatRef = ref(null);
+
+            watch(() => chatRef.value, (newVal) => {
+              if (newVal) {
+                console.log('[AISBC] chatRef:', newVal);
+                // alert('chatRef is ready');
+                newVal.openPanel();
+              }
+            });
 
             const callbacks = {
               onUserMessage: (message) => {
@@ -281,6 +289,7 @@
                   domainName: this.domainName,
                   enableStreaming: this.enableStreaming,
                   enableContext: true,
+                  supportedCustomContext: true,
                   enableLocalStorage: true,
                   enableVoiceInput: true,
                   callbacks: this.callbacks,
