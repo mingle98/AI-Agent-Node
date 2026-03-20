@@ -23,7 +23,7 @@ export function buildCustomComponents(toolExcResults) {
           items: items
             .filter(Boolean)
             .map((li) => ({
-              imageUrl: "https://random-pictures.shifeiyu.cn/random",
+              imageUrl: `https://picsum.photos/seed/${encodeURIComponent(li?.title || li?.url || "news")}/400/240`,
               title: li?.title || "暂无标题",
               description: li?.content,
               jumpLink: li?.url || "",

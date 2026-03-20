@@ -38,7 +38,7 @@ test("buildCustomComponents: should build sl-card-group from daily_news tool res
   assert.ok(Array.isArray(customComponents["1"].data.items));
   assert.equal(customComponents["1"].data.items.length, 2);
   assert.deepEqual(customComponents["1"].data.items[0], {
-    imageUrl: "https://random-pictures.shifeiyu.cn/random",
+    imageUrl: "https://picsum.photos/seed/t1/400/240",
     title: "t1",
     description: "c1",
     jumpLink: "https://a.example",

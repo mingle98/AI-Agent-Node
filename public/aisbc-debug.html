@@ -80,7 +80,7 @@
     <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
 
     <!-- AISuspendedBallChat UMD -->
-    <script src="https://unpkg.com/ai-suspended-ball-chat@0.2.80-alpha.1/dist/suspended-ball-chat.umd.js"></script>
+    <script src="https://unpkg.com/ai-suspended-ball-chat@0.2.81/dist/suspended-ball-chat.umd.js"></script>
   </head>
 
   <body>
@@ -116,7 +116,9 @@
               if (newVal) {
                 console.log('[AISBC] chatRef:', newVal);
                 // alert('chatRef is ready');
-                newVal.openPanel();
+                setTimeout(() => {
+                   newVal.openPanel();
+                }, 2000);
               }
             });
 
@@ -289,10 +291,10 @@
                   domainName: this.domainName,
                   enableStreaming: this.enableStreaming,
                   enableContext: true,
-                  // enableImageUpload: false,
+                  // enableImageUpload: true,
                   supportedCustomContext: true,
                   enableLocalStorage: true,
-                  // enableVoiceInput: true,
+                  enableVoiceInput: true,
                   callbacks: this.callbacks,
                   customRequestConfig: this.customRequestConfig,
                   showClearButton: true,
