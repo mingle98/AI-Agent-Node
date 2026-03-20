@@ -29,7 +29,6 @@
     "@langchain/openai": "^1.2.13",
     "@langchain/textsplitters": "^1.0.1",
     "archiver": "^7.0.1",
-    "unzipper": "^0.12.3",
     "axios": "^1.13.6",
     "dotenv": "^17.3.1",
     "epub2": "^3.0.2",
@@ -44,10 +43,11 @@
     "multer": "^2.1.1",
     "neo4j-driver": "^5.28.1",
     "pdf-lib": "^1.17.1",
-    "pdf-parse": "^1.1.1"
+    "pdf-parse": "^1.1.1",
+    "unzipper": "^0.12.3"
   },
   "devDependencies": {
-    "c8": "^10.1.2",
+    "c8": "^11.0.0",
     "husky": "^9.1.6"
   },
   "engines": {
