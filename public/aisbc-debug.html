@@ -190,6 +190,11 @@
               },
             ];
 
+            const welcomeConfig = {
+              title: '欢迎使用AI助手',
+              description: '我是您的智能助手，有什么可以帮助您的吗？',
+            }
+
             const customRequestConfig = {
               customParams: {
                 session_id: 'test123456',
@@ -221,6 +226,7 @@
               enableStreaming,
               callbacks,
               presetTasks,
+              welcomeConfig,
               customRequestConfig,
               chatRef,
               clearHistory,
@@ -299,6 +305,7 @@
                   customRequestConfig: this.customRequestConfig,
                   showClearButton: true,
                   presetTasks: this.presetTasks,
+                  welcomeConfig: this.welcomeConfig
                 }),
               ]),
             ]);
