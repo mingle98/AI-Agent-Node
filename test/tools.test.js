@@ -69,3 +69,37 @@ test("daily_news tool: should be defined", () => {
   assert.ok(tool);
   assert.equal(tool.params.length, 2);
 });
+
+// ========== 邮件工具测试 ==========
+test("email_send tool: should be defined with correct params", () => {
+  const tool = TOOL_DEFINITIONS.find(t => t.name === "email_send");
+  assert.ok(tool, "email_send tool should exist");
+  assert.equal(tool.params.length, 4);
+  assert.ok(tool.params.find(p => p.name === "收件人"));
+  assert.ok(tool.params.find(p => p.name === "主题"));
+  assert.ok(tool.params.find(p => p.name === "内容"));
+  assert.ok(tool.params.find(p => p.name === "选项"));
+});
+
+test("email_template tool: should be defined with correct options", () => {
+  const tool = TOOL_DEFINITIONS.find(t => t.name === "email_template");
+  assert.ok(tool, "email_template tool should exist");
+  assert.equal(tool.params.length, 4);
+  const templateParam = tool.params.find(p => p.name === "模板");
+  assert.ok(templateParam);
+  assert.ok(templateParam.options.includes("notification"));
+  assert.ok(templateParam.options.includes("alert"));
+  assert.ok(templateParam.options.includes("report"));
+});
+
+test("email_verify tool: should be defined", () => {
+  const tool = TOOL_DEFINITIONS.find(t => t.name === "email_verify");
+  assert.ok(tool, "email_verify tool should exist");
+  assert.equal(tool.params.length, 0);
+});
+
+test("TOOLS: should include email functions", () => {
+  assert.equal(typeof TOOLS.email_send, "function");
+  assert.equal(typeof TOOLS.email_template, "function");
+  assert.equal(typeof TOOLS.email_verify, "function");
+});

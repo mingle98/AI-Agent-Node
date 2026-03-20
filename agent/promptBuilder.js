@@ -136,7 +136,8 @@ function buildRulesSection() {
 13. CSV/JSON → 使用 csv_read/csv_write/json_read/json_write 工具
 14. 图片操作 → 使用 image_info/svg_write 工具
 15. 压缩/解压操作 → 使用 zip_compress/zip_extract/zip_info/zip_list 工具
-16. 文件操作返回的 URL 可直接访问下载（在用户专属的 workspace/{sessionId} 目录下）
+16. 邮件发送 → 使用 send_email 工具（支持 SMTP 发送，可带附件、HTML/文本内容）
+17. 文件操作返回的 URL 可直接访问下载（在用户专属的 workspace/{sessionId} 目录下）
 17. 文件路径以用户专属 workspace 为根目录，例如：file_write("docs/readme.md", "内容")
 18. 用户文件相互隔离，一个用户无法访问另一个用户的文件
 19. 复杂场景 → 使用高级技能（教学、咨询、问答、Mermaid画图、需要数据搜索和可视化、可用python_executor创建python脚本解决问题的场景）
@@ -162,6 +163,8 @@ function buildExamplesSection(skillDefinitions) {
     '- "Excel怎么统计销售额" → 用 excel_helper 技能获取公式',
     '- "纠结选哪个offer" → 用 decision_helper 技能分析',
     '- "帮我写封邮件跟进客户" → 用 email_writer 技能生成',
+    '- "发送邮件通知给xxx@example.com" → 用 send_email 工具发送',
+    '- "发送系统告警邮件给管理员" → 用 email_sender 技能（自动完成发送流程）',
     '- "执行这段js代码看看结果" → 用 exec_code 工具沙箱执行',
     '- "这是上周数据：访问=50000, 加购=3500, 下单=800, 支付=210。帮我计算每步转化率，并找出最大流失环节" → 用 python_executor 技能自动生成脚本执行分析',
     '- "列出workspace里的文件" → 用 file_list 工具查看目录',
@@ -201,6 +204,7 @@ function generateSkillExample(skill) {
     'excel_helper': '- "Excel怎么计算平均值排除空值" → 用 excel_helper 技能（公式和操作指导）',
     'decision_helper': '- "纠结要不要换工作" → 用 decision_helper 技能（决策分析框架）',
     'email_writer': '- "帮我写封跟进邮件" → 用 email_writer 技能（生成邮件模板）',
+    'email_sender': '- "发送告警邮件给运维团队" → 用 email_sender 技能（自动提取信息、验证配置、选择模板、执行发送）',
     'python_executor': '- "分析这组数据的统计指标" → 用 python_executor 技能（自动生成脚本执行分析）',
   };
   

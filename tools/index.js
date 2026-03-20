@@ -17,6 +17,7 @@ import {
   readCsv, writeCsv, readJson, writeJson
 } from './fileFormatHandler.js';
 import { compressFiles, extractArchive, getArchiveInfo, listArchiveContents } from './compress.js';
+import { sendEmail, sendTemplateEmail, verifySmtpConfig } from './email.js';
 export const TOOL_DEFINITIONS = [
   {
     name: "search_knowledge",
@@ -372,6 +373,53 @@ export const TOOL_DEFINITIONS = [
     ],
     example: 'zip_list("archive.zip", 50)',
   },
+  // ========== 邮件发送工具 ==========
+  {
+    name: "email_send",
+    func: (sessionId, to, subject, content, options = "{}") => {
+      const opts = JSON.parse(options);
+      return sendEmail({
+        to,
+        subject,
+        text: opts.html ? undefined : content,
+        html: opts.html ? content : undefined,
+        from: opts.from,
+        smtp: opts.smtp
+      });
+    },
+    description: "发送邮件通知，支持纯文本或HTML格式，可用于系统告警、任务完成通知等场景",
+    params: [
+      { name: "收件人", type: "string", example: "user@example.com", description: "收件人邮箱，多个用逗号分隔" },
+      { name: "主题", type: "string", example: "任务完成通知" },
+      { name: "内容", type: "string", example: "您的数据分析任务已完成，请查看结果。" },
+      { name: "选项", type: "object", example: '{"html":false,"from":"系统通知"}', description: "可选：html是否HTML格式, from发件人名称, smtp自定义SMTP配置", required: false }
+    ],
+    example: 'email_send("admin@example.com", "系统告警", "CPU使用率超过90%", "{}")',
+  },
+  {
+    name: "email_template",
+    func: (sessionId, to, template, subject, variables = "{}") => sendTemplateEmail({
+      to,
+      template,
+      subject,
+      variables: JSON.parse(variables)
+    }),
+    description: "使用内置模板发送邮件，支持 notification/alert/report 模板",
+    params: [
+      { name: "收件人", type: "string", example: "user@example.com" },
+      { name: "模板", type: "string", example: "notification", options: ["notification", "alert", "report"] },
+      { name: "主题", type: "string", example: "每日报告" },
+      { name: "变量", type: "object", example: '{"title":"数据统计","message":"今日新增100条记录"}', description: "模板变量替换对象", required: false }
+    ],
+    example: 'email_template("user@example.com", "notification", "欢迎邮件", "{\"title\":\"欢迎\",\"message\":\"感谢您的注册\"}")',
+  },
+  {
+    name: "email_verify",
+    func: () => verifySmtpConfig(),
+    description: "验证 SMTP 配置是否有效，检查邮件服务连接状态",
+    params: [],
+    example: 'email_verify()',
+  },
 ];
 
 // 生成工具映射表
@@ -402,4 +450,6 @@ export {
   readCsv, writeCsv, readJson, writeJson,
   // 压缩工具
   compressFiles, extractArchive, getArchiveInfo, listArchiveContents,
+  // 邮件工具
+  sendEmail, sendTemplateEmail, verifySmtpConfig,
 };

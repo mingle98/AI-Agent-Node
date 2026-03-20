@@ -30,7 +30,21 @@ test("SKILLS: should map skill names to functions", () => {
   assert.equal(typeof SKILLS.excel_helper, "function");
   assert.equal(typeof SKILLS.decision_helper, "function");
   assert.equal(typeof SKILLS.email_writer, "function");
+  assert.equal(typeof SKILLS.email_sender, "function");  // 新增
   assert.equal(typeof SKILLS.python_executor, "function");
+});
+
+test("email_sender skill: should be defined with correct params", () => {
+  const skill = SKILL_DEFINITIONS.find(s => s.name === "email_sender");
+  assert.ok(skill, "email_sender skill should exist");
+  assert.ok(skill.params.find(p => p.name === "收件人"));
+  assert.ok(skill.params.find(p => p.name === "主题"));
+  assert.ok(skill.params.find(p => p.name === "内容"));
+  assert.ok(skill.params.find(p => p.name === "场景类型"));
+  const typeParam = skill.params.find(p => p.name === "场景类型");
+  assert.ok(typeParam.options.includes("notification"));
+  assert.ok(typeParam.options.includes("alert"));
+  assert.ok(typeParam.options.includes("thanks"));
 });
 
 test("ai_agent_teaching skill: should have difficulty options", () => {

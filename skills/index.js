@@ -10,6 +10,7 @@ import { skillCodeReview } from './codeReview.js';
 import { skillExcelHelper } from './excelHelper.js';
 import { skillDecisionHelper } from './decisionHelper.js';
 import { skillEmailWriter } from './emailWriter.js';
+import { skillEmailSender } from './emailSender.js';
 import { skillPythonExecutor } from './pythonExecutor.js';
 
 // 技能定义（包含函数和元数据）
@@ -136,6 +137,19 @@ export const SKILL_DEFINITIONS = [
     example: 'email_writer("跟进", "上周会议方案", "formal")',
   },
   {
+    name: "email_sender",
+    func: skillEmailSender,
+    description: "邮件发送助手（完整流程）",
+    functionality: "自动完成邮件信息提取、SMTP配置验证、模板选择、发送执行的全流程，适用于通知、告警、报告等场景",
+    params: [
+      { name: "收件人", type: "string", example: "user@example.com, admin@company.com" },
+      { name: "主题", type: "string", example: "系统告警通知", required: false },
+      { name: "内容", type: "string", example: "CPU使用率超过90%，请及时处理" },
+      { name: "场景类型", type: "string", example: "alert", options: ["notification", "alert", "report", "custom", "thanks", "verification", "invitation"] }
+    ],
+    example: 'email_sender("user@example.com", "系统告警", "CPU使用率超过90%", "alert")',
+  },
+  {
     name: "python_executor",
     func: skillPythonExecutor,
     description: "Python 脚本执行器（LLM生成脚本+执行+智能分析）",
@@ -168,5 +182,6 @@ export {
   skillExcelHelper,
   skillDecisionHelper,
   skillEmailWriter,
+  skillEmailSender,
   skillPythonExecutor,
 };

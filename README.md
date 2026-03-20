@@ -12,6 +12,7 @@
 - 🔄 **会话管理**: 多会话支持，自动上下文管理
 - 🛡️ **容错机制**: 熔断器、重试机制、降级策略
 - 📁 **用户文件隔离**: 基于 sessionId 的独立工作空间，自动目录初始化，支持文件数量限制（100个/用户）
+- 📧 **邮件发送**: 支持 SMTP 发送，内置多种精美模板（通知/告警/报告/感谢信/验证码/邀请函/营销）
 - 🎨 **AISuspendedBallChat 兼容**: 完全符合 AISuspendedBallChat 组件接口规范
  
 ![ai-agent-node.png](./imgs/ai-agent-node.png)
@@ -82,6 +83,17 @@ DASHSCOPE_API_KEY=your_dashscope_api_key_here
 
 # OpenAI API配置（如果使用 OpenAI 则取消注释并设置）
 # OPENAI_API_KEY=your_openai_api_key_here
+
+# SMTP 邮件发送配置（可选，用于邮件发送功能）
+# SMTP_HOST=smtp.qq.com          # QQ邮箱: smtp.qq.com, 163邮箱: smtp.163.com
+# SMTP_PORT=465                  # QQ/163邮箱用465，Gmail用587
+# SMTP_SECURE=true               # 端口465用true，587用false
+# SMTP_USER=your_email@qq.com    # 发件人邮箱
+# SMTP_PASS=your_auth_code       # 邮箱授权码（非登录密码！）
+# 
+# 获取授权码方法：
+# - QQ邮箱: 设置 → 账户 → 开启POP3/SMTP服务 → 生成授权码
+# - 163邮箱: 设置 → POP3/SMTP/IMAP → 开启服务 → 生成授权码
 ```
 
 ### 4. 启动服务
@@ -312,6 +324,9 @@ import { SuspendedBallChat } from 'ai-suspended-ball-chat'
 | `exec_code`　　　　 | 代码执行　　　 | 代码内容, 编程语言(可选)　　　　　　　　 | `exec_code("console.log(2+3)", "javascript")`　　　　　　　　　　　　|
 | `render_mermaid`　　| Mermaid渲染　　| Mermaid源码或图表类型, 图表内容　　　　　| `render_mermaid("sequence", "participant A\nA->>B: msg")`　　　　　　|
 | `script_generator`　| Python脚本生成　　　 | 任务描述, 输入数据(可选), 输出格式(可选) | `script_generator("计算平均值", "10,20,30", "auto")`　　　　　　　　 |
+| `email_send`　　　　| 邮件发送　　　 | 收件人, 主题, 内容, 选项(可选)　　　　　 | `email_send("user@example.com", "通知", "内容", "{}")` |
+| `email_template`　　| 模板邮件发送　 | 收件人, 模板类型, 主题, 变量(可选)　　　 | `email_template("user@example.com", "alert", "告警", "{}")` |
+| `email_verify`　　　| 验证SMTP配置 | 无　　　　　　　　　　　　　　　　　　　 | `email_verify()` |
 
 ### 用户文件管理
 
@@ -370,6 +385,7 @@ import { SuspendedBallChat } from 'ai-suspended-ball-chat'
 | `excel_helper`　　　　 | Excel 助手　　　　　　　　　 | 需求描述, 数据类型 | `excel_helper("计算A列平均值", "numbers")` |
 | `decision_helper`　　　| 决策助手　　　　　　　　　　 | 决策场景, 可选方案 | `decision_helper("是否换工作", "接受, 拒绝, 再谈条件")` |
 | `email_writer`　　　　 | 邮件写作助手　　　　　　　　 | 邮件目的, 背景信息, 语气风格 | `email_writer("跟进", "上周会议方案", "formal")` |
+| `email_sender`　　　　 | 邮件发送助手（完整流程）　　 | 收件人, 主题, 内容, 场景类型 | `email_sender("user@example.com", "告警", "CPU使用率过高", "alert")` |
 
 
 ### 配置选项
