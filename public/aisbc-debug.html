@@ -59,6 +59,277 @@
         position: relative;
         flex: 1;
         overflow: hidden;
+        display: flex;
+      }
+      /* 文件管理面板样式 - Ant Design 风格 */
+      .file-panel {
+        flex: 3;
+        border-right: 1px solid #e5e7eb;
+        display: flex;
+        flex-direction: column;
+        background: #fff;
+        min-width: 500px;
+      }
+      .file-panel-header {
+        padding: 12px 16px;
+        border-bottom: 1px solid #f0f0f0;
+        font-weight: 500;
+        font-size: 14px;
+        color: #262626;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #fafafa;
+      }
+      .file-panel-body {
+        flex: 1;
+        display: flex;
+        overflow: hidden;
+      }
+      .file-tree-section {
+        width: 200px;
+        border-right: 1px solid #f0f0f0;
+        overflow-y: auto;
+        padding: 8px 0;
+        background: #fff;
+        flex-shrink: 0;
+      }
+      .file-preview-section {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        background: #fff;
+        min-height: 0;
+      }
+      .file-preview-empty {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #bfbfbf;
+        font-size: 13px;
+        background: #f5f5f5;
+      }
+      .file-tree {
+        font-size: 13px;
+      }
+      .tree-node {
+        display: flex;
+        align-items: center;
+        padding: 6px 12px 6px 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: #595959;
+        user-select: none;
+      }
+      .tree-node:hover {
+        background: #f5f5f5;
+      }
+      .tree-node.selected {
+        background: #e6f7ff;
+        color: #1890ff;
+      }
+      .tree-node-content {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex: 1;
+        min-width: 0;
+      }
+      .tree-toggle {
+        width: 14px;
+        height: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        color: #8c8c8c;
+        transition: transform 0.2s;
+      }
+      .tree-toggle.expanded {
+        transform: rotate(90deg);
+      }
+      .tree-toggle.placeholder {
+        visibility: hidden;
+      }
+      .tree-icon {
+        font-size: 14px;
+        flex-shrink: 0;
+      }
+      .tree-icon.folder {
+        color: #faad14;
+      }
+      .tree-icon.file {
+        color: #8c8c8c;
+      }
+      .tree-name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .tree-checkbox {
+        margin-right: 4px;
+        cursor: pointer;
+      }
+      .file-preview-header {
+        padding: 12px 16px;
+        border-bottom: 1px solid #f0f0f0;
+        background: #fafafa;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .file-preview-title {
+        font-size: 13px;
+        font-weight: 500;
+        color: #262626;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
+      }
+      .file-preview-actions {
+        display: flex;
+        gap: 8px;
+      }
+      .file-preview-actions button {
+        padding: 4px 12px;
+        font-size: 12px;
+        border: 1px solid #d9d9d9;
+        border-radius: 4px;
+        background: #fff;
+        cursor: pointer;
+        color: #595959;
+        transition: all 0.2s;
+      }
+      .file-preview-actions button:hover {
+        border-color: #1890ff;
+        color: #1890ff;
+      }
+      .file-preview-actions button.btn-primary {
+        background: #1890ff;
+        border-color: #1890ff;
+        color: #fff;
+      }
+      .file-preview-actions button.btn-primary:hover {
+        background: #40a9ff;
+      }
+      .file-preview-actions button.btn-danger {
+        color: #ff4d4f;
+        border-color: #ff4d4f;
+      }
+      .file-preview-actions button.btn-danger:hover {
+        background: #fff1f0;
+      }
+      .file-preview-body {
+        flex: 1;
+        overflow: auto;
+        padding: 16px;
+        background: #fff;
+      }
+      .file-preview-content {
+        font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.6;
+        color: #595959;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .file-preview-image {
+        max-width: 100%;
+        max-height: 300px;
+        border-radius: 4px;
+        border: 1px solid #f0f0f0;
+      }
+      .file-toolbar {
+        padding: 8px 12px;
+        border-bottom: 1px solid #f0f0f0;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        background: #fafafa;
+      }
+      .file-toolbar button {
+        padding: 4px 12px;
+        font-size: 12px;
+        border: 1px solid #d9d9d9;
+        border-radius: 4px;
+        background: #fff;
+        cursor: pointer;
+        color: #595959;
+        transition: all 0.2s;
+      }
+      .file-toolbar button:hover {
+        border-color: #1890ff;
+        color: #1890ff;
+      }
+      .file-toolbar button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .file-toolbar label {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        color: #595959;
+        cursor: pointer;
+      }
+      .quota-badge {
+        font-size: 11px;
+        color: #8c8c8c;
+        padding: 2px 8px;
+        background: #f5f5f5;
+        border-radius: 4px;
+      }
+      .upload-area {
+        border: 1px dashed #d9d9d9;
+        border-radius: 4px;
+        padding: 16px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        margin: 8px 12px;
+        background: #fafafa;
+      }
+      .upload-area:hover {
+        border-color: #1890ff;
+        background: #e6f7ff;
+      }
+      .upload-area.dragover {
+        border-color: #1890ff;
+        background: #bae7ff;
+      }
+      .upload-area input[type="file"] {
+        display: none;
+      }
+      .upload-icon {
+        font-size: 24px;
+        margin-bottom: 4px;
+        color: #8c8c8c;
+      }
+      .upload-text {
+        font-size: 12px;
+        color: #8c8c8c;
+      }
+      .upload-progress {
+        margin-top: 8px;
+        height: 2px;
+        background: #f0f0f0;
+        border-radius: 1px;
+        overflow: hidden;
+      }
+      .upload-progress-bar {
+        height: 100%;
+        background: #1890ff;
+        transition: width 0.3s;
+      }
+      .chat-container {
+        flex: 2;
+        position: relative;
       }
     </style>
 
@@ -69,18 +340,46 @@
     <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 
     <!-- Vue 3 (global build) -->
-    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
 
+    <!-- Vue 2 Compatibility Shim for UMD packages expecting Vue 2 -->
     <script>
-      window.Vue = window.Vue || {};
-      window.Vue.component = window.Vue.component || function () {};
+      (function() {
+        if (!window.Vue) return;
+        // Vue 2 shim for Vue 3
+        if (typeof window.Vue.component !== 'function') {
+          window.Vue.component = function(name, definition) {
+            return definition;
+          };
+        }
+        if (typeof window.Vue.extend !== 'function') {
+          window.Vue.extend = function(options) {
+            // Return a constructor function that wraps the options
+            return function(props) {
+              return Object.assign({}, options, { props: props });
+            };
+          };
+        }
+        // Add other common Vue 2 static methods if needed
+        if (!window.Vue.set && window.Vue.ref) {
+          window.Vue.set = function(target, key, value) {
+            target[key] = value;
+            return value;
+          };
+        }
+        if (!window.Vue.delete) {
+          window.Vue.delete = function(target, key) {
+            delete target[key];
+          };
+        }
+      })();
     </script>
 
     <!-- lodash-es (UMD expects global _) -->
     <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
 
     <!-- AISuspendedBallChat UMD -->
-    <script src="https://unpkg.com/ai-suspended-ball-chat@0.2.82/dist/suspended-ball-chat.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ai-suspended-ball-chat@0.2.82/dist/suspended-ball-chat.umd.js"></script>
   </head>
 
   <body>
@@ -88,7 +387,7 @@
 
     <script>
       (function () {
-        const { createApp, ref, computed, h, watch } = window.Vue;
+        const { createApp, ref, computed, h, watch, reactive } = window.Vue;
 
         // UMD export name observed in the bundle:
         // globalThis.SuspendedBallChat = { SuspendedBallChat, ChatPanel, ... }
@@ -112,13 +411,29 @@
 
             const chatRef = ref(null);
 
+            // 文件管理相关
+            const files = ref([]);
+            const uploadProgress = ref(0);
+            const isUploading = ref(false);
+            const quotaInfo = ref(null);
+            // selectedFiles 用 reactive 包装，以便在 render 中通过 this 直接访问
+            const selectedFiles = reactive({ selected: new Set() });
+            // fileInputRef 使用字符串 ref 方式
+
             watch(() => chatRef.value, (newVal) => {
               if (newVal) {
                 console.log('[AISBC] chatRef:', newVal);
-                // alert('chatRef is ready');
                 setTimeout(() => {
                    newVal.openPanel();
                 }, 2000);
+                // 聊天组件准备好后加载文件列表
+                fetchFileList();
+                // 启动30秒轮询
+                if (!window.fileListPolling) {
+                  window.fileListPolling = setInterval(() => {
+                    fetchFileList();
+                  }, 30000);
+                }
               }
             });
 
@@ -202,6 +517,340 @@
               },
             };
 
+            // 文件管理功能
+            const getSessionId = () => {
+              return (customRequestConfig?.customParams?.session_id || 'default').trim() || 'default';
+            };
+
+            const queryRecursive = ref(true);
+            const fileTree = ref([]);
+            const expandedPaths = ref(new Set(['/']));
+            const selectedNode = ref(null);
+            const preview = ref({ loading: false, error: '', content: '', type: '', url: '' });
+            const lastRefreshTime = ref(null);
+
+            const fetchFileList = async () => {
+              try {
+                const sessionId = getSessionId();
+                const resp = await fetch(`http://localhost:3000/api/tools/file_list`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'X-Session-Id': sessionId,
+                  },
+                  body: JSON.stringify({
+                    session_id: sessionId,
+                    dirPath: '',
+                    recursive: !!queryRecursive.value,
+                  }),
+                });
+                const data = await resp.json();
+                if (data.success) {
+                  const normalizeNode = (node) => {
+                    const base = {
+                      name: node.name,
+                      type: node.type,
+                      path: node.path,
+                      size: node.size,
+                      formattedSize: node.formattedSize,
+                      modifiedAt: node.modifiedAt,
+                      url: node.url,
+                      fullUrl: node.fullUrl,
+                      children: Array.isArray(node.children) ? node.children.map(normalizeNode) : [],
+                    };
+                    return base;
+                  };
+
+                  fileTree.value = Array.isArray(data.items) ? data.items.map(normalizeNode) : [];
+
+                  const flattenFiles = (nodes, out = []) => {
+                    for (const n of nodes || []) {
+                      if (n.type === 'file') out.push(n);
+                      if (n.type === 'directory' && n.children && n.children.length > 0) {
+                        flattenFiles(n.children, out);
+                      }
+                    }
+                    return out;
+                  };
+                  files.value = flattenFiles(fileTree.value, []);
+                  lastRefreshTime.value = new Date();
+                }
+              } catch (error) {
+                console.error('获取文件列表失败:', error);
+              }
+            };
+
+            const isExpanded = (path) => expandedPaths.value.has(path);
+            const toggleExpand = (node) => {
+              if (!node || node.type !== 'directory') return;
+              if (expandedPaths.value.has(node.path)) {
+                expandedPaths.value.delete(node.path);
+              } else {
+                expandedPaths.value.add(node.path);
+              }
+            };
+
+            const selectNode = async (node) => {
+              selectedNode.value = node;
+              preview.value = { loading: false, error: '', content: '', type: '', url: '' };
+              if (!node || node.type !== 'file') return;
+              const ext = (node.name || '').split('.').pop()?.toLowerCase() || '';
+              const isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico'].includes(ext);
+              if (isImage) {
+                preview.value = { loading: false, error: '', content: '', type: 'image', url: node.fullUrl || node.url || '' };
+                return;
+              }
+              preview.value = { loading: true, error: '', content: '', type: 'text', url: '' };
+              try {
+                const sessionId = getSessionId();
+                const resp = await fetch(`http://localhost:3000/api/tools/file_read`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'X-Session-Id': sessionId,
+                  },
+                  body: JSON.stringify({
+                    session_id: sessionId,
+                    filePath: node.path,
+                    maxSize: 1024 * 1024,
+                  }),
+                });
+                const data = await resp.json();
+                if (data.success) {
+                  preview.value = {
+                    loading: false,
+                    error: '',
+                    content: typeof data.content === 'string' ? data.content : '',
+                    type: 'text',
+                    url: data.fullUrl || data.url || '',
+                  };
+                } else {
+                  preview.value = { loading: false, error: data.error || '读取失败', content: '', type: 'text', url: '' };
+                }
+              } catch (e) {
+                preview.value = { loading: false, error: e.message || '读取失败', content: '', type: 'text', url: '' };
+              }
+            };
+
+            const handleFileSelect = async (event) => {
+              const selectedFiles = event.target.files;
+              if (!selectedFiles.length) return;
+              await uploadFiles(selectedFiles);
+              event.target.value = ''; // 清空input
+            };
+
+            const uploadFiles = async (fileList) => {
+              if (isUploading.value) return;
+              isUploading.value = true;
+              uploadProgress.value = 0;
+
+              const sessionId = getSessionId();
+              const formData = new FormData();
+              formData.append('session_id', sessionId);
+              for (const file of fileList) {
+                formData.append('files', file);
+              }
+
+              try {
+                const xhr = new XMLHttpRequest();
+                xhr.upload.addEventListener('progress', (e) => {
+                  if (e.lengthComputable) {
+                    uploadProgress.value = Math.round((e.loaded / e.total) * 100);
+                  }
+                });
+
+                await new Promise((resolve, reject) => {
+                  xhr.addEventListener('load', () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                      resolve(xhr.response);
+                    } else {
+                      reject(new Error(`上传失败: ${xhr.statusText}`));
+                    }
+                  });
+                  xhr.addEventListener('error', () => reject(new Error('上传失败')));
+                  xhr.addEventListener('abort', () => reject(new Error('上传被取消')));
+                  xhr.open('POST', 'http://localhost:3000/api/files/upload');
+                  xhr.send(formData);
+                });
+
+                const data = JSON.parse(xhr.responseText);
+                if (data.success) {
+                  alert(`上传成功! 已上传 ${data.uploadedCount} 个文件`);
+                  await fetchFileList(); // 刷新列表
+                } else {
+                  alert(data.message || '上传失败');
+                }
+              } catch (error) {
+                console.error('上传失败:', error);
+                alert('上传失败: ' + error.message);
+              } finally {
+                isUploading.value = false;
+                uploadProgress.value = 0;
+              }
+            };
+
+            const downloadFile = (file) => {
+              if (file.fullUrl) {
+                window.open(file.fullUrl, '_blank');
+              } else {
+                const sessionId = getSessionId();
+                window.open(`http://localhost:3000/workspace/${sessionId}/${file.path}`, '_blank');
+              }
+            };
+
+            const deleteFile = async (file) => {
+              if (!confirm(`确定要删除 ${file.name} 吗?`)) return;
+              try {
+                const sessionId = getSessionId();
+                const resp = await fetch(`http://localhost:3000/api/tools/file_delete`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'X-Session-Id': sessionId,
+                  },
+                  body: JSON.stringify({
+                    session_id: sessionId,
+                    filePath: file.path,
+                    recursive: false,
+                  }),
+                });
+                const data = await resp.json();
+                if (data.success) {
+                  await fetchFileList();
+                } else {
+                  alert(data.error || '删除失败');
+                }
+              } catch (error) {
+                console.error('删除失败:', error);
+                alert('删除失败: ' + error.message);
+              }
+            };
+
+            const openFolderLocation = () => {
+              const sessionId = getSessionId();
+              window.open(`http://localhost:3000/workspace/${sessionId}`, '_blank');
+            };
+
+            const onDragOver = (e) => {
+              e.preventDefault();
+              e.currentTarget.classList.add('dragover');
+            };
+
+            const onDragLeave = (e) => {
+              e.currentTarget.classList.remove('dragover');
+            };
+
+            const onDrop = async (e) => {
+              e.preventDefault();
+              e.currentTarget.classList.remove('dragover');
+              const droppedFiles = e.dataTransfer.files;
+              if (droppedFiles.length > 0) {
+                await uploadFiles(droppedFiles);
+              }
+            };
+
+            const fetchQuotaInfo = async () => {
+              try {
+                const sessionId = getSessionId();
+                const resp = await fetch(`http://localhost:3000/api/files/quota`, {
+                  method: 'GET',
+                  headers: {
+                    'X-Session-Id': sessionId,
+                  },
+                });
+                const data = await resp.json();
+                if (data.success) {
+                  quotaInfo.value = data;
+                }
+              } catch (error) {
+                console.error('获取配额信息失败:', error);
+              }
+            };
+
+            const toggleFileSelection = (file) => {
+              if (selectedFiles.selected.has(file.path)) {
+                selectedFiles.selected.delete(file.path);
+              } else {
+                selectedFiles.selected.add(file.path);
+              }
+            };
+
+            const downloadSelectedFiles = async () => {
+              const selected = Array.from(selectedFiles.selected);
+              if (selected.length === 0) {
+                alert('请先选择要下载的文件');
+                return;
+              }
+              try {
+                const sessionId = getSessionId();
+                const resp = await fetch(`http://localhost:3000/api/files/download`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'X-Session-Id': sessionId,
+                  },
+                  body: JSON.stringify({
+                    session_id: sessionId,
+                    files: selected,
+                    zipName: `download_${Date.now()}.zip`,
+                  }),
+                });
+                if (!resp.ok) {
+                  const errorData = await resp.json().catch(() => ({}));
+                  alert(errorData.error || '批量下载失败');
+                  return;
+                }
+                // 处理 ZIP 二进制下载
+                const blob = await resp.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `download_${Date.now()}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                selectedFiles.selected.clear();
+              } catch (error) {
+                console.error('批量下载失败:', error);
+                alert('批量下载失败: ' + error.message);
+              }
+            };
+
+            const getQuotaDisplay = () => {
+              if (!quotaInfo.value) return '';
+              const { usedSizeFormatted, maxSizeFormatted, usedPercent } = quotaInfo.value;
+              return `${usedSizeFormatted} / ${maxSizeFormatted} (${usedPercent}%)`;
+            };
+            const getFileIcon = (filename) => {
+              const ext = filename.split('.').pop().toLowerCase();
+              const iconMap = {
+                zip: '📦',
+                pdf: '📄',
+                doc: '📝',
+                docx: '📝',
+                xls: '📊',
+                xlsx: '📊',
+                ppt: '📊',
+                pptx: '📊',
+                jpg: '🖼️',
+                jpeg: '🖼️',
+                png: '🖼️',
+                gif: '🖼️',
+                svg: '🖼️',
+                txt: '📃',
+                md: '📃',
+                json: '📋',
+                js: '📜',
+                ts: '📜',
+                html: '🌐',
+                css: '🎨',
+                mp4: '🎬',
+                mp3: '🎵',
+              };
+              return iconMap[ext] || '📄';
+            };
+
             const statusText = computed(() => {
               return enableStreaming.value ? 'streaming' : 'non-streaming';
             });
@@ -232,9 +881,80 @@
               clearHistory,
               getState,
               statusText,
+              // 文件管理
+              queryRecursive,
+              fileTree,
+              expandedPaths,
+              selectedNode,
+              preview,
+              files,
+              uploadProgress,
+              isUploading,
+              quotaInfo,
+              selectedFiles,
+              handleFileSelect,
+              downloadFile,
+              deleteFile,
+              onDragOver,
+              onDragLeave,
+              onDrop,
+              getFileIcon,
+              fetchFileList,
+              fetchQuotaInfo,
+              toggleFileSelection,
+              downloadSelectedFiles,
+              getQuotaDisplay,
+              isExpanded,
+              toggleExpand,
+              selectNode,
+              lastRefreshTime,
+              openFolderLocation,
             };
           },
           render() {
+            const renderTreeNodes = (nodes, depth = 0) => {
+              if (!Array.isArray(nodes) || nodes.length === 0) return [];
+              const rows = [];
+              for (const node of nodes) {
+                const isDir = node.type === 'directory';
+                const expanded = isDir && this.isExpanded(node.path);
+                const selected = this.selectedNode && this.selectedNode.path === node.path;
+                const hasChildren = isDir && node.children && node.children.length > 0;
+                rows.push(
+                  h('div', {
+                    class: ['tree-node', selected ? 'selected' : ''].filter(Boolean).join(' '),
+                    style: { paddingLeft: `${8 + depth * 16}px` },
+                    onClick: () => {
+                      if (isDir) {
+                        this.toggleExpand(node);
+                      } else {
+                        this.selectNode(node);
+                      }
+                    },
+                  }, [
+                    h('span', {
+                      class: ['tree-toggle', expanded ? 'expanded' : '', !hasChildren ? 'placeholder' : ''].filter(Boolean).join(' '),
+                    }, hasChildren ? '▸' : ''),
+                    !isDir && h('input', {
+                      type: 'checkbox',
+                      class: 'tree-checkbox',
+                      checked: this.selectedFiles.selected?.has(node.path),
+                      onClick: (e) => e.stopPropagation(),
+                      onChange: () => {
+                        if (!isDir) this.toggleFileSelection(node);
+                      },
+                    }),
+                    h('span', { class: ['tree-icon', isDir ? 'folder' : 'file'].join(' ') }, isDir ? '📁' : this.getFileIcon(node.name)),
+                    h('span', { class: 'tree-name', title: node.path }, node.name),
+                  ])
+                );
+                if (isDir && expanded) {
+                  rows.push(...renderTreeNodes(node.children || [], depth + 1));
+                }
+              }
+              return rows;
+            };
+
             return h('div', { class: 'page' }, [
               h('div', { class: 'topbar' }, [
                 h('label', null, [
@@ -290,23 +1010,125 @@
                 h('span', { class: 'hint' }, `mode: ${this.statusText}`),
               ]),
               h('div', { class: 'body' }, [
-                h(SuspendedBallChat, {
-                  ref: 'chatRef',
-                  url: this.apiUrl,
-                  appName: this.appName,
-                  domainName: this.domainName,
-                  enableStreaming: this.enableStreaming,
-                  enableContext: true,
-                  // enableImageUpload: true,
-                  supportedCustomContext: true,
-                  enableLocalStorage: true,
-                  enableVoiceInput: true,
-                  callbacks: this.callbacks,
-                  customRequestConfig: this.customRequestConfig,
-                  showClearButton: true,
-                  presetTasks: this.presetTasks,
-                  // welcomeConfig: this.welcomeConfig
-                }),
+                // 文件管理面板
+                h('div', { class: 'file-panel' }, [
+                  // Header
+                  h('div', { class: 'file-panel-header' }, [
+                    h('span', null, '📁 文件管理'),
+                    h('div', { style: 'display: flex; gap: 8px; align-items: center;' }, [
+                      this.lastRefreshTime && h('span', { 
+                        style: 'font-size: 11px; color: #8c8c8c; font-weight: normal; margin-right: 8px;' 
+                      }, `更新于 ${this.lastRefreshTime.toLocaleTimeString()}`),
+                      this.quotaInfo && h('span', { class: 'quota-badge' }, this.getQuotaDisplay()),
+                      h('button', {
+                        onClick: () => this.fetchQuotaInfo(),
+                        title: '查询配额',
+                        style: 'font-size: 12px; padding: 2px 6px;'
+                      }, '📊'),
+                      this.selectedFiles.selected?.size > 0 && h('button', {
+                        onClick: () => this.downloadSelectedFiles(),
+                        title: `批量下载 (${this.selectedFiles.selected?.size || 0}个文件)`,
+                        style: 'font-size: 12px; padding: 2px 6px; background: #1890ff; color: white; border-color: #1890ff;'
+                      }, `⬇️ ${this.selectedFiles.selected?.size || 0}`),
+                      h('button', {
+                        onClick: () => this.openFolderLocation(),
+                        title: '打开文件夹位置',
+                        style: 'font-size: 12px; padding: 2px 6px;'
+                      }, '📂'),
+                      h('button', {
+                        onClick: () => this.fetchFileList(),
+                        title: '刷新列表',
+                        style: 'font-size: 12px; padding: 2px 6px;'
+                      }, '🔄'),
+                    ]),
+                  ]),
+                  // Toolbar
+                  h('div', { class: 'file-toolbar' }, [
+                    h('label', null, [
+                      h('input', {
+                        type: 'checkbox',
+                        checked: this.queryRecursive,
+                        onChange: (e) => (this.queryRecursive = e.target.checked),
+                      }),
+                      h('span', null, '递归'),
+                    ]),
+                    h('button', { onClick: () => this.fetchFileList() }, '刷新'),
+                    h('span', { style: 'flex: 1' }),
+                    h('button', {
+                      onClick: () => this.$refs.fileInputRef?.click(),
+                      style: 'background: #1890ff; color: white; border-color: #1890ff;'
+                    }, '📤 上传'),
+                  ]),
+                  // Body - Split layout
+                  h('div', { class: 'file-panel-body' }, [
+                    // Upload area (overlay)
+                    h('input', {
+                      ref: 'fileInputRef',
+                      type: 'file',
+                      multiple: true,
+                      onChange: (e) => this.handleFileSelect(e),
+                      style: 'display: none;'
+                    }),
+                    // Left: Tree section
+                    h('div', { class: 'file-tree-section' }, [
+                      this.fileTree.length === 0
+                        ? h('div', { style: 'text-align: center; color: #bfbfbf; padding: 20px; font-size: 12px;' }, '暂无文件')
+                        : h('div', { class: 'file-tree' }, renderTreeNodes(this.fileTree, 0))
+                    ]),
+                    // Right: Preview section
+                    h('div', { class: 'file-preview-section' }, [
+                      this.selectedNode && this.selectedNode.type === 'file'
+                        ? [
+                            h('div', { class: 'file-preview-header' }, [
+                              h('div', { class: 'file-preview-title', title: this.selectedNode.path }, this.selectedNode.name),
+                              h('div', { class: 'file-preview-actions' }, [
+                                h('button', {
+                                  class: 'btn-primary',
+                                  onClick: () => this.downloadFile(this.selectedNode),
+                                  title: '下载'
+                                }, '⬇️ 下载'),
+                                h('button', {
+                                  class: 'btn-danger',
+                                  onClick: () => this.deleteFile(this.selectedNode),
+                                  title: '删除'
+                                }, '🗑️ 删除'),
+                              ]),
+                            ]),
+                            h('div', { class: 'file-preview-body' }, [
+                              this.preview.loading
+                                ? h('div', { style: 'color: #8c8c8c; text-align: center; padding: 40px;' }, '加载中...')
+                                : this.preview.error
+                                  ? h('div', { style: 'color: #ff4d4f; padding: 20px;' }, this.preview.error)
+                                  : this.preview.type === 'image'
+                                    ? h('img', {
+                                        class: 'file-preview-image',
+                                        src: this.preview.url || (this.selectedNode.fullUrl || this.selectedNode.url || '')
+                                      })
+                                    : h('pre', { class: 'file-preview-content' }, this.preview.content || '（空文件或不可预览）')
+                            ])
+                          ]
+                        : h('div', { class: 'file-preview-empty' }, '选择文件查看内容')
+                    ]),
+                  ]),
+                ]),
+                // 聊天区域
+                h('div', { class: 'chat-container' }, [
+                  h(SuspendedBallChat, {
+                    ref: 'chatRef',
+                    url: this.apiUrl,
+                    appName: this.appName,
+                    domainName: this.domainName,
+                    enableStreaming: this.enableStreaming,
+                    enableContext: true,
+                    supportedCustomContext: true,
+                    enableLocalStorage: true,
+                    enableVoiceInput: true,
+                    callbacks: this.callbacks,
+                    customRequestConfig: this.customRequestConfig,
+                    showClearButton: true,
+                    presetTasks: this.presetTasks,
+                  }),
+                ]),
               ]),
             ]);
           },

@@ -11,6 +11,7 @@
 - 🌊 **流式响应**: 支持实时流式输出，提升用户体验
 - 🔄 **会话管理**: 多会话支持，自动上下文管理
 - 🛡️ **容错机制**: 熔断器、重试机制、降级策略
+- 📁 **用户文件隔离**: 基于 sessionId 的独立工作空间，自动目录初始化，支持文件数量限制（100个/用户）
 - 🎨 **AISuspendedBallChat 兼容**: 完全符合 AISuspendedBallChat 组件接口规范
  
 ![ai-agent-node.png](./imgs/ai-agent-node.png)
@@ -122,6 +123,78 @@ data: {"code":0,"result":"能够自主感知环境","is_end":false}
 data: {"code":0,"result":"、做出决策并执行行动的智能系统。","is_end":true}
 
 ```
+
+### 文件上传接口
+
+```http
+POST /api/files/upload
+Content-Type: multipart/form-data
+
+表单字段:
+- files: 文件（支持多文件，最多10个）
+- session_id: 用户会话ID（可选，也可通过 X-Session-Id 请求头传递）
+```
+
+**响应示例：**
+```json
+{
+  "success": true,
+  "sessionId": "user123",
+  "uploadedCount": 2,
+  "files": [
+    {
+      "originalName": "document.pdf",
+      "savedName": "1710881234567_document.pdf",
+      "size": 1024567,
+      "sizeFormatted": "1001.53 KB",
+      "path": "uploadFile/1710881234567_document.pdf",
+      "url": "http://localhost:3000/workspace/user123/uploadFile/1710881234567_document.pdf"
+    }
+  ]
+}
+```
+
+### 存储配额查询接口
+
+```http
+GET /api/files/quota?session_id=user123
+```
+
+**响应示例：**
+```json
+{
+  "success": true,
+  "sessionId": "user123",
+  "usedSize": 52428800,
+  "usedSizeFormatted": "50 MB",
+  "maxSize": 209715200,
+  "maxSizeFormatted": "200 MB",
+  "remainingSize": 157286400,
+  "remainingSizeFormatted": "150 MB",
+  "usedPercent": "25.00",
+  "fileCount": 25,
+  "directoryCount": 5
+}
+```
+
+### 批量下载/压缩接口
+
+```http
+POST /api/files/download
+Content-Type: application/json
+
+{
+  "session_id": "user123",
+  "files": ["uploadFile/doc1.pdf", "uploadFile/doc2.pdf", "projects/data.xlsx"],
+  "zipName": "my_files.zip"
+}
+```
+
+**说明：**
+- 最多支持 100 个文件批量下载
+- 自动打包为 ZIP 格式
+- 只下载存在的文件，不存在的文件自动跳过
+- 响应头包含 `Content-Disposition: attachment`，浏览器会自动触发下载
 
 ## 🧭 架构与目录结构
 
@@ -239,6 +312,48 @@ import { SuspendedBallChat } from 'ai-suspended-ball-chat'
 | `exec_code`　　　　 | 代码执行　　　 | 代码内容, 编程语言(可选)　　　　　　　　 | `exec_code("console.log(2+3)", "javascript")`　　　　　　　　　　　　|
 | `render_mermaid`　　| Mermaid渲染　　| Mermaid源码或图表类型, 图表内容　　　　　| `render_mermaid("sequence", "participant A\nA->>B: msg")`　　　　　　|
 | `script_generator`　| Python脚本生成　　　 | 任务描述, 输入数据(可选), 输出格式(可选) | `script_generator("计算平均值", "10,20,30", "auto")`　　　　　　　　 |
+
+### 用户文件管理
+
+系统提供基于 `sessionId` 的用户文件隔离机制，每个用户拥有独立的工作空间：
+
+**核心特性：**
+- **用户隔离**: 每个 `sessionId` 对应独立的目录 `/public/workspace/{sessionId}/`，用户间文件完全隔离
+- **自动初始化**: 新用户首次访问文件操作时自动创建用户目录
+- **数量限制**: 每个用户最多拥有 **100** 个文件
+- **存储配额**: 每个用户最多 **200MB** 存储空间
+- **安全限制**: 50MB 单文件大小限制，防止路径遍历攻击
+- **文件上传**: 支持通过 `/api/files/upload` 接口上传文件到 `uploadFile` 目录
+- **批量下载**: 支持打包多个文件为 ZIP 下载
+
+**文件管理工具：**
+
+| 工具名称 | 功能描述 | 示例 |
+|---------|---------|------|
+| `file_list` | 列出目录文件 | `file_list("docs", true)` |
+| `file_read` | 读取文件内容 | `file_read("readme.md")` |
+| `file_write` | 创建/写入文件 | `file_write("test.txt", "内容")` |
+| `file_delete` | 删除文件/目录 | `file_delete("old.txt")` |
+| `file_mkdir` | 创建目录 | `file_mkdir("projects")` |
+| `file_move` | 移动/重命名 | `file_move("a.txt", "b.txt")` |
+| `file_copy` | 复制文件 | `file_copy("a.txt", "backup/a.txt")` |
+| `file_info` | 获取文件信息 | `file_info("data.json")` |
+| `file_search` | 搜索文件 | `file_search("report")` |
+| `file_quota` | 查询存储配额/剩余空间 | `file_quota()` |
+| `excel_read/write` | Excel 操作 | `excel_read("data.xlsx")` |
+| `word_read` | Word 读取 | `word_read("doc.docx")` |
+| `pdf_read/merge` | PDF 操作 | `pdf_read("doc.pdf")` |
+| `csv_read/write` | CSV 操作 | `csv_read("data.csv")` |
+| `json_read/write` | JSON 操作 | `json_read("config.json")` |
+| `image_info` | 图片信息 | `image_info("photo.jpg")` |
+| `svg_write` | SVG 创建 | `svg_write("icon.svg", "<svg>...</svg>")` |
+| `zip_compress` | 压缩为 ZIP | `zip_compress("docs", "backup.zip")` |
+| `zip_extract` | 解压 ZIP | `zip_extract("data.zip", "output")` |
+| `zip_info` | 压缩包信息 | `zip_info("archive.zip")` |
+| `zip_list` | 列出 ZIP 内容 | `zip_list("archive.zip", 50)` |
+
+**文件访问 URL：**
+文件创建后会返回可访问的 URL，格式为：`http://{host}/workspace/{sessionId}/{filePath}`
 
 ### 已支持的技能
 

@@ -251,7 +251,31 @@ export class ProductionAgent {
       .map((key) => argObj[key]);
   }
 
-  async runToolCall(toolName, args) {
+  async runToolCall(toolName, args, sessionId) {
+    // 文件操作工具需要 sessionId 进行用户隔离
+    const fileTools = [
+      'file_list', 'file_read', 'file_write', 'file_delete', 'file_mkdir',
+      'file_move', 'file_copy', 'file_info', 'file_search',
+      'file_quota',
+      'excel_read', 'excel_write', 'excel_append',
+      'word_read', 'word_read_html',
+      'pdf_read', 'pdf_merge',
+      'csv_read', 'csv_write',
+      'json_read', 'json_write',
+      'image_info', 'svg_write',
+      'zip_compress', 'zip_extract', 'zip_info', 'zip_list'
+    ];
+    
+    if (fileTools.includes(toolName)) {
+      console.log(`[DEBUG] ${toolName}: sessionId=${sessionId}, args=`, args);
+      if (!sessionId) {
+        throw new Error('文件操作需要提供 sessionId');
+      }
+      // 在参数前插入 sessionId
+      args = [sessionId, ...args];
+      console.log(`[DEBUG] ${toolName}: 注入后 args=`, args);
+    }
+    
     if (toolName === "search_knowledge") {
       return searchKnowledgeBase(this.vectorStore, args[0]);
     }
@@ -281,7 +305,7 @@ export class ProductionAgent {
       if (callable.kind === "skill") {
         return this.runSkillCall(name, args);
       }
-      return this.runToolCall(name, args);
+      return this.runToolCall(name, args, session.id);
     };
 
     if (!session.toolBreaker.canRequest()) {

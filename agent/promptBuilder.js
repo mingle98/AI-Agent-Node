@@ -118,11 +118,32 @@ function buildRulesSection() {
 6. 画图/梳理逻辑/流程/时序/类关系/架构图 → 必须先使用 mermaid_diagram 技能（用户不需要提 Mermaid，直接描述需求即可）
 7. 图表场景禁止首轮直接调用 render_mermaid；只能在 mermaid_diagram 技能返回绘图指令后再调用 render_mermaid
 8. 执行代码/数据转换/算法验证 → 使用 exec_code 工具（沙箱执行 JS/TS/Python）
-9. 复杂场景 → 使用高级技能（教学、咨询、问答、Mermaid画图、需要数据搜索和可视化、可用python_executor创建python脚本解决问题的场景）
-10. 如果问题过于复杂或没有可用的能力就优先使用python_executor技能自动创建python脚本尝试解决
-11. 优先使用技能处理综合场景，它们会自动完成多个步骤
-12. 参数要完整、准确，避免无效调用
-13. 给出准确、友好、专业的回答`;
+9. 文件管理操作 → 使用 file_ 系列工具：
+   【重要】每个用户拥有独立的文件空间，基于 sessionId 隔离，无法访问其他用户的文件
+   - 查看目录: file_list(path, recursive)
+   - 读取文件: file_read(path, maxSize)
+   - 创建/写入: file_write(path, content, overwrite) - 自动检测 Markdown 并转为 HTML 展示格式
+   - 删除: file_delete(path, recursive)
+   - 创建目录: file_mkdir(path)
+   - 移动/重命名: file_move(source, target, overwrite)
+   - 复制: file_copy(source, target, overwrite)
+   - 文件信息: file_info(path)
+   - 搜索文件: file_search(keyword, dirPath)
+   - 存储配额: file_quota()
+10. Excel操作 → 使用 excel_read/excel_write/excel_append 工具
+11. Word操作 → 使用 word_read/word_read_html 工具
+12. PDF操作 → 使用 pdf_read/pdf_merge 工具
+13. CSV/JSON → 使用 csv_read/csv_write/json_read/json_write 工具
+14. 图片操作 → 使用 image_info/svg_write 工具
+15. 压缩/解压操作 → 使用 zip_compress/zip_extract/zip_info/zip_list 工具
+16. 文件操作返回的 URL 可直接访问下载（在用户专属的 workspace/{sessionId} 目录下）
+17. 文件路径以用户专属 workspace 为根目录，例如：file_write("docs/readme.md", "内容")
+18. 用户文件相互隔离，一个用户无法访问另一个用户的文件
+19. 复杂场景 → 使用高级技能（教学、咨询、问答、Mermaid画图、需要数据搜索和可视化、可用python_executor创建python脚本解决问题的场景）
+20. 如果问题过于复杂或没有可用的能力就优先使用python_executor技能自动创建python脚本尝试解决
+21. 优先使用技能处理综合场景，它们会自动完成多个步骤
+22. 参数要完整、准确，避免无效调用
+23. 给出准确、友好、专业的回答`;
 }
 
 /**
@@ -143,6 +164,13 @@ function buildExamplesSection(skillDefinitions) {
     '- "帮我写封邮件跟进客户" → 用 email_writer 技能生成',
     '- "执行这段js代码看看结果" → 用 exec_code 工具沙箱执行',
     '- "这是上周数据：访问=50000, 加购=3500, 下单=800, 支付=210。帮我计算每步转化率，并找出最大流失环节" → 用 python_executor 技能自动生成脚本执行分析',
+    '- "列出workspace里的文件" → 用 file_list 工具查看目录',
+    '- "我还剩多少存储空间?" → 用 file_quota 工具查询',
+    '- "帮我创建一个叫report.txt的文件，内容是XXX" → 用 file_write 工具创建',
+    '- "读取data/report.xlsx的内容" → 用 excel_read 工具读取',
+    '- "把这几个PDF合并成一个" → 用 pdf_merge 工具合并',
+    '- "解压这个zip文件" → 用 zip_extract 工具解压',
+    '- "把这几个文件打包成zip" → 用 zip_compress 工具压缩',
   ];
   
   // 从技能中提取示例
