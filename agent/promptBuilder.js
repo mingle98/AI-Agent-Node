@@ -134,9 +134,9 @@ function buildRulesSection() {
 11. Word操作 → 使用 word_read/word_read_html 工具
 12. PDF操作 → 使用 pdf_read/pdf_merge 工具
 13. CSV/JSON → 使用 csv_read/csv_write/json_read/json_write 工具
-14. 图片操作 → 使用 image_info/svg_write 工具
+14. 图片操作 → 使用 image_info/svg_write 工具；压缩图片必须使用 image_compress（单张）或 image_compress_batch（批量）工具，支持 jpg/png/gif/webp/avif
 15. 压缩/解压操作 → 使用 zip_compress/zip_extract/zip_info/zip_list 工具
-16. 邮件发送 → 使用 email_send/email_template 工具（支持 SMTP 发送，多种模板）
+16. 邮件发送 → 【优先使用 email_sender 技能】，它会自动完成信息提取、SMTP验证、模板选择、发送全流程；只有在 schedule_task 的 onComplete 回调链中才直接使用 email_send 工具（技能无法作为回调 taskType）
 17. 定时任务调度 → 使用 schedule_task 工具（延迟执行邮件发送、脚本执行等，支持用户隔离）
 18. 多步骤定时任务请使用链式 onComplete 回调，按目标拆分步骤并顺序编排（可嵌套）
 19. 步骤可灵活组合（例如 exec_code / script_generator / pdf_write / email_send），并通过 {{result}} 传递上一步结果
@@ -170,8 +170,9 @@ function buildExamplesSection(skillDefinitions) {
     '- "Excel怎么统计销售额" → 用 excel_helper 技能获取公式',
     '- "纠结选哪个offer" → 用 decision_helper 技能分析',
     '- "帮我写封邮件跟进客户" → 用 email_writer 技能生成',
-    '- "发送邮件通知给xxx@example.com" → 用 send_email 工具发送',
+    '- "发送邮件通知给xxx@example.com" → 优先用 email_sender 技能（自动完成全流程），而非直接调用 email_send 工具',
     '- "发送系统告警邮件给管理员" → 用 email_sender 技能（自动完成发送流程）',
+    '- "定时任务完成后发邮件" → 在 schedule_task 的 onComplete 回调中用 email_send 工具（技能不可用作回调 taskType）',
     '- "2分钟后执行Python算平均值，写入result.pdf并发我邮箱" → 用 schedule_task 链式回调（示例：exec_code → pdf_write → email_send）',
     '- "查看我有哪些定时任务" → 用 schedule_list 工具查询',
     '- "取消那个定时任务" → 用 schedule_cancel 工具取消（需要任务ID）',

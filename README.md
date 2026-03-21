@@ -364,6 +364,8 @@ import { SuspendedBallChat } from 'ai-suspended-ball-chat'
 | `csv_read/write` | CSV 操作 | `csv_read("data.csv")` |
 | `json_read/write` | JSON 操作 | `json_read("config.json")` |
 | `image_info` | 图片信息 | `image_info("photo.jpg")` |
+| `image_compress` | 压缩图片（jpg/png/gif/webp/avif），可调质量、尺寸、格式，GIF 保留动画帧 | `image_compress("photo.jpg", "photo_small.jpg", "{\"quality\":75,\"width\":1280}")` |
+| `image_compress_batch` | 批量压缩图片到指定目录 | `image_compress_batch("[\"a.jpg\",\"b.png\"]", "out", "{\"quality\":75}")` |
 | `svg_write` | SVG 创建 | `svg_write("icon.svg", "<svg>...</svg>")` |
 | `zip_compress` | 压缩为 ZIP | `zip_compress("docs", "backup.zip")` |
 | `zip_extract` | 解压 ZIP | `zip_extract("data.zip", "output")` |
