@@ -4,6 +4,8 @@
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { rm } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { TOOLS } from '../tools/index.js';
 
 const TEST_SESSION = `full_order_test_${Date.now()}`;
@@ -241,4 +243,5 @@ test('file_quota 参数顺序正确', async () => {
 test('cleanup', async () => {
   const cleanupRes = await TOOLS.file_delete(TEST_SESSION, TEST_DIR, true);
   assert.equal(cleanupRes.success, true, 'cleanup 应该成功');
+  await rm(resolve('public/workspace', TEST_SESSION), { recursive: true, force: true });
 });

@@ -3,334 +3,542 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AISuspendedBallChat Debug</title>
+    <title>AI 工作台</title>
     <style>
-      html,
-      body {
-        height: 100%;
-        margin: 0;
-      }
-      #app {
-        height: 100%;
-      }
-      .page {
-        height: 100%;
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+      #app { height: 100%; }
+
+      /* ========== Layout ========== */
+      .page { height: 100%; display: flex; flex-direction: column; background: #f0f2f5; }
+
+      /* ========== Header ========== */
+      .header {
+        height: 52px;
+        background: linear-gradient(135deg, #0a0f1e 0%, #1a2744 60%, #0d1b3e 100%);
         display: flex;
-        flex-direction: column;
-      }
-      .topbar {
-        padding: 10px 12px;
-        border-bottom: 1px solid #e5e7eb;
-        display: flex;
-        gap: 12px;
-        flex-wrap: wrap;
         align-items: center;
-        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
-          "Apple Color Emoji", "Segoe UI Emoji";
+        padding: 0 20px;
+        gap: 16px;
+        flex-shrink: 0;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.35);
+        z-index: 10;
       }
-      .topbar label {
-        display: inline-flex;
+      .header-logo {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #fff;
+        font-size: 16px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        white-space: nowrap;
+        text-shadow: 0 0 20px rgba(99,179,237,0.6);
+      }
+      .header-logo-icon {
+        width: 28px;
+        height: 28px;
+        background: linear-gradient(135deg, #4299e1, #667eea);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        box-shadow: 0 0 12px rgba(66,153,225,0.5);
+      }
+      .header-divider {
+        width: 1px;
+        height: 24px;
+        background: rgba(255,255,255,0.15);
+        flex-shrink: 0;
+      }
+      .header-field {
+        display: flex;
         align-items: center;
         gap: 6px;
-        font-size: 13px;
+        flex-shrink: 0;
       }
-      .topbar input[type="text"] {
-        width: 320px;
-        max-width: 60vw;
-        padding: 6px 8px;
-        border: 1px solid #d1d5db;
+      .header-field label {
+        font-size: 11px;
+        color: rgba(255,255,255,0.5);
+        white-space: nowrap;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .header-input {
+        height: 28px;
+        padding: 0 10px;
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.15);
         border-radius: 6px;
+        color: #e2e8f0;
+        font-size: 12px;
+        outline: none;
+        transition: all 0.2s;
+        min-width: 80px;
       }
-      .topbar button {
-        padding: 6px 10px;
-        border: 1px solid #d1d5db;
+      .header-input:focus { border-color: #4299e1; background: rgba(66,153,225,0.15); }
+      .header-input.wide { min-width: 200px; }
+      .header-spacer { flex: 1; }
+      .header-tag {
+        font-size: 10px;
+        padding: 2px 8px;
+        border-radius: 10px;
+        background: rgba(66,153,225,0.2);
+        border: 1px solid rgba(66,153,225,0.4);
+        color: #90cdf4;
+        white-space: nowrap;
+      }
+      .header-btn {
+        height: 28px;
+        padding: 0 12px;
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 6px;
+        background: rgba(255,255,255,0.07);
+        color: rgba(255,255,255,0.8);
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .header-btn:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.35); color: #fff; }
+      .header-btn.active { background: rgba(66,153,225,0.25); border-color: #4299e1; color: #90cdf4; }
+      .header-toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        color: rgba(255,255,255,0.7);
+        font-size: 12px;
+      }
+      .toggle-switch {
+        width: 32px;
+        height: 18px;
+        background: rgba(255,255,255,0.15);
+        border-radius: 9px;
+        position: relative;
+        transition: background 0.2s;
+        flex-shrink: 0;
+      }
+      .toggle-switch.on { background: #4299e1; }
+      .toggle-switch::after {
+        content: '';
+        position: absolute;
+        width: 14px;
+        height: 14px;
+        background: #fff;
+        border-radius: 50%;
+        top: 2px;
+        left: 2px;
+        transition: transform 0.2s;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      }
+      .toggle-switch.on::after { transform: translateX(14px); }
+
+      /* ========== Body ========== */
+      .body {
+        flex: 1;
+        display: flex;
+        overflow: hidden;
+        gap: 0;
+      }
+
+      /* ========== File Panel ========== */
+      .file-panel {
+        width: 920px;
+        min-width: 320px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        background: #fff;
+        border-right: 1px solid #e8ecf0;
+        transition: width 0.25s ease;
+        overflow: hidden;
+      }
+      .file-panel.collapsed { width: 0; min-width: 0; border-right: none; }
+      .file-panel-header {
+        padding: 0 16px;
+        height: 44px;
+        border-bottom: 1px solid #f0f2f5;
+        font-weight: 600;
+        font-size: 13px;
+        color: #1a202c;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: #fff;
+        flex-shrink: 0;
+      }
+      .file-panel-header-left { display: flex; align-items: center; gap: 8px; }
+      .file-panel-header-right { display: flex; align-items: center; gap: 6px; }
+      .fp-icon-btn {
+        width: 26px;
+        height: 26px;
+        border: 1px solid #e8ecf0;
         border-radius: 6px;
         background: #fff;
         cursor: pointer;
-      }
-      .topbar button:active {
-        transform: translateY(1px);
-      }
-      .hint {
-        font-size: 12px;
-        color: #6b7280;
-      }
-      .body {
-        position: relative;
-        flex: 1;
-        overflow: hidden;
         display: flex;
-      }
-      /* 文件管理面板样式 - Ant Design 风格 */
-      .file-panel {
-        flex: 3;
-        border-right: 1px solid #e5e7eb;
-        display: flex;
-        flex-direction: column;
-        background: #fff;
-        min-width: 500px;
-      }
-      .file-panel-header {
-        padding: 12px 16px;
-        border-bottom: 1px solid #f0f0f0;
-        font-weight: 500;
-        font-size: 14px;
-        color: #262626;
-        display: flex;
-        justify-content: space-between;
         align-items: center;
-        background: #fafafa;
+        justify-content: center;
+        font-size: 12px;
+        color: #64748b;
+        transition: all 0.15s;
+      }
+      .fp-icon-btn:hover { background: #f0f7ff; border-color: #4299e1; color: #4299e1; }
+      .fp-icon-btn.primary { background: #4299e1; border-color: #4299e1; color: #fff; }
+      .fp-icon-btn.primary:hover { background: #3182ce; }
+      .quota-pill {
+        font-size: 10px;
+        padding: 2px 7px;
+        border-radius: 10px;
+        background: #f0f7ff;
+        border: 1px solid #bee3f8;
+        color: #2b6cb0;
       }
       .file-panel-body {
         flex: 1;
         display: flex;
         overflow: hidden;
-      }
-      .file-tree-section {
-        width: 200px;
-        border-right: 1px solid #f0f0f0;
-        overflow-y: auto;
-        padding: 8px 0;
-        background: #fff;
-        flex-shrink: 0;
-      }
-      .file-preview-section {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        background: #fff;
         min-height: 0;
       }
-      .file-preview-empty {
-        flex: 1;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #bfbfbf;
-        font-size: 13px;
-        background: #f5f5f5;
+
+      /* Tree */
+      .file-tree-section {
+        width: 180px;
+        flex-shrink: 0;
+        border-right: 1px solid #f0f2f5;
+        overflow-y: auto;
+        background: #fafbfc;
+        padding: 6px 0;
       }
-      .file-tree {
-        font-size: 13px;
-      }
+      .file-tree-section::-webkit-scrollbar { width: 4px; }
+      .file-tree-section::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 2px; }
+      .file-tree { font-size: 12.5px; }
       .tree-node {
         display: flex;
         align-items: center;
-        padding: 6px 12px 6px 8px;
+        padding: 5px 10px 5px 6px;
         cursor: pointer;
-        transition: all 0.2s;
-        color: #595959;
+        transition: background 0.15s;
+        color: #4a5568;
         user-select: none;
+        border-radius: 0;
       }
-      .tree-node:hover {
-        background: #f5f5f5;
-      }
-      .tree-node.selected {
-        background: #e6f7ff;
-        color: #1890ff;
-      }
-      .tree-node-content {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        flex: 1;
-        min-width: 0;
-      }
+      .tree-node:hover { background: #edf2f7; }
+      .tree-node.selected { background: #ebf8ff; color: #2b6cb0; }
       .tree-toggle {
         width: 14px;
         height: 14px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 10px;
-        color: #8c8c8c;
+        font-size: 9px;
+        color: #a0aec0;
         transition: transform 0.2s;
-      }
-      .tree-toggle.expanded {
-        transform: rotate(90deg);
-      }
-      .tree-toggle.placeholder {
-        visibility: hidden;
-      }
-      .tree-icon {
-        font-size: 14px;
         flex-shrink: 0;
       }
-      .tree-icon.folder {
-        color: #faad14;
-      }
-      .tree-icon.file {
-        color: #8c8c8c;
-      }
+      .tree-toggle.expanded { transform: rotate(90deg); }
+      .tree-toggle.placeholder { visibility: hidden; }
+      .tree-icon { font-size: 13px; flex-shrink: 0; margin: 0 4px; }
       .tree-name {
         flex: 1;
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        font-size: 12px;
       }
-      .tree-checkbox {
-        margin-right: 4px;
-        cursor: pointer;
+      .tree-checkbox { margin-right: 3px; cursor: pointer; accent-color: #4299e1; }
+      .tree-empty { text-align: center; color: #a0aec0; padding: 24px 12px; font-size: 12px; }
+
+      /* Preview */
+      .file-preview-section {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        min-height: 0;
+        background: #fff;
       }
       .file-preview-header {
-        padding: 12px 16px;
-        border-bottom: 1px solid #f0f0f0;
-        background: #fafafa;
+        padding: 0 14px;
+        height: 40px;
+        border-bottom: 1px solid #f0f2f5;
+        background: #fafbfc;
         display: flex;
-        justify-content: space-between;
         align-items: center;
+        justify-content: space-between;
+        flex-shrink: 0;
+        gap: 8px;
       }
       .file-preview-title {
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 500;
-        color: #262626;
+        color: #2d3748;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
         flex: 1;
       }
-      .file-preview-actions {
-        display: flex;
-        gap: 8px;
-      }
+      .file-preview-actions { display: flex; gap: 6px; }
       .file-preview-actions button {
-        padding: 4px 12px;
-        font-size: 12px;
-        border: 1px solid #d9d9d9;
+        height: 24px;
+        padding: 0 10px;
+        font-size: 11px;
+        border: 1px solid #e2e8f0;
         border-radius: 4px;
         background: #fff;
         cursor: pointer;
-        color: #595959;
-        transition: all 0.2s;
+        color: #4a5568;
+        transition: all 0.15s;
+        display: flex;
+        align-items: center;
+        gap: 3px;
       }
-      .file-preview-actions button:hover {
-        border-color: #1890ff;
-        color: #1890ff;
-      }
-      .file-preview-actions button.btn-primary {
-        background: #1890ff;
-        border-color: #1890ff;
-        color: #fff;
-      }
-      .file-preview-actions button.btn-primary:hover {
-        background: #40a9ff;
-      }
-      .file-preview-actions button.btn-danger {
-        color: #ff4d4f;
-        border-color: #ff4d4f;
-      }
-      .file-preview-actions button.btn-danger:hover {
-        background: #fff1f0;
-      }
-      .file-preview-body {
-        flex: 1;
-        overflow: auto;
-        padding: 16px;
-        background: #fff;
-      }
+      .file-preview-actions button:hover { border-color: #4299e1; color: #4299e1; }
+      .file-preview-actions button.btn-primary { background: #4299e1; border-color: #4299e1; color: #fff; }
+      .file-preview-actions button.btn-primary:hover { background: #3182ce; }
+      .file-preview-actions button.btn-danger { color: #e53e3e; border-color: #fed7d7; }
+      .file-preview-actions button.btn-danger:hover { background: #fff5f5; border-color: #fc8181; }
+      .file-preview-body { flex: 1; overflow: auto; padding: 14px; background: #fff; }
+      .file-preview-body::-webkit-scrollbar { width: 4px; }
+      .file-preview-body::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 2px; }
       .file-preview-content {
-        font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
-        font-size: 12px;
-        line-height: 1.6;
-        color: #595959;
+        font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+        font-size: 11.5px;
+        line-height: 1.65;
+        color: #4a5568;
         white-space: pre-wrap;
         word-break: break-word;
+        margin: 0;
       }
       .file-preview-image {
         max-width: 100%;
-        max-height: 300px;
-        border-radius: 4px;
-        border: 1px solid #f0f0f0;
+        border-radius: 6px;
+        border: 1px solid #e8ecf0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
       }
+      .file-preview-empty {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #a0aec0;
+        font-size: 12px;
+        gap: 8px;
+        background: #fafbfc;
+      }
+      .file-preview-empty-icon { font-size: 32px; opacity: 0.4; }
+
+      /* Upload toolbar */
       .file-toolbar {
         padding: 8px 12px;
-        border-bottom: 1px solid #f0f0f0;
+        border-bottom: 1px solid #f0f2f5;
         display: flex;
-        gap: 8px;
+        gap: 6px;
         align-items: center;
-        background: #fafafa;
-      }
-      .file-toolbar button {
-        padding: 4px 12px;
-        font-size: 12px;
-        border: 1px solid #d9d9d9;
-        border-radius: 4px;
-        background: #fff;
-        cursor: pointer;
-        color: #595959;
-        transition: all 0.2s;
-      }
-      .file-toolbar button:hover {
-        border-color: #1890ff;
-        color: #1890ff;
-      }
-      .file-toolbar button:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
+        background: #fafbfc;
+        flex-shrink: 0;
       }
       .file-toolbar label {
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        font-size: 12px;
-        color: #595959;
+        font-size: 11.5px;
+        color: #718096;
         cursor: pointer;
       }
-      .quota-badge {
-        font-size: 11px;
-        color: #8c8c8c;
-        padding: 2px 8px;
-        background: #f5f5f5;
-        border-radius: 4px;
-      }
-      .upload-area {
-        border: 1px dashed #d9d9d9;
-        border-radius: 4px;
-        padding: 16px;
-        text-align: center;
+      .file-toolbar button {
+        height: 26px;
+        padding: 0 10px;
+        font-size: 11.5px;
+        border: 1px solid #e2e8f0;
+        border-radius: 5px;
+        background: #fff;
         cursor: pointer;
-        transition: all 0.2s;
-        margin: 8px 12px;
-        background: #fafafa;
+        color: #4a5568;
+        transition: all 0.15s;
+        display: flex;
+        align-items: center;
+        gap: 3px;
       }
-      .upload-area:hover {
-        border-color: #1890ff;
-        background: #e6f7ff;
-      }
-      .upload-area.dragover {
-        border-color: #1890ff;
-        background: #bae7ff;
-      }
-      .upload-area input[type="file"] {
-        display: none;
-      }
-      .upload-icon {
-        font-size: 24px;
-        margin-bottom: 4px;
-        color: #8c8c8c;
-      }
-      .upload-text {
-        font-size: 12px;
-        color: #8c8c8c;
-      }
-      .upload-progress {
-        margin-top: 8px;
+      .file-toolbar button:hover { border-color: #4299e1; color: #4299e1; }
+      .file-toolbar .upload-btn { background: #4299e1; border-color: #4299e1; color: #fff; font-weight: 500; }
+      .file-toolbar .upload-btn:hover { background: #3182ce; }
+
+      /* Upload progress */
+      .upload-progress-bar-wrap {
         height: 2px;
-        background: #f0f0f0;
-        border-radius: 1px;
+        background: #ebf8ff;
         overflow: hidden;
+        flex-shrink: 0;
       }
       .upload-progress-bar {
         height: 100%;
-        background: #1890ff;
+        background: linear-gradient(90deg, #4299e1, #667eea);
         transition: width 0.3s;
       }
-      .chat-container {
-        flex: 2;
-        position: relative;
+
+      /* Drag-drop zone */
+      .upload-dropzone {
+        border: 1.5px dashed #cbd5e0;
+        border-radius: 8px;
+        margin: 10px 12px;
+        padding: 14px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        background: #fafbfc;
       }
+      .upload-dropzone:hover, .upload-dropzone.dragover {
+        border-color: #4299e1;
+        background: #ebf8ff;
+      }
+      .upload-dropzone .dz-icon { font-size: 22px; margin-bottom: 4px; color: #a0aec0; }
+      .upload-dropzone .dz-text { font-size: 11.5px; color: #718096; }
+
+      /* ========== Chat Panel ========== */
+      .chat-panel {
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+        background: #f7f9fc;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .chat-container { flex: 1; position: relative; overflow: hidden; }
+
+      /* ========== Info Dashboard ========== */
+      .info-dashboard {
+        position: absolute;
+        inset: 0;
+        overflow-y: auto;
+        padding: 22px 22px 80px;
+        z-index: 0;
+        background: linear-gradient(160deg, #f0f4fa 0%, #e8eef6 100%);
+      }
+      .info-dashboard::-webkit-scrollbar { width: 4px; }
+      .info-dashboard::-webkit-scrollbar-thumb { background: #c8d4e0; border-radius: 2px; }
+      .dash-hero {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 18px;
+        padding: 16px 20px;
+        background: linear-gradient(135deg, #fff 0%, #f0f7ff 100%);
+        border-radius: 12px;
+        border: 1px solid #dbeafe;
+        box-shadow: 0 2px 10px rgba(66,153,225,0.07);
+      }
+      .dash-hero h2 {
+        margin: 0 0 5px;
+        font-size: 16px;
+        font-weight: 700;
+        background: linear-gradient(135deg, #1e40af, #3b82f6);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .dash-hero p { margin: 0; font-size: 11.5px; color: #64748b; line-height: 1.6; }
+      .dash-hero-badge {
+        font-size: 11px;
+        padding: 3px 10px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        color: #fff;
+        white-space: nowrap;
+        flex-shrink: 0;
+        margin-top: 2px;
+        box-shadow: 0 2px 6px rgba(99,102,241,0.3);
+      }
+      .dash-section-label {
+        font-size: 10.5px;
+        font-weight: 700;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        margin: 0 0 10px;
+      }
+      .dash-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+      .dash-card {
+        background: #fff;
+        border-radius: 10px;
+        padding: 13px 14px;
+        cursor: pointer;
+        transition: all 0.18s;
+        border: 1px solid #e8edf2;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .dash-card:hover {
+        border-color: #3b82f6;
+        box-shadow: 0 4px 16px rgba(59,130,246,0.14);
+        transform: translateY(-2px);
+      }
+      .dash-card:active { transform: translateY(0); }
+      .dash-card-head { display: flex; align-items: center; gap: 8px; }
+      .dash-card-icon {
+        width: 30px; height: 30px;
+        border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 15px;
+        flex-shrink: 0;
+      }
+      .dash-card-name { font-size: 12.5px; font-weight: 600; color: #1e293b; }
+      .dash-card-desc { font-size: 11px; color: #64748b; line-height: 1.55; }
+      .dash-card-tags { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 2px; }
+      .dash-tag {
+        font-size: 10px;
+        padding: 1px 5px;
+        border-radius: 6px;
+        background: #eff6ff;
+        color: #3b82f6;
+        border: 1px solid #dbeafe;
+      }
+      .dash-tips {
+        background: #fff;
+        border-radius: 10px;
+        padding: 13px 16px;
+        border: 1px solid #e8edf2;
+      }
+      .dash-tips-title {
+        font-size: 10.5px;
+        font-weight: 700;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        margin-bottom: 10px;
+      }
+      .dash-tip {
+        font-size: 11.5px;
+        color: #64748b;
+        display: flex;
+        gap: 8px;
+        padding: 5px 0;
+        border-bottom: 1px solid #f1f5f9;
+      }
+      .dash-tip:last-child { border-bottom: none; }
+      .dash-tip-label { color: #3b82f6; font-weight: 600; font-size: 11px; white-space: nowrap; min-width: 56px; }
+
+      /* ========== Scrollbars ========== */
+      ::-webkit-scrollbar { width: 5px; height: 5px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+      ::-webkit-scrollbar-thumb:hover { background: #a0aec0; }
     </style>
 
     <!-- Optional: enable mermaid parsing in assistant messages -->
@@ -423,9 +631,6 @@
             watch(() => chatRef.value, (newVal) => {
               if (newVal) {
                 console.log('[AISBC] chatRef:', newVal);
-                setTimeout(() => {
-                   newVal.openPanel();
-                }, 2000);
                 // 聊天组件准备好后加载文件列表
                 fetchFileList();
                 // 启动30秒轮询
@@ -521,6 +726,8 @@
             const getSessionId = () => {
               return (customRequestConfig?.customParams?.session_id || 'default').trim() || 'default';
             };
+
+            const filePanelCollapsed = ref(false);
 
             const queryRecursive = ref(true);
             const fileTree = ref([]);
@@ -909,6 +1116,15 @@
               selectNode,
               lastRefreshTime,
               openFolderLocation,
+              filePanelCollapsed,
+              sendQuickMsg: (msg) => {
+                if (chatRef.value && typeof chatRef.value.sendMessage === 'function') {
+                  chatRef.value.openPanel();
+                  setTimeout(() => {
+                    chatRef.value.sendMessage(msg);
+                  }, 500);
+                }
+              },
             };
           },
           render() {
@@ -923,211 +1139,261 @@
                 rows.push(
                   h('div', {
                     class: ['tree-node', selected ? 'selected' : ''].filter(Boolean).join(' '),
-                    style: { paddingLeft: `${8 + depth * 16}px` },
+                    style: { paddingLeft: `${6 + depth * 14}px` },
                     onClick: () => {
-                      if (isDir) {
-                        this.toggleExpand(node);
-                      } else {
-                        this.selectNode(node);
-                      }
+                      if (isDir) { this.toggleExpand(node); } else { this.selectNode(node); }
                     },
                   }, [
-                    h('span', {
-                      class: ['tree-toggle', expanded ? 'expanded' : '', !hasChildren ? 'placeholder' : ''].filter(Boolean).join(' '),
-                    }, hasChildren ? '▸' : ''),
+                    h('span', { class: ['tree-toggle', expanded ? 'expanded' : '', !hasChildren ? 'placeholder' : ''].filter(Boolean).join(' ') }, hasChildren ? '▸' : ''),
                     !isDir && h('input', {
-                      type: 'checkbox',
-                      class: 'tree-checkbox',
+                      type: 'checkbox', class: 'tree-checkbox',
                       checked: this.selectedFiles.selected?.has(node.path),
                       onClick: (e) => e.stopPropagation(),
-                      onChange: () => {
-                        if (!isDir) this.toggleFileSelection(node);
-                      },
+                      onChange: () => { if (!isDir) this.toggleFileSelection(node); },
                     }),
-                    h('span', { class: ['tree-icon', isDir ? 'folder' : 'file'].join(' ') }, isDir ? '📁' : this.getFileIcon(node.name)),
+                    h('span', { class: 'tree-icon' }, isDir ? '📁' : this.getFileIcon(node.name)),
                     h('span', { class: 'tree-name', title: node.path }, node.name),
                   ])
                 );
-                if (isDir && expanded) {
-                  rows.push(...renderTreeNodes(node.children || [], depth + 1));
-                }
+                if (isDir && expanded) rows.push(...renderTreeNodes(node.children || [], depth + 1));
               }
               return rows;
             };
 
             return h('div', { class: 'page' }, [
-              h('div', { class: 'topbar' }, [
-                h('label', null, [
-                  h('span', null, 'API'),
+              // ====== Header ======
+              h('div', { class: 'header' }, [
+                // Logo
+                h('div', { class: 'header-logo' }, [
+                  h('div', { class: 'header-logo-icon' }, '⚡'),
+                  h('span', null, 'AI 工作台'),
+                ]),
+                h('div', { class: 'header-divider' }),
+                // Session ID
+                h('div', { class: 'header-field' }, [
+                  h('label', null, 'Session'),
                   h('input', {
+                    class: 'header-input',
+                    type: 'text',
+                    value: this.customRequestConfig?.customParams?.session_id || '',
+                    placeholder: 'session id',
+                    style: 'width: 120px;',
+                    onInput: (e) => {
+                      if (this.customRequestConfig?.customParams) {
+                        this.customRequestConfig.customParams.session_id = e.target.value;
+                      }
+                    },
+                  }),
+                ]),
+                h('div', { class: 'header-divider' }),
+                // API URL
+                h('div', { class: 'header-field' }, [
+                  h('label', null, 'API'),
+                  h('input', {
+                    class: 'header-input wide',
                     type: 'text',
                     value: this.apiUrl,
                     onInput: (e) => (this.apiUrl = e.target.value),
                   }),
                 ]),
-                h('label', null, [
-                  h('span', null, 'appName'),
-                  h('input', {
-                    type: 'text',
-                    value: this.appName,
-                    onInput: (e) => (this.appName = e.target.value),
-                  }),
+                // Spacer
+                h('div', { class: 'header-spacer' }),
+                // Streaming toggle
+                h('div', {
+                  class: 'header-toggle',
+                  onClick: () => (this.enableStreaming = !this.enableStreaming),
+                }, [
+                  h('div', { class: `toggle-switch ${this.enableStreaming ? 'on' : ''}` }),
+                  h('span', null, '流式响应'),
                 ]),
-                h('label', null, [
-                  h('span', null, 'domainName'),
-                  h('input', {
-                    type: 'text',
-                    value: this.domainName,
-                    onInput: (e) => (this.domainName = e.target.value),
-                  }),
-                ]),
-                h('label', null, [
-                  h('input', {
-                    type: 'checkbox',
-                    checked: this.enableStreaming,
-                    onChange: (e) => (this.enableStreaming = e.target.checked),
-                  }),
-                  h('span', null, 'Streaming'),
-                ]),
-                h(
-                  'button',
-                  {
-                    type: 'button',
-                    onClick: this.clearHistory,
-                    title: 'ref.clearHistory()',
-                  },
-                  'Clear history'
-                ),
-                h(
-                  'button',
-                  {
-                    type: 'button',
-                    onClick: this.getState,
-                    title: 'ref.getChatState()',
-                  },
-                  'Log state'
-                ),
-                h('span', { class: 'hint' }, `mode: ${this.statusText}`),
+                h('div', { class: 'header-divider' }),
+                // File panel toggle
+                h('button', {
+                  class: `header-btn ${!this.filePanelCollapsed ? 'active' : ''}`,
+                  onClick: () => (this.filePanelCollapsed = !this.filePanelCollapsed),
+                  title: '切换文件管理面板',
+                }, ['📁', h('span', null, '文件')]),
+                // Clear history
+                h('button', {
+                  class: 'header-btn',
+                  onClick: this.clearHistory,
+                  title: '清空对话历史',
+                }, ['🗑', h('span', null, '清除历史')]),
+                // Log state
+                h('button', {
+                  class: 'header-btn',
+                  onClick: this.getState,
+                  title: '打印当前状态到控制台',
+                }, '📋 状态'),
+                // Mode tag
+                h('span', { class: 'header-tag' }, this.statusText),
               ]),
+
+              // ====== Body ======
               h('div', { class: 'body' }, [
                 // 文件管理面板
-                h('div', { class: 'file-panel' }, [
+                h('div', { class: `file-panel ${this.filePanelCollapsed ? 'collapsed' : ''}` }, [
                   // Header
                   h('div', { class: 'file-panel-header' }, [
-                    h('span', null, '📁 文件管理'),
-                    h('div', { style: 'display: flex; gap: 8px; align-items: center;' }, [
-                      this.lastRefreshTime && h('span', { 
-                        style: 'font-size: 11px; color: #8c8c8c; font-weight: normal; margin-right: 8px;' 
-                      }, `更新于 ${this.lastRefreshTime.toLocaleTimeString()}`),
-                      this.quotaInfo && h('span', { class: 'quota-badge' }, this.getQuotaDisplay()),
-                      h('button', {
-                        onClick: () => this.fetchQuotaInfo(),
-                        title: '查询配额',
-                        style: 'font-size: 12px; padding: 2px 6px;'
-                      }, '📊'),
+                    h('div', { class: 'file-panel-header-left' }, [
+                      h('span', null, '📁 我的文件'),
+                      this.lastRefreshTime && h('span', { style: 'font-size: 10px; color: #a0aec0; font-weight: 400;' },
+                        `${this.lastRefreshTime.toLocaleTimeString()}`),
+                    ]),
+                    h('div', { class: 'file-panel-header-right' }, [
+                      this.quotaInfo && h('span', { class: 'quota-pill' }, this.getQuotaDisplay()),
+                      h('button', { class: 'fp-icon-btn', onClick: () => this.fetchQuotaInfo(), title: '查询存储配额' }, '📊'),
                       this.selectedFiles.selected?.size > 0 && h('button', {
+                        class: 'fp-icon-btn primary',
                         onClick: () => this.downloadSelectedFiles(),
-                        title: `批量下载 (${this.selectedFiles.selected?.size || 0}个文件)`,
-                        style: 'font-size: 12px; padding: 2px 6px; background: #1890ff; color: white; border-color: #1890ff;'
-                      }, `⬇️ ${this.selectedFiles.selected?.size || 0}`),
-                      h('button', {
-                        onClick: () => this.openFolderLocation(),
-                        title: '打开文件夹位置',
-                        style: 'font-size: 12px; padding: 2px 6px;'
-                      }, '📂'),
-                      h('button', {
-                        onClick: () => this.fetchFileList(),
-                        title: '刷新列表',
-                        style: 'font-size: 12px; padding: 2px 6px;'
-                      }, '🔄'),
+                        title: `批量下载 ${this.selectedFiles.selected?.size} 个文件`,
+                      }, `⬇ ${this.selectedFiles.selected?.size}`),
+                      h('button', { class: 'fp-icon-btn', onClick: () => this.openFolderLocation(), title: '在浏览器中打开目录' }, '🔗'),
+                      h('button', { class: 'fp-icon-btn', onClick: () => this.fetchFileList(), title: '刷新文件列表' }, '↻'),
                     ]),
                   ]),
                   // Toolbar
                   h('div', { class: 'file-toolbar' }, [
                     h('label', null, [
-                      h('input', {
-                        type: 'checkbox',
-                        checked: this.queryRecursive,
-                        onChange: (e) => (this.queryRecursive = e.target.checked),
-                      }),
-                      h('span', null, '递归'),
+                      h('input', { type: 'checkbox', checked: this.queryRecursive, onChange: (e) => (this.queryRecursive = e.target.checked), style: 'accent-color: #4299e1;' }),
+                      h('span', null, '递归列出'),
                     ]),
                     h('button', { onClick: () => this.fetchFileList() }, '刷新'),
                     h('span', { style: 'flex: 1' }),
                     h('button', {
+                      class: 'upload-btn',
                       onClick: () => this.$refs.fileInputRef?.click(),
-                      style: 'background: #1890ff; color: white; border-color: #1890ff;'
-                    }, '📤 上传'),
+                    }, '⬆ 上传文件'),
                   ]),
-                  // Body - Split layout
+                  // Upload progress bar
+                  this.isUploading && h('div', { class: 'upload-progress-bar-wrap' }, [
+                    h('div', { class: 'upload-progress-bar', style: { width: `${this.uploadProgress}%` } }),
+                  ]),
+                  // Hidden file input
+                  h('input', { ref: 'fileInputRef', type: 'file', multiple: true, onChange: (e) => this.handleFileSelect(e), style: 'display: none;' }),
+                  // Body: tree + preview
                   h('div', { class: 'file-panel-body' }, [
-                    // Upload area (overlay)
-                    h('input', {
-                      ref: 'fileInputRef',
-                      type: 'file',
-                      multiple: true,
-                      onChange: (e) => this.handleFileSelect(e),
-                      style: 'display: none;'
-                    }),
-                    // Left: Tree section
+                    // Tree
                     h('div', { class: 'file-tree-section' }, [
                       this.fileTree.length === 0
-                        ? h('div', { style: 'text-align: center; color: #bfbfbf; padding: 20px; font-size: 12px;' }, '暂无文件')
-                        : h('div', { class: 'file-tree' }, renderTreeNodes(this.fileTree, 0))
+                        ? h('div', { class: 'tree-empty' }, [
+                            h('div', { style: 'font-size: 28px; margin-bottom: 6px;' }, '📂'),
+                            h('div', null, '暂无文件'),
+                          ])
+                        : h('div', { class: 'file-tree' }, renderTreeNodes(this.fileTree, 0)),
                     ]),
-                    // Right: Preview section
+                    // Preview
                     h('div', { class: 'file-preview-section' }, [
                       this.selectedNode && this.selectedNode.type === 'file'
                         ? [
                             h('div', { class: 'file-preview-header' }, [
-                              h('div', { class: 'file-preview-title', title: this.selectedNode.path }, this.selectedNode.name),
+                              h('div', { class: 'file-preview-title', title: this.selectedNode.path }, [
+                                h('span', null, this.getFileIcon(this.selectedNode.name) + ' '),
+                                this.selectedNode.name,
+                              ]),
                               h('div', { class: 'file-preview-actions' }, [
-                                h('button', {
-                                  class: 'btn-primary',
-                                  onClick: () => this.downloadFile(this.selectedNode),
-                                  title: '下载'
-                                }, '⬇️ 下载'),
-                                h('button', {
-                                  class: 'btn-danger',
-                                  onClick: () => this.deleteFile(this.selectedNode),
-                                  title: '删除'
-                                }, '🗑️ 删除'),
+                                h('button', { class: 'btn-primary', onClick: () => this.downloadFile(this.selectedNode) }, '⬇ 下载'),
+                                h('button', { class: 'btn-danger', onClick: () => this.deleteFile(this.selectedNode) }, '🗑 删除'),
                               ]),
                             ]),
                             h('div', { class: 'file-preview-body' }, [
                               this.preview.loading
-                                ? h('div', { style: 'color: #8c8c8c; text-align: center; padding: 40px;' }, '加载中...')
+                                ? h('div', { style: 'color: #a0aec0; text-align: center; padding: 40px; font-size: 13px;' }, '加载中...')
                                 : this.preview.error
-                                  ? h('div', { style: 'color: #ff4d4f; padding: 20px;' }, this.preview.error)
+                                  ? h('div', { style: 'color: #e53e3e; padding: 16px; font-size: 12px;' }, this.preview.error)
                                   : this.preview.type === 'image'
-                                    ? h('img', {
-                                        class: 'file-preview-image',
-                                        src: this.preview.url || (this.selectedNode.fullUrl || this.selectedNode.url || '')
-                                      })
+                                    ? h('img', { class: 'file-preview-image', src: this.preview.url || (this.selectedNode.fullUrl || this.selectedNode.url || '') })
                                     : h('pre', { class: 'file-preview-content' }, this.preview.content || '（空文件或不可预览）')
                             ])
                           ]
-                        : h('div', { class: 'file-preview-empty' }, '选择文件查看内容')
+                        : h('div', { class: 'file-preview-empty' }, [
+                            h('div', { class: 'file-preview-empty-icon' }, '🗂'),
+                            h('span', null, '选择文件查看内容'),
+                          ]),
                     ]),
                   ]),
+                  // Drag-drop zone
+                  h('div', {
+                    class: 'upload-dropzone',
+                    onDragover: this.onDragOver,
+                    onDragleave: this.onDragLeave,
+                    onDrop: this.onDrop,
+                    onClick: () => this.$refs.fileInputRef?.click(),
+                  }, [
+                    h('div', { class: 'dz-icon' }, '☁'),
+                    h('div', { class: 'dz-text' }, '拖拽文件到此处，或点击上传'),
+                  ]),
                 ]),
+
                 // 聊天区域
-                h('div', { class: 'chat-container' }, [
-                  h(SuspendedBallChat, {
-                    ref: 'chatRef',
-                    url: this.apiUrl,
-                    appName: this.appName,
-                    domainName: this.domainName,
-                    enableStreaming: this.enableStreaming,
-                    enableContext: true,
-                    supportedCustomContext: true,
-                    enableLocalStorage: true,
-                    enableVoiceInput: true,
-                    callbacks: this.callbacks,
-                    customRequestConfig: this.customRequestConfig,
-                    showClearButton: true,
-                    presetTasks: this.presetTasks,
-                  }),
+                h('div', { class: 'chat-panel' }, [
+                  h('div', { class: 'chat-container' }, [
+                    // 能力导航 Dashboard（背景层）
+                    h('div', { class: 'info-dashboard' }, (() => {
+                      const caps = [
+                        { icon: '📁', bg: '#fef9ec', name: '文件管理', desc: '上传下载预览、搜索、移动复制，多用户空间隔离', tags: ['上传', '下载', '搜索'], msg: '帮我列出 workspace 里有哪些文件' },
+                        { icon: '🖼️', bg: '#f0fff4', name: '图片处理', desc: '压缩 JPG/PNG/GIF/WebP，调质量与尺寸，批量转格式', tags: ['压缩', '转格式', '批量'], msg: '介绍一下图片压缩功能怎么用' },
+                        { icon: '📊', bg: '#ebf8ff', name: '数据分析', desc: '读写 Excel/CSV，Python 脚本自动分析并可视化', tags: ['Excel', 'CSV', 'Python'], msg: '帮我展示一个数据分析的例子' },
+                        { icon: '📝', bg: '#faf5ff', name: '文档生成', desc: '生成 PDF 报告，读取 Word 文档，支持中文富文本', tags: ['PDF', 'Word', 'Markdown'], msg: '帮我生成一份简单的PDF报告' },
+                        { icon: '💻', bg: '#fff5f5', name: '代码执行', desc: '沙箱安全执行 JavaScript / Python，实时输出结果', tags: ['JavaScript', 'Python', '沙箱'], msg: '帮我用 Python 计算1到100的和' },
+                        { icon: '⏰', bg: '#fffff0', name: '定时任务', desc: '延迟执行，链式回调：运行代码 → 写PDF → 发邮件', tags: ['延迟执行', '链式回调'], msg: '帮我设置一个2分钟后执行代码的定时任务' },
+                        { icon: '📧', bg: '#fff5ee', name: '邮件发送', desc: '通过 SMTP 发送邮件，支持模板、附件与系统通知', tags: ['SMTP', '模板', '附件'], msg: '我想了解怎么通过 AI 发送邮件' },
+                        { icon: '🗜️', bg: '#f0f4ff', name: 'ZIP 压缩', desc: '打包多个文件为 ZIP，支持解压与查看压缩包内容', tags: ['打包', '解压', '查看'], msg: '帮我把 workspace 里的文件打包成 ZIP' },
+                        { icon: '🔍', bg: '#f0fff8', name: '知识检索', desc: '基于 RAG 搜索本地知识库，支持 PDF/MD/EPUB', tags: ['RAG', '知识库', 'PDF'], msg: '搜索一下关于 AI Agent 架构的资料' },
+                      ];
+                      return [
+                        h('div', { class: 'dash-hero' }, [
+                          h('div', null, [
+                            h('h2', null, '⚡ AI 工作台能力速览'),
+                            h('p', null, '点击任意卡片即可快速开启对话 · 所有工具均支持用户文件空间隔离 · 支持流式响应与定时任务链'),
+                          ]),
+                          h('div', { class: 'dash-hero-badge' }, '9 种核心能力'),
+                        ]),
+                        h('div', { class: 'dash-section-label' }, '工具 & 技能'),
+                        h('div', { class: 'dash-grid' },
+                          caps.map(c =>
+                            h('div', { class: 'dash-card', onClick: () => this.sendQuickMsg(c.msg) }, [
+                              h('div', { class: 'dash-card-head' }, [
+                                h('div', { class: 'dash-card-icon', style: { background: c.bg } }, c.icon),
+                                h('span', { class: 'dash-card-name' }, c.name),
+                              ]),
+                              h('div', { class: 'dash-card-desc' }, c.desc),
+                              h('div', { class: 'dash-card-tags' }, c.tags.map(t => h('span', { class: 'dash-tag' }, t))),
+                            ])
+                          )
+                        ),
+                        h('div', { class: 'dash-tips' }, [
+                          h('div', { class: 'dash-tips-title' }, '💡 快速上手'),
+                          ...[
+                            { label: '文件上传', text: '左侧文件面板可拖拽上传，或点击"上传文件"按钮' },
+                            { label: '图片压缩', text: '上传图片后对 AI 说"帮我压缩这张图片"即可' },
+                            { label: '定时任务', text: '对 AI 说"2分钟后执行…"自动创建并链式回调' },
+                            { label: '批量下载', text: '勾选文件树中多个文件，点击批量下载按钮' },
+                          ].map(tip =>
+                            h('div', { class: 'dash-tip' }, [
+                              h('span', { class: 'dash-tip-label' }, tip.label),
+                              h('span', null, tip.text),
+                            ])
+                          ),
+                        ]),
+                      ];
+                    })()),
+                    h(SuspendedBallChat, {
+                      ref: 'chatRef',
+                      url: this.apiUrl,
+                      appName: this.appName,
+                      domainName: this.domainName,
+                      enableStreaming: this.enableStreaming,
+                      enableContext: true,
+                      supportedCustomContext: true,
+                      enableLocalStorage: true,
+                      enableVoiceInput: true,
+                      callbacks: this.callbacks,
+                      customRequestConfig: this.customRequestConfig,
+                      showClearButton: true,
+                      presetTasks: this.presetTasks,
+                    }),
+                  ]),
                 ]),
               ]),
             ]);

@@ -4,6 +4,8 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { rm } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { TOOLS } from '../tools/index.js';
 import { initScheduler, stopScheduler, cleanupTasks } from '../tools/scheduler.js';
 
@@ -260,4 +262,5 @@ test('cleanup', async () => {
   await cleanupTasks();
   await TOOLS.file_delete(TEST_SESSION, TEST_DIR, true);
   await stopScheduler();
+  await rm(resolve('public/workspace', TEST_SESSION), { recursive: true, force: true });
 });

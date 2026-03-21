@@ -4,6 +4,8 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { rm } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { TOOLS } from '../tools/index.js';
 
 const TEST_SESSION = `arg_order_test_${Date.now()}`;
@@ -317,4 +319,8 @@ test('argument passing: manual vs Object.values', async () => {
   // 清理
   await TOOLS.file_delete(TEST_SESSION, jsonPath, false);
   await TOOLS.file_delete(TEST_SESSION, 'tmp/spread-test.json', false);
+});
+
+test('cleanup: 删除测试 session 根目录', async () => {
+  await rm(resolve('public/workspace', TEST_SESSION), { recursive: true, force: true });
 });
