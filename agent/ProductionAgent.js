@@ -262,7 +262,7 @@ export class ProductionAgent {
       'pdf_read', 'pdf_merge',
       'csv_read', 'csv_write',
       'json_read', 'json_write',
-      'image_info', 'svg_write',
+      'image_info', 'svg_write', 'image_compress', 'image_compress_batch',
       'zip_compress', 'zip_extract', 'zip_info', 'zip_list',
       // 定时任务工具也需要 sessionId 进行用户隔离
       'schedule_task', 'schedule_list', 'schedule_cancel'

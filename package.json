@@ -46,6 +46,7 @@
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^1.1.1",
     "pdfkit": "^0.18.0",
+    "sharp": "^0.34.5",
     "unzipper": "^0.12.3"
   },
   "devDependencies": {
@@ -59,6 +60,7 @@
   "resolutions": {
     "string-width": "4.2.3",
     "strip-ansi": "6.0.1",
-    "ansi-regex": "5.0.1"
+    "ansi-regex": "5.0.1",
+    "wrap-ansi": "7.0.0"
   }
 }

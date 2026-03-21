@@ -19,6 +19,7 @@ import {
 import { compressFiles, extractArchive, getArchiveInfo, listArchiveContents } from './compress.js';
 import { sendEmail, sendTemplateEmail, verifySmtpConfig } from './email.js';
 import { scheduleTask, getTasks, cancelTask, getTaskById, cleanupTasks } from './scheduler.js';
+import { compressImage, compressImageBatch } from './imageProcessor.js';
 export const TOOL_DEFINITIONS = [
   {
     name: "search_knowledge",
@@ -328,6 +329,30 @@ export const TOOL_DEFINITIONS = [
   },
   // ========== 图片工具 ==========
   {
+    name: "image_compress",
+    func: (sessionId, inputPath, outputPath, options = "{}") =>
+      compressImage(sessionId, inputPath, outputPath || null, JSON.parse(options)),
+    description: "压缩图片文件（支持 jpg/png/gif/webp/avif），可调整质量、尺寸、格式。GIF 默认保留动画帧",
+    params: [
+      { name: "输入路径", type: "string", example: "images/photo.jpg", description: "workspace 内的图片路径" },
+      { name: "输出路径", type: "string", example: "images/photo_compressed.jpg", description: "输出路径（可选，默认覆盖原文件）", required: false },
+      { name: "选项", type: "object", example: '{"quality":80,"width":1920}', description: "可选：quality(1-100,默认80)、width、height、format(jpg/png/webp/gif/avif)、fit(inside/cover/contain)、animated(保留gif动画,默认true)", required: false }
+    ],
+    example: 'image_compress("images/photo.jpg", "images/photo_small.jpg", "{\\"quality\\":75,\\"width\\":1280}")',
+  },
+  {
+    name: "image_compress_batch",
+    func: (sessionId, inputPaths, outputDir, options = "{}") =>
+      compressImageBatch(sessionId, JSON.parse(inputPaths), outputDir || null, JSON.parse(options)),
+    description: "批量压缩图片，将多张图片压缩到指定目录",
+    params: [
+      { name: "输入路径数组", type: "string", example: '["images/a.jpg","images/b.png"]', description: "图片路径数组（JSON字符串）" },
+      { name: "输出目录", type: "string", example: "images/compressed", description: "输出目录（可选，默认覆盖原文件）", required: false },
+      { name: "选项", type: "object", example: '{"quality":80}', description: "同 image_compress 选项", required: false }
+    ],
+    example: 'image_compress_batch("[\\"images/a.jpg\\",\\"images/b.jpg\\"]", "images/out", "{\\"quality\\":75}")',
+  },
+  {
     name: "image_info",
     func: (sessionId, filePath) => getImageInfo(filePath, sessionId),
     description: "获取用户 workspace 中图片文件信息",
@@ -518,6 +543,8 @@ export {
   readCsv, writeCsv, readJson, writeJson,
   // 压缩工具
   compressFiles, extractArchive, getArchiveInfo, listArchiveContents,
+  // 图片处理
+  compressImage, compressImageBatch,
   // 邮件工具
   sendEmail, sendTemplateEmail, verifySmtpConfig,
   // 调度工具

@@ -184,6 +184,9 @@ function buildExamplesSection(skillDefinitions) {
     '- "把这几个PDF合并成一个" → 用 pdf_merge 工具合并',
     '- "解压这个zip文件" → 用 zip_extract 工具解压',
     '- "把这几个文件打包成zip" → 用 zip_compress 工具压缩',
+    '- "压缩这张图片/帮我把图片变小" → 用 image_compress 工具（支持 jpg/png/gif/webp，可调质量和尺寸）',
+    '- "批量压缩这些图片" → 用 image_compress_batch 工具（多张图片一次性压缩到指定目录）',
+    '- "把图片转成 webp 格式" → 用 image_compress 工具（设置 format: webp）',
   ];
   
   // 从技能中提取示例
