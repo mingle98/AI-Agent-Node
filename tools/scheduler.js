@@ -94,7 +94,31 @@ export async function scheduleTask(sessionId, delayMinutes, taskType, params, de
   if (!taskType) {
     return { success: false, error: '任务类型不能为空' };
   }
-  
+
+  const MAX_TASKS_PER_USER = 20;
+  const userPendingCount = () => [...scheduledTasks.values()].filter(
+    t => t.sessionId === sessionId && t.status === 'pending'
+  ).length;
+
+  if (userPendingCount() >= MAX_TASKS_PER_USER) {
+    // 优先清除该用户已完成/失败/取消/过期的任务
+    const now = Date.now();
+    for (const [id, t] of scheduledTasks) {
+      if (t.sessionId !== sessionId) continue;
+      const isExpired = t.status === 'pending' && t.executeAt < now;
+      if (['completed', 'failed', 'cancelled'].includes(t.status) || isExpired) {
+        scheduledTasks.delete(id);
+      }
+    }
+  }
+
+  if (userPendingCount() >= MAX_TASKS_PER_USER) {
+    return {
+      success: false,
+      error: `任务数量已达上限（每用户最多 ${MAX_TASKS_PER_USER} 个待执行任务），请等待现有任务完成或取消后再创建`
+    };
+  }
+
   const task = {
     id: randomUUID(),
     sessionId,  // 关联用户

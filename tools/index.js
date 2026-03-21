@@ -85,7 +85,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "exec_code",
     func: (code, language) => execCode(code, language),
-    description: "在服务端沙箱环境中执行代码（支持 JavaScript/TypeScript/Python），用于数据转换、算法验证、脚本执行",
+    description: "在服务端沙箱环境中执行代码（支持 JavaScript/TypeScript/Python），用于数据转换、算法验证、脚本执行。注意：Python 沙箱为独立进程，无法 import 本项目的 JS 工具模块（如 daily_news），如需调用系统工具请直接使用对应工具或通过 schedule_task 调度",
     params: [
       { name: "代码内容", type: "string", example: "console.log('Hello World')" },
       { name: "编程语言", type: "string", example: "javascript", options: ["javascript", "typescript", "python"], required: false }
@@ -463,7 +463,7 @@ export const TOOL_DEFINITIONS = [
     description: "创建定时任务（支持用户隔离 + onComplete回调），支持多步链式流程与嵌套回调。步骤可按场景灵活组合（如 exec_code / script_generator / pdf_write / email_send）。用户ID由系统自动注入",
     params: [
       { name: "延迟分钟数", type: "number", example: 2, description: "延迟多少分钟后执行任务" },
-      { name: "任务类型", type: "string", example: "exec_code", options: ["email_send", "email_template", "exec_code", "script_generator", "pdf_write"], description: "要执行的任务类型" },
+      { name: "任务类型", type: "string", example: "exec_code", options: ["daily_news", "email_send", "email_template", "exec_code", "script_generator", "pdf_write"], description: "要执行的任务类型。获取新闻后发邮件请直接用 daily_news 作为 taskType，而非在 exec_code 的 Python 代码里 import" },
       { name: "任务参数", type: "object", example: '{"code":"console.log(1+2)","language":"javascript"}', description: "任务所需参数对象" },
       { name: "任务描述", type: "string", example: "2分钟后执行代码并发送结果", description: "任务描述说明", required: false },
       { name: "回调任务", type: "object", example: '{"taskType":"pdf_write","params":{"filePath":"output/result.pdf","content":"计算结果：{{result}}"},"onComplete":{"taskType":"email_send","params":{"to":"user@qq.com","subject":"结果","content":"请查收附件","options":"{\\"attachments\\":[{\\"filename\\":\\"result.pdf\\",\\"path\\":\\"output/result.pdf\\"}]}"}}}', description: "任务执行完成后自动触发的回调任务，支持嵌套 onComplete 和 {{result}} 占位符替换父任务结果", required: false }
