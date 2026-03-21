@@ -14,8 +14,9 @@ import {
 import { CONFIG } from "./config.js";
 import { resolveThinkingMode } from "./utils/thinkingMode.js";
 import { escapeHtml, wrapThinkingOpen, wrapThinkingClose } from "./utils/thinkingRenderer.js";
-import { initWorkspace, getUserWorkspaceRoot, getUserStorageStats, checkUserStorageQuota } from "./tools/fileManager.js";
-import { TOOL_DEFINITIONS } from "./tools/index.js";
+import { initWorkspace, getUserWorkspaceRoot, getUserStorageStats, checkUserStorageQuota } from './tools/fileManager.js';
+import { TOOL_DEFINITIONS } from './tools/index.js';
+import { initScheduler } from './tools/scheduler.js';
 import multer from "multer";
 import archiver from "archiver";
 import fs from "fs/promises";
@@ -604,7 +605,7 @@ app.use((error, req, res, next) => {
   res.status(500).json({ error: message });
 });
 
-app.listen(PORT, HOST, async () => {
+const server = app.listen(PORT, HOST, async () => {
   console.log(`🚀 Express API 服务已启动: http://${HOST}:${PORT}`);
   console.log("可用接口:");
   console.log("  GET  /health");
@@ -626,11 +627,38 @@ app.listen(PORT, HOST, async () => {
   } catch (error) {
     console.error(`⚠️ Workspace 初始化错误: ${error.message}`);
   }
+
+  // 初始化任务调度器
+  try {
+    await initScheduler();
+    console.log('⏰ 任务调度器已启动（支持定时任务持久化）');
+  } catch (error) {
+    console.error('⚠️ 任务调度器初始化失败:', error.message);
+  }
+});
+
+server.on('error', (error) => {
+  if (error?.code === 'EADDRINUSE') {
+    console.error(`❌ 端口占用: ${HOST}:${PORT} 已被其他进程使用`);
+    console.error('💡 请先结束占用进程，或修改 PORT 后重试');
+    process.exit(1);
+  }
+
+  if (error?.code === 'EACCES') {
+    console.error(`❌ 端口权限不足: 无法监听 ${HOST}:${PORT}`);
+    process.exit(1);
+  }
+
+  console.error('❌ 服务器启动失败:', error?.message || error);
+  process.exit(1);
 });
 
 // 添加进程错误处理，防止服务意外退出
 process.on('uncaughtException', (error) => {
   console.error('❌ 未捕获的异常:', error.message);
+  if (error?.code === 'EADDRINUSE' || error?.code === 'EACCES') {
+    process.exit(1);
+  }
   console.log('💡 服务继续运行...');
 });
 

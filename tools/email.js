@@ -441,20 +441,32 @@ export async function sendTemplateEmail(options) {
  * @returns {Promise<Object>} - 验证结果
  */
 export async function verifySmtpConfig(smtpConfig) {
-  try {
-    const config = smtpConfig || {
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-      }
+  const config = smtpConfig || {
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS
+    }
+  };
+
+  if (!config.host) {
+    return {
+      success: false,
+      error: '未配置 SMTP_HOST',
+      code: 'SMTP_NOT_CONFIGURED'
     };
+  }
 
-    const transporter = nodemailer.createTransport(config);
-    await transporter.verify();
-
+  const transporter = nodemailer.createTransport(config);
+  try {
+    await Promise.race([
+      transporter.verify(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('SMTP 连接超时')), 5000)
+      )
+    ]);
     return {
       success: true,
       message: 'SMTP 配置验证通过'
@@ -465,5 +477,7 @@ export async function verifySmtpConfig(smtpConfig) {
       error: error.message,
       code: error.code
     };
+  } finally {
+    transporter.close();
   }
 }

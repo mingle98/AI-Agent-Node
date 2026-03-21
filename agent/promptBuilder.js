@@ -136,15 +136,22 @@ function buildRulesSection() {
 13. CSV/JSON → 使用 csv_read/csv_write/json_read/json_write 工具
 14. 图片操作 → 使用 image_info/svg_write 工具
 15. 压缩/解压操作 → 使用 zip_compress/zip_extract/zip_info/zip_list 工具
-16. 邮件发送 → 使用 send_email 工具（支持 SMTP 发送，可带附件、HTML/文本内容）
-17. 文件操作返回的 URL 可直接访问下载（在用户专属的 workspace/{sessionId} 目录下）
-17. 文件路径以用户专属 workspace 为根目录，例如：file_write("docs/readme.md", "内容")
-18. 用户文件相互隔离，一个用户无法访问另一个用户的文件
-19. 复杂场景 → 使用高级技能（教学、咨询、问答、Mermaid画图、需要数据搜索和可视化、可用python_executor创建python脚本解决问题的场景）
-20. 如果问题过于复杂或没有可用的能力就优先使用python_executor技能自动创建python脚本尝试解决
-21. 优先使用技能处理综合场景，它们会自动完成多个步骤
-22. 参数要完整、准确，避免无效调用
-23. 给出准确、友好、专业的回答`;
+16. 邮件发送 → 使用 email_send/email_template 工具（支持 SMTP 发送，多种模板）
+17. 定时任务调度 → 使用 schedule_task 工具（延迟执行邮件发送、脚本执行等，支持用户隔离）
+18. 多步骤定时任务请使用链式 onComplete 回调，按目标拆分步骤并顺序编排（可嵌套）
+19. 步骤可灵活组合（例如 exec_code / script_generator / pdf_write / email_send），并通过 {{result}} 传递上一步结果
+20. 查看定时任务 → 使用 schedule_list 工具（查询当前用户的待执行/已完成任务）
+21. 取消定时任务 → 使用 schedule_cancel 工具（只能取消自己的任务）
+22. 文件操作返回的 URL 可直接访问下载（在用户专属的 workspace/{sessionId} 目录下）
+23. 文件路径以用户专属 workspace 为根目录，例如：file_write("docs/readme.md", "内容")
+24. 用户文件相互隔离，一个用户无法访问另一个用户的文件
+25. 复杂场景 → 使用高级技能（教学、咨询、问答、Mermaid画图、需要数据搜索和可视化、可用python_executor创建python脚本解决问题的场景）
+26. 如果问题过于复杂或没有可用的能力就优先使用python_executor技能自动创建python脚本尝试解决
+27. 优先使用技能处理综合场景，它们会自动完成多个步骤
+28. 参数要完整、准确，避免无效调用
+29. exec_code 生成 Python 代码时，f-string 要使用单花括号如 f'{variable}'，不要使用双花括号；同时避免引号冲突（如 f"{datetime.now().strftime('%Y-%m-%d')}"）；且代码在沙箱执行，禁止导入项目内部模块（如 tools、agent 等），只能用标准库
+30. schedule_task 的链式任务可以直接调用任意工具（如 daily_news → email_send），不需要用 exec_code 包裹
+31. 给出准确、友好、专业的回答`;
 }
 
 /**
@@ -165,6 +172,9 @@ function buildExamplesSection(skillDefinitions) {
     '- "帮我写封邮件跟进客户" → 用 email_writer 技能生成',
     '- "发送邮件通知给xxx@example.com" → 用 send_email 工具发送',
     '- "发送系统告警邮件给管理员" → 用 email_sender 技能（自动完成发送流程）',
+    '- "2分钟后执行Python算平均值，写入result.pdf并发我邮箱" → 用 schedule_task 链式回调（示例：exec_code → pdf_write → email_send）',
+    '- "查看我有哪些定时任务" → 用 schedule_list 工具查询',
+    '- "取消那个定时任务" → 用 schedule_cancel 工具取消（需要任务ID）',
     '- "执行这段js代码看看结果" → 用 exec_code 工具沙箱执行',
     '- "这是上周数据：访问=50000, 加购=3500, 下单=800, 支付=210。帮我计算每步转化率，并找出最大流失环节" → 用 python_executor 技能自动生成脚本执行分析',
     '- "列出workspace里的文件" → 用 file_list 工具查看目录',

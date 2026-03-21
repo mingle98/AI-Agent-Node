@@ -45,13 +45,20 @@
     "nodemailer": "^6.9.15",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^1.1.1",
+    "pdfkit": "^0.18.0",
     "unzipper": "^0.12.3"
   },
   "devDependencies": {
     "c8": "^11.0.0",
-    "husky": "^9.1.6"
+    "husky": "^9.1.6",
+    "string-width": "4.2.3"
   },
   "engines": {
     "node": ">=20.6.0"
+  },
+  "resolutions": {
+    "string-width": "4.2.3",
+    "strip-ansi": "6.0.1",
+    "ansi-regex": "5.0.1"
   }
 }

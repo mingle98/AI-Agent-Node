@@ -9,7 +9,7 @@ import { execCode } from './execCode.js';
 import { generatePythonScript, analyzeScriptResult, setScriptGeneratorLLM, checkScriptSafety } from './scriptGenerator.js';
 import {
   listDirectory, readFile, writeFile, deleteFile, createDirectory,
-  moveFile, copyFile, getFileInfo, searchFiles, batchFileOperations, initWorkspace, getUserStorageStats
+  moveFile, copyFile, getFileInfo, searchFiles, batchFileOperations, initWorkspace, getUserStorageStats, resolveWorkspacePath
 } from './fileManager.js';
 import {
   readExcel, writeExcel, appendToExcel, readWord, writeWord,
@@ -18,6 +18,7 @@ import {
 } from './fileFormatHandler.js';
 import { compressFiles, extractArchive, getArchiveInfo, listArchiveContents } from './compress.js';
 import { sendEmail, sendTemplateEmail, verifySmtpConfig } from './email.js';
+import { scheduleTask, getTasks, cancelTask, getTaskById, cleanupTasks } from './scheduler.js';
 export const TOOL_DEFINITIONS = [
   {
     name: "search_knowledge",
@@ -204,7 +205,7 @@ export const TOOL_DEFINITIONS = [
   // ========== Excel 文件工具 ==========
   {
     name: "excel_read",
-    func: (sessionId, filePath, sheetName) => readExcel(sessionId, filePath, { sheetName }),
+    func: (sessionId, filePath, sheetName) => readExcel(filePath, sessionId, { sheetName }),
     description: "读取用户 workspace 中的 Excel 文件，返回工作表列表和单元格数据",
     params: [
       { name: "文件路径", type: "string", example: "data/report.xlsx" },
@@ -214,7 +215,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "excel_write",
-    func: (sessionId, filePath, data, sheetName) => writeExcel(sessionId, filePath, JSON.parse(data), { sheetName }),
+    func: (sessionId, filePath, data, sheetName) => writeExcel(filePath, sessionId, JSON.parse(data), { sheetName }),
     description: "在用户 workspace 中创建 Excel 文件，支持写入二维数组数据",
     params: [
       { name: "文件路径", type: "string", example: "output/report.xlsx" },
@@ -225,7 +226,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "excel_append",
-    func: (sessionId, filePath, data) => appendToExcel(sessionId, filePath, JSON.parse(data)),
+    func: (sessionId, filePath, data) => appendToExcel(filePath, sessionId, JSON.parse(data)),
     description: "向用户 workspace 中的 Excel 文件追加数据行",
     params: [
       { name: "文件路径", type: "string", example: "data/log.xlsx" },
@@ -236,7 +237,7 @@ export const TOOL_DEFINITIONS = [
   // ========== Word 文件工具 ==========
   {
     name: "word_read",
-    func: (sessionId, filePath) => readWord(sessionId, filePath),
+    func: (sessionId, filePath) => readWord(filePath, sessionId),
     description: "读取用户 workspace 中 Word 文档的纯文本内容",
     params: [
       { name: "文件路径", type: "string", example: "docs/document.docx" }
@@ -245,7 +246,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "word_read_html",
-    func: (sessionId, filePath) => readWordAsHtml(sessionId, filePath),
+    func: (sessionId, filePath) => readWordAsHtml(filePath, sessionId),
     description: "将用户 workspace 中 Word 文档转换为 HTML 格式",
     params: [
       { name: "文件路径", type: "string", example: "docs/document.docx" }
@@ -255,7 +256,7 @@ export const TOOL_DEFINITIONS = [
   // ========== PDF 文件工具 ==========
   {
     name: "pdf_read",
-    func: (sessionId, filePath) => readPdf(sessionId, filePath),
+    func: (sessionId, filePath) => readPdf(filePath, sessionId),
     description: "读取用户 workspace 中 PDF 文件的文本内容",
     params: [
       { name: "文件路径", type: "string", example: "docs/document.pdf" }
@@ -264,7 +265,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "pdf_merge",
-    func: (sessionId, files, output) => mergePdfs(sessionId, files.split(","), output),
+    func: (sessionId, files, output) => mergePdfs(files.split(","), output, sessionId),
     description: "合并用户 workspace 中的多个 PDF 文件",
     params: [
       { name: "源文件列表", type: "string", example: "doc1.pdf,doc2.pdf" },
@@ -272,10 +273,24 @@ export const TOOL_DEFINITIONS = [
     ],
     example: 'pdf_merge("chapter1.pdf,chapter2.pdf", "full_report.pdf")',
   },
+  {
+    name: "pdf_write",
+    func: (sessionId, filePath, content, options = "{}") => {
+      const opts = JSON.parse(options);
+      return writePdf(filePath, sessionId, [{ text: content }], { overwrite: true, ...opts });
+    },
+    description: "将文本内容写入用户 workspace 中的 PDF 文件，支持简单的文本到PDF转换",
+    params: [
+      { name: "文件路径", type: "string", example: "output/result.pdf", description: "PDF文件输出路径" },
+      { name: "内容", type: "string", example: "计算结果: 3.0", description: "要写入PDF的文本内容" },
+      { name: "选项", type: "object", example: '{"title":"结果文档","fontSize":12}', description: "可选：title文档标题, fontSize字体大小, overwrite默认true", required: false }
+    ],
+    example: 'pdf_write("output/result.pdf", "计算结果: 3.0", "{\"title\":\"平均值计算\"}")',
+  },
   // ========== CSV/JSON 工具 ==========
   {
     name: "csv_read",
-    func: (sessionId, filePath) => readCsv(sessionId, filePath),
+    func: (sessionId, filePath) => readCsv(filePath, sessionId),
     description: "读取用户 workspace 中 CSV 文件，解析为结构化数据",
     params: [
       { name: "文件路径", type: "string", example: "data/export.csv" }
@@ -284,7 +299,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "csv_write",
-    func: (sessionId, filePath, data) => writeCsv(sessionId, filePath, JSON.parse(data)),
+    func: (sessionId, filePath, data) => writeCsv(filePath, sessionId, JSON.parse(data)),
     description: "将数据写入用户 workspace 中的 CSV 文件",
     params: [
       { name: "文件路径", type: "string", example: "output/data.csv" },
@@ -294,7 +309,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "json_read",
-    func: (sessionId, filePath) => readJson(sessionId, filePath),
+    func: (sessionId, filePath) => readJson(filePath, sessionId),
     description: "读取用户 workspace 中 JSON 文件并解析",
     params: [
       { name: "文件路径", type: "string", example: "config/settings.json" }
@@ -303,7 +318,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "json_write",
-    func: (sessionId, filePath, data) => writeJson(sessionId, filePath, JSON.parse(data)),
+    func: (sessionId, filePath, data) => writeJson(filePath, sessionId, JSON.parse(data)),
     description: "将数据写入用户 workspace 中的 JSON 文件",
     params: [
       { name: "文件路径", type: "string", example: "output/data.json" },
@@ -314,7 +329,7 @@ export const TOOL_DEFINITIONS = [
   // ========== 图片工具 ==========
   {
     name: "image_info",
-    func: (sessionId, filePath) => getImageInfo(sessionId, filePath),
+    func: (sessionId, filePath) => getImageInfo(filePath, sessionId),
     description: "获取用户 workspace 中图片文件信息",
     params: [
       { name: "文件路径", type: "string", example: "images/photo.jpg" }
@@ -323,7 +338,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "svg_write",
-    func: (sessionId, filePath, content) => writeSvg(sessionId, filePath, content),
+    func: (sessionId, filePath, content) => writeSvg(filePath, sessionId, content),
     description: "在用户 workspace 中创建 SVG 矢量图形文件",
     params: [
       { name: "文件路径", type: "string", example: "images/chart.svg" },
@@ -378,23 +393,44 @@ export const TOOL_DEFINITIONS = [
     name: "email_send",
     func: (sessionId, to, subject, content, options = "{}") => {
       const opts = JSON.parse(options);
+      const attachments = Array.isArray(opts.attachments)
+        ? opts.attachments.map((att) => {
+            if (!att || !att.path || typeof att.path !== 'string') {
+              return att;
+            }
+
+            const isRemotePath = /^https?:\/\//i.test(att.path);
+            if (isRemotePath) {
+              return att;
+            }
+
+            return {
+              ...att,
+              path: resolveWorkspacePath(att.path, sessionId)
+            };
+          })
+        : opts.attachments;
+
+      // 默认使用 HTML 格式发送邮件
       return sendEmail({
+        sessionId,
         to,
         subject,
-        text: opts.html ? undefined : content,
-        html: opts.html ? content : undefined,
+        text: undefined,
+        html: content,
         from: opts.from,
-        smtp: opts.smtp
+        smtp: opts.smtp,
+        attachments
       });
     },
-    description: "发送邮件通知，支持纯文本或HTML格式，可用于系统告警、任务完成通知等场景",
+    description: "发送邮件通知，支持纯文本/HTML格式，支持附件，可用于发送报告、文档等",
     params: [
       { name: "收件人", type: "string", example: "user@example.com", description: "收件人邮箱，多个用逗号分隔" },
       { name: "主题", type: "string", example: "任务完成通知" },
       { name: "内容", type: "string", example: "您的数据分析任务已完成，请查看结果。" },
-      { name: "选项", type: "object", example: '{"html":false,"from":"系统通知"}', description: "可选：html是否HTML格式, from发件人名称, smtp自定义SMTP配置", required: false }
+      { name: "选项", type: "object", example: '{"html":false,"from":"系统通知","attachments":[{"filename":"result.pdf","path":"workspace/user123/output/result.pdf"}]}', description: "可选：html是否HTML格式, from发件人名称, smtp自定义SMTP配置, attachments附件数组(支持{{result}}占位符动态替换路径)", required: false }
     ],
-    example: 'email_send("admin@example.com", "系统告警", "CPU使用率超过90%", "{}")',
+    example: 'email_send("user@qq.com", "计算结果", "平均值计算完成", "{\"attachments\":[{\"filename\":\"result.pdf\",\"path\":\"output/result.pdf\"}]}")',
   },
   {
     name: "email_template",
@@ -419,6 +455,38 @@ export const TOOL_DEFINITIONS = [
     description: "验证 SMTP 配置是否有效，检查邮件服务连接状态",
     params: [],
     example: 'email_verify()',
+  },
+  // ========== 任务调度工具 ==========
+  {
+    name: "schedule_task",
+    func: (sessionId, delayMinutes, taskType, params, description, onComplete) => scheduleTask(sessionId, delayMinutes, taskType, JSON.parse(params || '{}'), description, onComplete ? JSON.parse(onComplete) : null),
+    description: "创建定时任务（支持用户隔离 + onComplete回调），支持多步链式流程与嵌套回调。步骤可按场景灵活组合（如 exec_code / script_generator / pdf_write / email_send）。用户ID由系统自动注入",
+    params: [
+      { name: "延迟分钟数", type: "number", example: 2, description: "延迟多少分钟后执行任务" },
+      { name: "任务类型", type: "string", example: "exec_code", options: ["email_send", "email_template", "exec_code", "script_generator", "pdf_write"], description: "要执行的任务类型" },
+      { name: "任务参数", type: "object", example: '{"code":"console.log(1+2)","language":"javascript"}', description: "任务所需参数对象" },
+      { name: "任务描述", type: "string", example: "2分钟后执行代码并发送结果", description: "任务描述说明", required: false },
+      { name: "回调任务", type: "object", example: '{"taskType":"pdf_write","params":{"filePath":"output/result.pdf","content":"计算结果：{{result}}"},"onComplete":{"taskType":"email_send","params":{"to":"user@qq.com","subject":"结果","content":"请查收附件","options":"{\\"attachments\\":[{\\"filename\\":\\"result.pdf\\",\\"path\\":\\"output/result.pdf\\"}]}"}}}', description: "任务执行完成后自动触发的回调任务，支持嵌套 onComplete 和 {{result}} 占位符替换父任务结果", required: false }
+    ],
+    example: 'schedule_task(2, "exec_code", "{\\"code\\":\\"data=[1,2,3,4,5]; print(sum(data)/len(data))\\",\\"language\\":\\"python\\"}", "计算平均值并发送PDF", "{\\"taskType\\":\\"pdf_write\\",\\"params\\":{\\"filePath\\":\\"output/result.pdf\\",\\"content\\":\\"计算结果：{{result}}\\"},\\"onComplete\\":{\\"taskType\\":\\"email_send\\",\\"params\\":{\\"to\\":\\"user@qq.com\\",\\"subject\\":\\"计算结果\\",\\"content\\":\\"请查收附件\\",\\"options\\":\\"{\\\\\\"attachments\\\\\\":[{\\\\\\"filename\\\\\\":\\\\\\"result.pdf\\\\\\",\\\\\\"path\\\\\\":\\\\\\"output/result.pdf\\\\\\"}]}\\"}}}")',
+  },
+  {
+    name: "schedule_list",
+    func: (sessionId, status) => getTasks(sessionId, status || 'pending'),
+    description: "查询当前用户的定时任务列表（用户ID由系统自动注入）",
+    params: [
+      { name: "状态过滤", type: "string", example: "pending", options: ["pending", "completed", "failed", "cancelled", "all"], description: "按状态过滤任务", required: false }
+    ],
+    example: 'schedule_list("pending")',
+  },
+  {
+    name: "schedule_cancel",
+    func: (sessionId, taskId) => cancelTask(sessionId, taskId),
+    description: "取消当前用户的待执行任务（只能操作自己的任务，用户ID由系统自动注入）",
+    params: [
+      { name: "任务ID", type: "string", example: "uuid-string", description: "要取消的任务ID" }
+    ],
+    example: 'schedule_cancel("task-uuid")',
   },
 ];
 
@@ -452,4 +520,6 @@ export {
   compressFiles, extractArchive, getArchiveInfo, listArchiveContents,
   // 邮件工具
   sendEmail, sendTemplateEmail, verifySmtpConfig,
+  // 调度工具
+  scheduleTask, getTasks, cancelTask, getTaskById, cleanupTasks,
 };

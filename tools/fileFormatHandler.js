@@ -2,12 +2,43 @@
 
 import fs from 'fs/promises';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import ExcelJS from 'exceljs';
-import { PDFDocument } from 'pdf-lib';
+import PDFKit from 'pdfkit';
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import mammoth from 'mammoth';
 import { resolveWorkspacePath, getPublicUrl, FILE_MANAGER_CONFIG } from './fileManager.js';
 import { CONFIG } from '../config.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const CHINESE_FONT_PATH = path.join(__dirname, '../assets/fonts/NotoSansSC.otf');
+
+async function isValidFontFile(fontPath) {
+  try {
+    const fd = await fs.open(fontPath, 'r');
+    const buf = Buffer.alloc(4);
+    await fd.read(buf, 0, 4, 0);
+    await fd.close();
+    const magic = buf.toString('hex');
+    return (
+      magic === '4f54544f' || // OTF: OTTO
+      magic === '00010000' || // TTF
+      magic === '74727565' || // TTF: true
+      magic === '74746366'    // TTC: ttcf
+    );
+  } catch {
+    return false;
+  }
+}
+const CHINESE_FONT_CANDIDATES = [
+  CHINESE_FONT_PATH,
+  '/Library/Fonts/Arial Unicode.ttf',
+  '/System/Library/Fonts/Supplemental/Arial Unicode.ttf',
+  '/System/Library/Fonts/PingFang.ttc',
+  '/System/Library/Fonts/STHeiti Light.ttc',
+  '/System/Library/Fonts/Hiragino Sans GB.ttc',
+  '/System/Library/Fonts/Supplemental/Songti.ttc'
+].filter(fontPath => fontPath.endsWith('.otf') || fontPath.endsWith('.ttf'));
 
 // ========== Excel 文件处理 ==========
 
@@ -438,7 +469,7 @@ export async function readPdf(filePath, sessionId) {
 }
 
 /**
- * 创建简单的 PDF 文件
+ * 创建简单的 PDF 文件（使用 PDFKit + 中文字体）
  * @param {string} filePath - 文件路径（相对用户workspace）
  * @param {string} sessionId - 用户会话ID
  * @param {Array<Object>} pages - 页面内容数组
@@ -451,7 +482,7 @@ export async function writePdf(filePath, sessionId, pages, options = {}) {
       throw new Error('需要提供 sessionId 来访问文件系统');
     }
     
-    const { overwrite = false, title = 'Document', author = '' } = options;
+    const { overwrite = false, title = 'Document' } = options;
     const absolutePath = resolveWorkspacePath(filePath, sessionId);
     const dirPath = path.dirname(absolutePath);
     
@@ -464,34 +495,87 @@ export async function writePdf(filePath, sessionId, pages, options = {}) {
       throw new Error(`文件已存在: ${filePath}，如需覆盖请设置 overwrite: true`);
     }
     
-    const pdfDoc = await PDFDocument.create();
+    // 使用 PDFKit 创建 PDF（按需初始化，避免模块加载时因字体异常崩溃）
+    const doc = new PDFKit();
+    const chunks = [];
     
-    // 设置文档信息
-    if (title) {
-      pdfDoc.setTitle(title);
-    }
-    if (author) {
-      pdfDoc.setAuthor(author);
-    }
-    pdfDoc.setCreationDate(new Date());
-    pdfDoc.setModificationDate(new Date());
+    doc.on('data', chunk => chunks.push(chunk));
     
-    // 添加页面
+    const pdfPromise = new Promise((resolve, reject) => {
+      doc.on('end', () => {
+        const pdfBuffer = Buffer.concat(chunks);
+        fs.writeFile(absolutePath, pdfBuffer).then(resolve).catch(reject);
+      });
+      doc.on('error', reject);
+    });
+    
+    // 加载中文字体（如果可用）
+    let hasChineseFont = false;
+    for (const fontPath of CHINESE_FONT_CANDIDATES) {
+      try {
+        // 先检查文件是否存在且是合法字体格式
+        await fs.access(fontPath);
+        if (!(await isValidFontFile(fontPath))) {
+          console.warn(`⚠️ 字体文件格式无效（非字体二进制）: ${fontPath}`);
+          continue;
+        }
+        // 再尝试注册字体
+        try {
+          doc.registerFont('ChineseFont', fontPath);
+          hasChineseFont = true;
+          break;
+        } catch (fontError) {
+          console.warn(`⚠️ 字体加载失败: ${fontPath} - ${fontError.message}`);
+          // 继续尝试下一个字体
+        }
+      } catch {
+        // 文件不存在，尝试下一个
+      }
+    }
+    
+    let totalTextLength = 0;
+    let pageCount = 0;
+    
     if (Array.isArray(pages)) {
-      for (const pageData of pages) {
-        const page = pdfDoc.addPage();
-        const { width, height } = page.getSize();
+      for (let i = 0; i < pages.length; i++) {
+        const pageData = pages[i];
         
-        // 简单的文本渲染（实际项目可以使用更复杂的布局）
+        if (i > 0) {
+          doc.addPage();
+        }
+        pageCount++;
+        
         if (pageData.text) {
-          // 这里需要嵌入字体才能添加文本
-          // 简化版本：返回提示信息
+          const rawText = String(pageData.text);
+          const text = hasChineseFont
+            ? rawText
+            : rawText.replace(/[^\x00-\x7F]/g, '?');
+          totalTextLength += text.length;
+          
+          const fontSize = pageData.fontSize || 12;
+          const margin = 50;
+          
+          // 使用中文字体（如果有）
+          if (hasChineseFont) {
+            try {
+              doc.font('ChineseFont');
+            } catch (fontErr) {
+              console.warn(`⚠️ 字体切换失败: ${fontErr.message}`);
+              hasChineseFont = false;
+            }
+          }
+          doc.fontSize(fontSize);
+          doc.text(text, margin, margin, {
+            width: doc.page.width - 2 * margin,
+            height: doc.page.height - 2 * margin,
+            align: 'left'
+          });
         }
       }
     }
     
-    const pdfBytes = await pdfDoc.save();
-    await fs.writeFile(absolutePath, pdfBytes);
+    doc.end();
+    await pdfPromise;
     
     const stats = await fs.stat(absolutePath);
     
@@ -500,11 +584,12 @@ export async function writePdf(filePath, sessionId, pages, options = {}) {
       filePath: filePath,
       url: getPublicUrl(absolutePath, sessionId),
       fullUrl: `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`,
-      pageCount: pdfDoc.getPageCount(),
+      pageCount: pageCount || 1,
       size: stats.size,
       formattedSize: formatFileSize(stats.size),
-      note: 'PDF 创建功能需要嵌入字体才能添加文本内容，当前版本创建空白 PDF',
-      message: `PDF 文件创建成功: ${filePath}\n访问地址: ${getPublicUrl(absolutePath, sessionId)}\n完整地址: ${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`
+      textLength: totalTextLength,
+      hasChineseFont,
+      message: `PDF 文件创建成功: ${filePath}（${pageCount || 1}页，${totalTextLength}字符${hasChineseFont ? '，含中文支持' : '，无中文字体'}）\n访问地址: ${getPublicUrl(absolutePath, sessionId)}`
     };
   } catch (error) {
     return {

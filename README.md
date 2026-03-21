@@ -327,6 +327,9 @@ import { SuspendedBallChat } from 'ai-suspended-ball-chat'
 | `email_send`　　　　| 邮件发送　　　 | 收件人, 主题, 内容, 选项(可选)　　　　　 | `email_send("user@example.com", "通知", "内容", "{}")` |
 | `email_template`　　| 模板邮件发送　 | 收件人, 模板类型, 主题, 变量(可选)　　　 | `email_template("user@example.com", "alert", "告警", "{}")` |
 | `email_verify`　　　| 验证SMTP配置 | 无　　　　　　　　　　　　　　　　　　　 | `email_verify()` |
+| `schedule_task`　　 | 定时任务调度　| 延迟分钟数, 任务类型, 参数, 描述(可选)　| `schedule_task(2, "email_send", "{\"to\":\"...\"}", "2分钟后发送")` |
+| `schedule_list`　　 | 查询定时任务　| 状态过滤(可选)　　　　　　　　　　　　　 | `schedule_list("pending")` |
+| `schedule_cancel`　 | 取消定时任务　| 任务ID　　　　　　　　　　　　　　　　　 | `schedule_cancel("task-uuid")` |
 
 ### 用户文件管理
 

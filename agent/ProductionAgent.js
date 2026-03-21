@@ -263,7 +263,9 @@ export class ProductionAgent {
       'csv_read', 'csv_write',
       'json_read', 'json_write',
       'image_info', 'svg_write',
-      'zip_compress', 'zip_extract', 'zip_info', 'zip_list'
+      'zip_compress', 'zip_extract', 'zip_info', 'zip_list',
+      // 定时任务工具也需要 sessionId 进行用户隔离
+      'schedule_task', 'schedule_list', 'schedule_cancel'
     ];
     
     if (fileTools.includes(toolName)) {

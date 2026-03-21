@@ -84,8 +84,13 @@ export async function compressFiles(sessionId, sourcePaths, outputPath, options 
       const baseName = path.basename(source);
       
       if (stats.isDirectory()) {
-        // 添加目录
-        archive.directory(fullSourcePath, baseName);
+        // 添加目录（若输出文件在源目录内，排除自身避免循环引用）
+        const globOptions = {};
+        if (fullOutputPath.startsWith(fullSourcePath + path.sep)) {
+          const relIgnore = path.relative(fullSourcePath, fullOutputPath);
+          globOptions.ignore = [relIgnore];
+        }
+        archive.glob('**/*', { cwd: fullSourcePath, dot: true, ...globOptions }, { prefix: baseName });
       } else {
         // 添加文件
         archive.file(fullSourcePath, { name: baseName });

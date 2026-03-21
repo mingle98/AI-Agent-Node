@@ -24,8 +24,8 @@ test("buildSystemPrompt: should include tools, skills and rules", () => {
 
   const prompt = buildSystemPrompt(toolDefs, skillDefs, { roleName: "R", roleDescription: "D" });
   assert.match(prompt, /你是一个R，D/);
-  assert.match(prompt, /t1\(p1\)/);
-  assert.match(prompt, /s1\(k1/);
   assert.match(prompt, /使用规则/);
   assert.match(prompt, /智能决策示例/);
+  assert.match(prompt, /链式 onComplete 回调/);
+  assert.match(prompt, /exec_code \/ script_generator \/ pdf_write \/ email_send/);
 });
