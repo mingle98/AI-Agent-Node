@@ -933,11 +933,6 @@
               }
             };
 
-            const openFolderLocation = () => {
-              const sessionId = getSessionId();
-              window.open(`http://localhost:3000/workspace/${sessionId}`, '_blank');
-            };
-
             const onDragOver = (e) => {
               e.preventDefault();
               e.currentTarget.classList.add('dragover');
@@ -1115,7 +1110,6 @@
               toggleExpand,
               selectNode,
               lastRefreshTime,
-              openFolderLocation,
               filePanelCollapsed,
               sendQuickMsg: (msg) => {
                 if (chatRef.value && typeof chatRef.value.sendMessage === 'function') {
@@ -1248,7 +1242,6 @@
                         onClick: () => this.downloadSelectedFiles(),
                         title: `批量下载 ${this.selectedFiles.selected?.size} 个文件`,
                       }, `⬇ ${this.selectedFiles.selected?.size}`),
-                      h('button', { class: 'fp-icon-btn', onClick: () => this.openFolderLocation(), title: '在浏览器中打开目录' }, '🔗'),
                       h('button', { class: 'fp-icon-btn', onClick: () => this.fetchFileList(), title: '刷新文件列表' }, '↻'),
                     ]),
                   ]),
