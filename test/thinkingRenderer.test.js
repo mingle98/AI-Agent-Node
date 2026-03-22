@@ -85,7 +85,7 @@ test("wrapThinkingOpen: should handle empty summary", () => {
 
 test("wrapThinkingClose: should generate closing HTML", () => {
   const result = wrapThinkingClose();
-  assert.equal(result, "</div></div></details>\n\n---\n");
+  assert.equal(result, "</div></div></details>\n\n");
 });
 
 test("wrapThinkingOpen and wrapThinkingClose: should produce matching tags", () => {

@@ -49,6 +49,21 @@ function emitToolEvent(callback, toolExcResult) {
   }
 }
 
+function getToolDivBox(text, stType = 'content') {
+  try {
+    if (!text) return '';
+    let marginStyle = () => {
+      if (stType === 'start') return 'margin-top: 30px;';
+      if (stType === 'end') return 'margin-bottom: 30px;';
+    }
+    // 工具调用提示自定义样式,且加上data-tool="true"用于前端过滤
+    return `<div data-tool="true" style="color: #868a8f; font-size: 12px;padding-left: 20px;border-left: 3px solid #b0b1b0;margin-bottom: 10px;${marginStyle()}">${text}</div>\n`;
+  } catch (error) {
+    return '';
+  }
+
+}
+
 function extractReasoningContent(chunk) {
   const raw = chunk?.additional_kwargs?.__raw_response;
   const delta = raw?.choices?.[0]?.delta;
@@ -550,14 +565,14 @@ export class ProductionAgent {
           session.messages.push(aiResponse);
 
           if (streamEnabled) {
-            emitStreamEvent(chunkCallback, { type: "status", content: "\n>⌛️ 【TOOL】正在调用工具/技能... \n" });
+            emitStreamEvent(chunkCallback, { type: "status", content: getToolDivBox('⌛️ 【TOOL】正在调用工具/技能...', 'start') });
           }
 
           for (const toolCall of toolCalls) {
             if (streamEnabled) {
               emitStreamEvent(chunkCallback, {
                 type: "status",
-                content: `\n>🚀  【TOOL】执行 ${toolCall.name}...\n`,
+                content: getToolDivBox(`🚀  【TOOL】执行 ${toolCall.name}...`),
               });
             }
             const callable = this.callableDefinitions.get(toolCall.name);
@@ -586,7 +601,7 @@ export class ProductionAgent {
             if (streamEnabled) {
               emitStreamEvent(chunkCallback, {
                 type: "status",
-                content: `\n>✅  【TOOL】执行 ${toolCall.name} 完成\n\n --- \n`,
+                content: getToolDivBox(`✅  【TOOL】执行 ${toolCall.name} 完成`, 'end'),
               });
             }
             session.messages.push(new ToolMessage({

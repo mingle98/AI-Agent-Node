@@ -13,5 +13,5 @@ export function wrapThinkingOpen(summaryText = "深度思考过程") {
 }
 
 export function wrapThinkingClose() {
-  return `</div></div></details>\n\n---\n`;
+  return `</div></div></details>\n\n`;
 }

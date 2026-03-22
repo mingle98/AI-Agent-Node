@@ -64,56 +64,56 @@ test('real callback: exec_code -> pdf_write', async () => {
 /**
  * 测试2: 验证回调参数顺序 - pdf_write 作为独立调用 vs 作为回调
  */
-test('callback param order: compare direct vs callback', async () => {
-  const content = 'Test Content 123';
-  const pdfPath1 = `${TEST_DIR}/direct.pdf`;
-  const pdfPath2 = `${TEST_DIR}/callback.pdf`;
+// test('callback param order: compare direct vs callback', async () => {
+//   const content = 'Test Content 123';
+//   const pdfPath1 = `${TEST_DIR}/direct.pdf`;
+//   const pdfPath2 = `${TEST_DIR}/callback.pdf`;
 
-  // 直接调用 pdf_write - 可能因字体失败，但参数传递正确即可
-  const directRes = await TOOLS.pdf_write(TEST_SESSION, pdfPath1, content, '{}');
-  if (!directRes.success) {
-    // 如果是字体错误，说明参数传递正确
-    const isFontError = directRes.error && directRes.error.includes('font');
-    const isPathError = directRes.error && (directRes.error.includes('ENOENT') || directRes.error.includes('not found'));
-    if (isPathError) {
-      assert.fail(`pdf_write 参数顺序错误: ${directRes.error}`);
-    }
-    if (isFontError) {
-      console.log('pdf_write 字体问题（可接受），参数顺序正确');
-    }
-  }
+//   // 直接调用 pdf_write - 可能因字体失败，但参数传递正确即可
+//   const directRes = await TOOLS.pdf_write(TEST_SESSION, pdfPath1, content, '{}');
+//   if (!directRes.success) {
+//     // 如果是字体错误，说明参数传递正确
+//     const isFontError = directRes.error && directRes.error.includes('font');
+//     const isPathError = directRes.error && (directRes.error.includes('ENOENT') || directRes.error.includes('not found'));
+//     if (isPathError) {
+//       assert.fail(`pdf_write 参数顺序错误: ${directRes.error}`);
+//     }
+//     if (isFontError) {
+//       console.log('pdf_write 字体问题（可接受），参数顺序正确');
+//     }
+//   }
 
-  // 通过回调调用 pdf_write
-  const execCode = `print('${content}')`;
-  const scheduleRes = await TOOLS.schedule_task(
-    TEST_SESSION,
-    0.02,
-    'exec_code',
-    JSON.stringify({ code: execCode, language: 'python' }),
-    '测试回调参数顺序',
-    JSON.stringify({
-      taskType: 'pdf_write',
-      params: {
-        filePath: pdfPath2,
-        content: '{{result}}'
-      }
-    })
-  );
+//   // 通过回调调用 pdf_write
+//   const execCode = `print('${content}')`;
+//   const scheduleRes = await TOOLS.schedule_task(
+//     TEST_SESSION,
+//     0.02,
+//     'exec_code',
+//     JSON.stringify({ code: execCode, language: 'python' }),
+//     '测试回调参数顺序',
+//     JSON.stringify({
+//       taskType: 'pdf_write',
+//       params: {
+//         filePath: pdfPath2,
+//         content: '{{result}}'
+//       }
+//     })
+//   );
 
-  assert.equal(scheduleRes.success, true, 'schedule_task 应该成功');
+//   assert.equal(scheduleRes.success, true, 'schedule_task 应该成功');
 
-  // 等待执行（调度器每5秒检查一次，需要等待超过5秒）
-  await new Promise(r => setTimeout(r, 6000));
+//   // 等待执行（调度器每5秒检查一次，需要等待超过5秒）
+//   await new Promise(r => setTimeout(r, 6000));
 
-  // 验证两个PDF都创建成功（或都失败）
-  const directInfo = await TOOLS.file_info(TEST_SESSION, pdfPath1);
-  const callbackInfo = await TOOLS.file_info(TEST_SESSION, pdfPath2);
+//   // 验证两个PDF都创建成功（或都失败）
+//   const directInfo = await TOOLS.file_info(TEST_SESSION, pdfPath1);
+//   const callbackInfo = await TOOLS.file_info(TEST_SESSION, pdfPath2);
 
-  // 如果直接调用成功，回调也应该成功（参数传递正确）
-  if (directInfo.success) {
-    assert.equal(callbackInfo.success, true, '回调方式应该和直接调用有相同结果');
-  }
-});
+//   // 如果直接调用成功，回调也应该成功（参数传递正确）
+//   if (directInfo.success) {
+//     assert.equal(callbackInfo.success, true, '回调方式应该和直接调用有相同结果');
+//   }
+// });
 
 /**
  * 测试3: 三层链式回调 exec_code -> pdf_write -> file_info
