@@ -338,11 +338,20 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "csv_write",
-    func: (sessionId, filePath, data) => writeCsv(filePath, sessionId, JSON.parse(data)),
-    description: "将数据写入用户 workspace 中的 CSV 文件",
+    func: (sessionId, filePath, data) => {
+      if (!filePath) throw new Error('缺少参数: 文件路径(filePath)不能为空');
+      if (!data) throw new Error('缺少参数: 数据(data)不能为空，请提供JSON数组格式数据');
+      try {
+        const parsedData = JSON.parse(data);
+        return writeCsv(filePath, sessionId, parsedData);
+      } catch (e) {
+        throw new Error(`数据格式错误: ${e.message}。请提供有效的JSON数组，例如: [{"name":"张三","age":25}]`);
+      }
+    },
+    description: "将数据写入用户 workspace 中的 CSV 文件。参数: 1)文件路径 2)JSON数组数据(字符串格式)",
     params: [
-      { name: "文件路径", type: "string", example: "output/data.csv" },
-      { name: "数据(JSON数组)", type: "string", example: '[{"name":"张三","age":25}]' }
+      { name: "文件路径", type: "string", example: "output/data.csv", description: "CSV文件输出路径，如: output/data.csv" },
+      { name: "数据", type: "string", example: '[{"name":"张三","age":25}]', description: "JSON数组格式的数据字符串，必须提供有效JSON" }
     ],
     example: 'csv_write("output/users.csv", "[{\"name\":\"张三\",\"age\":25}]")',
   },
@@ -357,13 +366,22 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "json_write",
-    func: (sessionId, filePath, data) => writeJson(filePath, sessionId, JSON.parse(data)),
-    description: "将数据写入用户 workspace 中的 JSON 文件",
+    func: (sessionId, filePath, data) => {
+      if (!filePath) throw new Error('缺少参数: 文件路径(filePath)不能为空');
+      if (!data) throw new Error('缺少参数: 数据(data)不能为空，请提供JSON格式数据');
+      try {
+        const parsedData = JSON.parse(data);
+        return writeJson(filePath, sessionId, parsedData);
+      } catch (e) {
+        throw new Error(`数据格式错误: ${e.message}。请提供有效的JSON对象或数组，例如: {"key":"value"}`);
+      }
+    },
+    description: "将数据写入用户 workspace 中的 JSON 文件。参数: 1)文件路径 2)JSON格式数据(字符串)",
     params: [
-      { name: "文件路径", type: "string", example: "output/data.json" },
-      { name: "数据(JSON)", type: "string", example: '{"key":"value"}' }
+      { name: "文件路径", type: "string", example: "output/data.json", description: "JSON文件输出路径" },
+      { name: "数据", type: "string", example: '{"key":"value"}', description: "JSON格式的数据字符串" }
     ],
-    example: 'json_write("output/config.json", "{\"port\":3000}")',
+    example: 'json_write("output/config.json", "{\\"port\\":3000}")',
   },
   // ========== 图片工具 ==========
   {

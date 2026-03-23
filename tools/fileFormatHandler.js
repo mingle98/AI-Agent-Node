@@ -1052,7 +1052,7 @@ export async function writeCsv(filePath, sessionId, data, options = {}) {
       throw new Error('需要提供 sessionId 来访问文件系统');
     }
     
-    const { overwrite = false, headers = null } = options;
+    const { overwrite = true, headers = null } = options;
     const absolutePath = resolveWorkspacePath(filePath, sessionId);
     const dirPath = path.dirname(absolutePath);
     
@@ -1138,7 +1138,7 @@ export async function writeJson(filePath, sessionId, data, options = {}) {
       throw new Error('需要提供 sessionId 来访问文件系统');
     }
     
-    const { overwrite = false, pretty = true } = options;
+    const { overwrite = true, pretty = true } = options;
     const absolutePath = resolveWorkspacePath(filePath, sessionId);
     const dirPath = path.dirname(absolutePath);
     
