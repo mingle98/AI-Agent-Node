@@ -14,7 +14,7 @@ import {
 import {
   readExcel, writeExcel, appendToExcel, readWord, writeWord,
   readWordAsHtml, readPdf, writePdf, mergePdfs, getImageInfo, writeSvg,
-  readCsv, writeCsv, readJson, writeJson
+  readCsv, writeCsv, readJson, writeJson, writeDocx
 } from './fileFormatHandler.js';
 import { compressFiles, extractArchive, getArchiveInfo, listArchiveContents } from './compress.js';
 import { sendEmail, sendTemplateEmail, verifySmtpConfig } from './email.js';
@@ -253,6 +253,39 @@ export const TOOL_DEFINITIONS = [
       { name: "文件路径", type: "string", example: "docs/document.docx" }
     ],
     example: 'word_read_html("docs/report.docx")',
+  },
+  {
+    name: "word_write_docx",
+    func: (sessionId, filePath, content, options = "{}") => {
+      let paragraphs;
+      if (typeof content === 'string') {
+        const trimmed = content.trim();
+        // 检测是否为 JSON 数组或对象
+        if ((trimmed.startsWith('[') && trimmed.endsWith(']')) || 
+            (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+          try {
+            const parsed = JSON.parse(trimmed);
+            paragraphs = Array.isArray(parsed) ? parsed : [parsed];
+          } catch {
+            // JSON 解析失败，按行分割
+            paragraphs = content.split('\n').filter(line => line.trim()).map(line => ({ text: line }));
+          }
+        } else {
+          // 普通文本，按行分割
+          paragraphs = content.split('\n').filter(line => line.trim()).map(line => ({ text: line }));
+        }
+      } else {
+        paragraphs = Array.isArray(content) ? content : [content];
+      }
+      return writeDocx(filePath, sessionId, paragraphs, { overwrite: true, ...JSON.parse(options) });
+    },
+    description: "创建真正的 Word 文档（.docx 格式），使用 A4 纸张尺寸（210mm x 297mm）",
+    params: [
+      { name: "文件路径", type: "string", example: "output/document.docx", description: "输出 .docx 文件路径" },
+      { name: "内容", type: "string|array", example: "[{\"text\":\"标题\",\"heading\":\"Heading1\"},{\"text\":\"正文内容\"}]", description: "段落数组或纯文本（自动按行分割）。支持属性：text, heading(Heading1-6), bold, italic, fontSize, alignment(left/center/right/justified)" },
+      { name: "选项", type: "object", example: '{"title":"文档标题"}', description: "可选参数：title文档标题", required: false }
+    ],
+    example: 'word_write_docx("output/report.docx", "[{\"text\":\"第一章\",\"heading\":\"Heading1\"},{\"text\":\"这是正文内容\"}]")',
   },
   // ========== PDF 文件工具 ==========
   {
@@ -519,7 +552,10 @@ export const TOOL_DEFINITIONS = [
 export const TOOLS = TOOL_DEFINITIONS.reduce((acc, tool) => {
   acc[tool.name] = tool.func;
   return acc;
-}, {});
+}, {
+  // 额外暴露的底层函数
+  writeDocx: writeDocx
+});
 
 // 导出函数
 export {
@@ -540,7 +576,7 @@ export {
   // 文件格式处理
   readExcel, writeExcel, appendToExcel, readWord, writeWord,
   readWordAsHtml, readPdf, writePdf, mergePdfs, getImageInfo, writeSvg,
-  readCsv, writeCsv, readJson, writeJson,
+  readCsv, writeCsv, readJson, writeJson, writeDocx,
   // 压缩工具
   compressFiles, extractArchive, getArchiveInfo, listArchiveContents,
   // 图片处理

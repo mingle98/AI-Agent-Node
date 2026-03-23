@@ -7,6 +7,7 @@ import ExcelJS from 'exceljs';
 import PDFKit from 'pdfkit';
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import mammoth from 'mammoth';
+import { Document, Paragraph, TextRun, Packer, PageOrientation, SectionType } from 'docx';
 import { resolveWorkspacePath, getPublicUrl, FILE_MANAGER_CONFIG } from './fileManager.js';
 import { CONFIG } from '../config.js';
 
@@ -418,6 +419,147 @@ ${htmlContent}
       formattedSize: formatFileSize(stats.size),
       note: '已保存为 HTML 格式（Word 兼容），建议使用专业库生成 .docx 文件',
       message: `文档创建成功: ${filePath}\n访问地址: ${getPublicUrl(absolutePath, sessionId)}\n完整地址: ${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+      filePath: filePath
+    };
+  }
+}
+
+/**
+ * 创建真正的 Word 文件（.docx 格式，A4 纸张）
+ * @param {string} filePath - 文件路径（相对用户workspace）
+ * @param {string} sessionId - 用户会话ID
+ * @param {Array<Object>} paragraphs - 段落数组，每个段落包含 text 和可选的 style 属性
+ * @param {Object} options - 选项
+ * @returns {Promise<Object>}
+ */
+export async function writeDocx(filePath, sessionId, paragraphs, options = {}) {
+  try {
+    if (!sessionId) {
+      throw new Error('需要提供 sessionId 来访问文件系统');
+    }
+    
+    const { overwrite = false, title = 'Document' } = options;
+    const absolutePath = resolveWorkspacePath(filePath, sessionId);
+    const dirPath = path.dirname(absolutePath);
+    
+    // 确保目录存在
+    await fs.mkdir(dirPath, { recursive: true });
+    
+    // 检查是否已存在
+    const exists = await fs.stat(absolutePath).catch(() => null);
+    if (exists && !overwrite) {
+      throw new Error(`文件已存在: ${filePath}，如需覆盖请设置 overwrite: true`);
+    }
+    
+    // A4 纸张尺寸（单位：twips，1英寸 = 1440 twips）
+    // A4: 210mm x 297mm = 8.27英寸 x 11.69英寸
+    const A4_WIDTH = 11906;   // 约 8.27 英寸
+    const A4_HEIGHT = 16838;  // 约 11.69 英寸
+    const MARGIN = 1440;      // 1 英寸边距
+    
+    // 构建段落数组
+    const docParagraphs = [];
+    
+    if (Array.isArray(paragraphs)) {
+      for (const para of paragraphs) {
+        if (typeof para === 'string') {
+          // 简单字符串段落
+          docParagraphs.push(new Paragraph({
+            children: [new TextRun({ text: para })]
+          }));
+        } else if (para && typeof para === 'object') {
+          // 带样式的段落
+          const textRuns = [];
+          
+          if (para.text) {
+            const runOptions = { text: para.text };
+            
+            // 应用样式
+            if (para.bold) runOptions.bold = true;
+            if (para.italic) runOptions.italic = true;
+            if (para.underline) runOptions.underline = true;
+            if (para.fontSize) runOptions.size = para.fontSize * 2; // docx 使用 half-points
+            if (para.color) runOptions.color = para.color;
+            if (para.font) runOptions.font = para.font;
+            
+            textRuns.push(new TextRun(runOptions));
+          }
+          
+          if (para.runs && Array.isArray(para.runs)) {
+            for (const run of para.runs) {
+              const runOptions = typeof run === 'string' ? { text: run } : {
+                text: run.text || '',
+                bold: run.bold,
+                italic: run.italic,
+                underline: run.underline,
+                size: run.fontSize ? run.fontSize * 2 : undefined,
+                color: run.color,
+                font: run.font
+              };
+              textRuns.push(new TextRun(runOptions));
+            }
+          }
+          
+          const paraOptions = { children: textRuns };
+          
+          // 段落样式
+          if (para.heading) {
+            paraOptions.heading = para.heading; // Heading1, Heading2, etc.
+          }
+          if (para.alignment) {
+            paraOptions.alignment = para.alignment; // left, center, right, justified
+          }
+          if (para.spacing && para.spacing.after) {
+            paraOptions.spacing = { after: para.spacing.after * 20 }; // twips
+          }
+          
+          docParagraphs.push(new Paragraph(paraOptions));
+        }
+      }
+    }
+    
+    // 创建文档，使用 A4 纸张尺寸
+    const doc = new Document({
+      sections: [{
+        properties: {
+          page: {
+            width: A4_WIDTH,
+            height: A4_HEIGHT,
+            margin: {
+              top: MARGIN,
+              right: MARGIN,
+              bottom: MARGIN,
+              left: MARGIN
+            }
+          }
+        },
+        children: docParagraphs.length > 0 ? docParagraphs : [new Paragraph({
+          children: [new TextRun({ text: '' })]
+        })]
+      }]
+    });
+    
+    // 生成并保存文档
+    const buffer = await Packer.toBuffer(doc);
+    await fs.writeFile(absolutePath, buffer);
+    
+    const stats = await fs.stat(absolutePath);
+    
+    return {
+      success: true,
+      filePath: filePath,
+      url: getPublicUrl(absolutePath, sessionId),
+      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`,
+      size: stats.size,
+      formattedSize: formatFileSize(stats.size),
+      pageSize: 'A4 (210mm x 297mm)',
+      paragraphCount: docParagraphs.length,
+      message: `Word 文档创建成功: ${filePath}（A4 纸张）\n访问地址: ${getPublicUrl(absolutePath, sessionId)}\n完整地址: ${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`
     };
   } catch (error) {
     return {
