@@ -3,7 +3,7 @@
 import { SystemMessage, HumanMessage, AIMessage, ToolMessage } from "@langchain/core/messages";
 import { concat } from "@langchain/core/utils/stream";
 import { CONFIG } from "../config.js";
-import { TOOLS, TOOL_DEFINITIONS, setScriptGeneratorLLM } from "../tools/index.js";
+import { TOOLS, TOOL_DEFINITIONS, setScriptGeneratorLLM, TOOLS_NEEDING_SESSION_ID, toolNeedsSessionId } from "../tools/index.js";
 import { searchKnowledgeBase } from "../tools/knowledge.js";
 import { SKILLS, SKILL_DEFINITIONS } from "../skills/index.js";
 import { buildSystemPrompt } from "./promptBuilder.js";
@@ -267,23 +267,8 @@ export class ProductionAgent {
   }
 
   async runToolCall(toolName, args, sessionId) {
-    // 文件操作工具需要 sessionId 进行用户隔离
-    const fileTools = [
-      'file_list', 'file_read', 'file_write', 'file_delete', 'file_mkdir',
-      'file_move', 'file_copy', 'file_info', 'file_search',
-      'file_quota',
-      'excel_read', 'excel_write', 'excel_append',
-      'word_read', 'word_read_html', 'word_write_docx',
-      'pdf_read', 'pdf_write', 'pdf_merge',
-      'csv_read', 'csv_write',
-      'json_read', 'json_write',
-      'image_info', 'svg_write', 'image_compress', 'image_compress_batch',
-      'zip_compress', 'zip_extract', 'zip_info', 'zip_list',
-      // 定时任务工具也需要 sessionId 进行用户隔离
-      'schedule_task', 'schedule_list', 'schedule_cancel'
-    ];
-    
-    if (fileTools.includes(toolName)) {
+    // 检查工具是否需要 sessionId 进行用户隔离
+    if (toolNeedsSessionId(toolName)) {
       console.log(`[DEBUG] ${toolName}: sessionId=${sessionId}, args=`, args);
       if (!sessionId) {
         throw new Error('文件操作需要提供 sessionId');

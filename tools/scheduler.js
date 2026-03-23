@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { readFile, writeFile, access, mkdir } from 'fs/promises';
 import { dirname, join, isAbsolute } from 'path';
 import { fileURLToPath } from 'url';
+import { TOOLS_NEEDING_SESSION_ID, toolNeedsSessionId } from './toolConstants.js';
 
 // ========== 轻量级任务调度器 ==========
 // 支持持久化存储，服务重启后自动恢复待执行任务
@@ -83,7 +84,7 @@ export function stopScheduler() {
  * @returns {Promise<Object>} - 任务创建结果
  */
 export async function scheduleTask(sessionId, delayMinutes, taskType, params, description = '', onComplete = null) {
-  if (!sessionId) {
+  if (!sessionId && toolNeedsSessionId(taskType)) {
     return { success: false, error: '缺少用户会话ID' };
   }
   
@@ -346,27 +347,10 @@ async function executeTask(task) {
     }
     
     // 执行任务
-    // 需要 sessionId 的工具列表（从 tools/index.js 中确认）
-    const toolsNeedingSessionId = [
-      // 邮件工具
-      'email_send', 'email_template',
-      // 文件管理工具
-      'file_list', 'file_quota', 'file_read', 'file_write', 
-      'file_delete', 'file_mkdir', 'file_move', 'file_copy', 
-      'file_info', 'file_search',
-      // Excel/Word/PDF 等文件格式工具
-      'excel_read', 'excel_write', 'excel_append',
-      'word_read', 'word_write', 'word_read_html',
-      'pdf_read', 'pdf_merge', 'pdf_write',
-      'csv_read', 'csv_write',
-      'json_read', 'json_write',
-      'image_info', 'svg_write',
-      // 压缩工具
-      'zip_compress', 'zip_extract', 'zip_info', 'zip_list'
-    ];
+    // 使用统一的工具常量判断是否需要 sessionId
     
     let result;
-    if (toolsNeedingSessionId.includes(task.taskType)) {
+    if (TOOLS_NEEDING_SESSION_ID.includes(task.taskType)) {
       // 需要 sessionId 的工具：注入为第一个参数
       const paramsWithSession = { sessionId: task.sessionId, ...task.params };
       result = await toolFunc(...Object.values(paramsWithSession));
@@ -448,22 +432,10 @@ async function executeCallback(parentTask) {
     }
     
     // 判断是否需要 sessionId
-    const toolsNeedingSessionId = [
-      'email_send', 'email_template',
-      'file_list', 'file_quota', 'file_read', 'file_write', 
-      'file_delete', 'file_mkdir', 'file_move', 'file_copy', 
-      'file_info', 'file_search',
-      'excel_read', 'excel_write', 'excel_append',
-      'word_read', 'word_write', 'word_read_html',
-      'pdf_read', 'pdf_merge', 'pdf_write',
-      'csv_read', 'csv_write',
-      'json_read', 'json_write',
-      'image_info', 'svg_write',
-      'zip_compress', 'zip_extract', 'zip_info', 'zip_list'
-    ];
+    // 使用统一的工具常量
     
     let callbackResult;
-    if (toolsNeedingSessionId.includes(callback.taskType)) {
+    if (TOOLS_NEEDING_SESSION_ID.includes(callback.taskType)) {
       callbackResult = await toolFunc(...Object.values(callbackParams));
     } else {
       // 移除 sessionId

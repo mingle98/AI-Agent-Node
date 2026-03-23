@@ -20,6 +20,11 @@ import { compressFiles, extractArchive, getArchiveInfo, listArchiveContents } fr
 import { sendEmail, sendTemplateEmail, verifySmtpConfig } from './email.js';
 import { scheduleTask, getTasks, cancelTask, getTaskById, cleanupTasks } from './scheduler.js';
 import { compressImage, compressImageBatch } from './imageProcessor.js';
+import { TOOLS_NEEDING_SESSION_ID, toolNeedsSessionId } from './toolConstants.js';
+
+// 重新导出工具常量，供其他模块使用
+export { TOOLS_NEEDING_SESSION_ID, toolNeedsSessionId };
+
 export const TOOL_DEFINITIONS = [
   {
     name: "search_knowledge",
