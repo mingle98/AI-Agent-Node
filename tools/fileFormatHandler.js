@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import ExcelJS from 'exceljs';
 import PDFKit from 'pdfkit';
+import { PDFDocument } from 'pdf-lib';
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import mammoth from 'mammoth';
 import { Document, Paragraph, TextRun, Packer, PageOrientation, SectionType } from 'docx';
