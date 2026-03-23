@@ -9,6 +9,9 @@ import {
   writeSvg, getImageInfo, readPdf, mergePdfs
 } from '../tools/fileFormatHandler.js';
 
+import { rm } from 'node:fs/promises';
+import { resolve } from 'node:path';
+
 const TEST_DIR = 'test_auto_' + Date.now();
 const TEST_SESSION = 'test_session_123';
 let passedTests = 0;
@@ -289,6 +292,8 @@ async function cleanup() {
   } else {
     console.log('  ⚠️  清理失败:', result.error);
   }
+  // 清理 session 根目录
+  await rm(resolve('public/workspace', TEST_SESSION), { recursive: true, force: true });
 }
 
 // ========== 运行所有测试 ==========

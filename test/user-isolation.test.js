@@ -13,6 +13,9 @@ import {
 const USER_A = 'user-a-123';
 const USER_B = 'user-b-456';
 
+import { rm } from 'node:fs/promises';
+import { resolve } from 'node:path';
+
 // 颜色输出
 const colors = {
   reset: '\x1b[0m',
@@ -201,6 +204,12 @@ async function runTests() {
 
   await test('清理用户B测试数据', async () => {
     await deleteFile(USER_B, 'test.txt');
+  });
+
+  // 16. 清理用户 session 根目录
+  await test('清理用户 session 根目录', async () => {
+    await rm(resolve('public/workspace', USER_A), { recursive: true, force: true });
+    await rm(resolve('public/workspace', USER_B), { recursive: true, force: true });
   });
 
   // 输出测试结果
