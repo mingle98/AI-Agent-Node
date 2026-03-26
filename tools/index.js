@@ -492,9 +492,16 @@ export const TOOL_DEFINITIONS = [
               return att;
             }
 
+            // 如果路径已包含 /workspace/{sessionId}/ 前缀，说明用户传的是完整 URL 路径，
+            // 提取出相对部分，避免 resolveWorkspacePath 再加一层 sessionId 前缀
+            const wsPrefix = `/workspace/${sessionId}/`;
+            const cleanPath = att.path.startsWith(wsPrefix)
+              ? att.path.slice(wsPrefix.length)
+              : att.path;
+
             return {
               ...att,
-              path: resolveWorkspacePath(att.path, sessionId)
+              path: resolveWorkspacePath(cleanPath, sessionId)
             };
           })
         : opts.attachments;
@@ -547,16 +554,15 @@ export const TOOL_DEFINITIONS = [
   // ========== 任务调度工具 ==========
   {
     name: "schedule_task",
-    func: (sessionId, delayMinutes, taskType, params, description, onComplete) => scheduleTask(sessionId, delayMinutes, taskType, JSON.parse(params || '{}'), description, onComplete ? JSON.parse(onComplete) : null),
-    description: "创建定时任务（支持用户隔离 + onComplete回调），支持多步链式流程与嵌套回调。步骤可按场景灵活组合（如 exec_code / script_generator / pdf_write / email_send）。用户ID由系统自动注入",
+    func: (sessionId, delayMinutes, taskType, params, description) => scheduleTask(sessionId, delayMinutes, taskType, JSON.parse(params || '{}'), description),
+    description: "创建定时任务（延迟 N 分钟后执行一次指定工具）。用户ID由系统自动注入。多步骤场景请使用 Plan 模式编排多个定时任务",
     params: [
       { name: "延迟分钟数", type: "number", example: 2, description: "延迟多少分钟后执行任务" },
-      { name: "任务类型", type: "string", example: "exec_code", options: ["daily_news", "email_send", "email_template", "exec_code", "script_generator", "pdf_write"], description: "要执行的任务类型。获取新闻后发邮件请直接用 daily_news 作为 taskType，而非在 exec_code 的 Python 代码里 import" },
-      { name: "任务参数", type: "object", example: '{"code":"console.log(1+2)","language":"javascript"}', description: "任务所需参数对象" },
-      { name: "任务描述", type: "string", example: "2分钟后执行代码并发送结果", description: "任务描述说明", required: false },
-      { name: "回调任务", type: "object", example: '{"taskType":"pdf_write","params":{"filePath":"output/result.pdf","content":"计算结果：{{result}}"},"onComplete":{"taskType":"email_send","params":{"to":"user@qq.com","subject":"结果","content":"请查收附件","options":"{\\"attachments\\":[{\\"filename\\":\\"result.pdf\\",\\"path\\":\\"output/result.pdf\\"}]}"}}}', description: "任务执行完成后自动触发的回调任务，支持嵌套 onComplete 和 {{result}} 占位符替换父任务结果", required: false }
+      { name: "任务类型", type: "string", example: "daily_news", options: ["daily_news", "email_send", "email_template", "exec_code", "script_generator", "pdf_write"], description: "要执行的任务类型，对应工具名" },
+      { name: "任务参数", type: "object", example: '{"code":"console.log(1+2)","language":"javascript"}', description: "任务参数，直接传递到对应工具的各参数位置（如 email_send 需传入 to/subject/content/options）" },
+      { name: "任务描述", type: "string", example: "2分钟后执行代码", description: "任务描述（可选）", required: false }
     ],
-    example: 'schedule_task(2, "exec_code", "{\\"code\\":\\"data=[1,2,3,4,5]; print(sum(data)/len(data))\\",\\"language\\":\\"python\\"}", "计算平均值并发送PDF", "{\\"taskType\\":\\"pdf_write\\",\\"params\\":{\\"filePath\\":\\"output/result.pdf\\",\\"content\\":\\"计算结果：{{result}}\\"},\\"onComplete\\":{\\"taskType\\":\\"email_send\\",\\"params\\":{\\"to\\":\\"user@qq.com\\",\\"subject\\":\\"计算结果\\",\\"content\\":\\"请查收附件\\",\\"options\\":\\"{\\\\\\"attachments\\\\\\":[{\\\\\\"filename\\\\\\":\\\\\\"result.pdf\\\\\\",\\\\\\"path\\\\\\":\\\\\\"output/result.pdf\\\\\\"}]}\\"}}}")',
+    example: 'schedule_task(2, "exec_code", \'{"code":"print(sum([1,2,3,4,5])/5)","language":"python"}\', "计算平均值")',
   },
   {
     name: "schedule_list",

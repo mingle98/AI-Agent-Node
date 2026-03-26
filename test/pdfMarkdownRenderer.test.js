@@ -275,6 +275,19 @@ test("renderMarkdownOnPdf: 无序列表", async () => {
   assert.ok(buf.length > 100);
 });
 
+test("renderMarkdownOnPdf: 列表项内 **加粗**（GFM 块级 text，非 paragraph）", async () => {
+  const { doc, chunks } = makeDoc();
+  doc.font("Helvetica");
+  const md = "**经济基础**：交通运输数据印证了实体经济的活跃度与抗风险能力。";
+  assert.doesNotThrow(() => {
+    renderMarkdownOnPdf(doc, `- ${md}`, {});
+  });
+  const buf = await endAndBuffer(doc, chunks);
+  assert.ok(buf.length > 100);
+  const s = buf.toString("latin1");
+  assert.ok(!s.includes("**"), "PDF 流中不应再出现未解析的 ** 字面量");
+});
+
 test("renderMarkdownOnPdf: 有序列表", async () => {
   const { doc, chunks } = makeDoc();
   doc.font("Helvetica");

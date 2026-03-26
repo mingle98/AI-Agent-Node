@@ -281,13 +281,39 @@ async function executeSend(templateInfo, emailInfo) {
   return sendEmail({
     to,
     subject,
-    html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #333;">${subject}</h2>
-      <div style="color: #666; line-height: 1.6; white-space: pre-wrap;">${emailInfo.content}</div>
-      <div style="margin-top: 20px; padding: 15px; background: #f5f5f5; border-radius: 5px;">
-        <p style="margin: 0; color: #999; font-size: 12px;">此邮件由系统自动发送</p>
-      </div>
-    </div>`,
+    html: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:'PingFang SC','Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f5f5f5;">
+    <tr>
+      <td align="center" style="padding:36px 16px 48px;">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#ffffff;border-top:3px solid #3b82f6;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.06);">
+          <tr>
+            <td style="padding:32px 40px 28px;border-bottom:1px solid #f0f0f0;">
+              <p style="margin:0 0 6px;font-size:11px;letter-spacing:.08em;color:#9ca3af;text-transform:uppercase;">新消息</p>
+              <h1 style="margin:0;font-size:20px;font-weight:600;color:#111827;line-height:1.4;">${subject}</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 40px 32px;">
+              <p style="margin:0;font-size:15px;color:#374151;line-height:1.9;white-space:pre-wrap;">${emailInfo.content}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 40px 28px;border-top:1px solid #f0f0f0;">
+              <p style="margin:0;font-size:11px;color:#d1d5db;">此邮件由系统自动发送，请勿直接回复。</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
     attachments
   });
 }

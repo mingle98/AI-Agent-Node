@@ -1,6 +1,25 @@
 // ========== Markdown → PDFKit 渲染（用于 pdf_write 富文本样式） ==========
 
-import { lexer } from "marked";
+import { lexer, Lexer } from "marked";
+
+const MARKED_LEXER_OPTS = { gfm: true };
+
+/**
+ * 取出段落的内联 token。列表项在 GFM 下常为 block.type === "text"（非 paragraph），
+ * 必须用 token.tokens；若为空则用 Lexer.lexInline 兜底，避免整段 raw 含 ** 未解析。
+ */
+function resolveInlineTokens(token) {
+  if (Array.isArray(token.tokens) && token.tokens.length > 0) {
+    return token.tokens;
+  }
+  const raw = token.text ?? "";
+  if (!raw) return [];
+  try {
+    return Lexer.lexInline(raw, MARKED_LEXER_OPTS);
+  } catch {
+    return [{ type: "text", text: raw }];
+  }
+}
 
 /**
  * 将 marked 行内 token 展平为带样式的文本片段
@@ -16,16 +35,28 @@ function flattenInline(tokens, inherited = {}) {
         else if (t.text) out.push({ ...inherited, text: t.text });
         break;
       case "strong":
-        out.push(...flattenInline(t.tokens, { ...inherited, bold: true }));
+        if (t.tokens?.length) {
+          out.push(...flattenInline(t.tokens, { ...inherited, bold: true }));
+        } else if (t.text) {
+          out.push({ ...inherited, text: t.text, bold: true });
+        }
         break;
       case "em":
-        out.push(...flattenInline(t.tokens, { ...inherited, italic: true }));
+        if (t.tokens?.length) {
+          out.push(...flattenInline(t.tokens, { ...inherited, italic: true }));
+        } else if (t.text) {
+          out.push({ ...inherited, text: t.text, italic: true });
+        }
         break;
       case "codespan":
         out.push({ ...inherited, text: t.text, code: true });
         break;
       case "del":
-        out.push(...flattenInline(t.tokens, { ...inherited, strike: true }));
+        if (t.tokens?.length) {
+          out.push(...flattenInline(t.tokens, { ...inherited, strike: true }));
+        } else if (t.text) {
+          out.push({ ...inherited, text: t.text, strike: true });
+        }
         break;
       case "link":
         out.push({
@@ -90,7 +121,7 @@ function mergeSegments(segments) {
 function applySegmentStyle(doc, seg, ctx) {
   let size = ctx.baseSize;
   if (seg.code) size -= 1;
-  else if (seg.bold && ctx.hasChineseFont) size += 0.8;
+  else if (seg.bold && ctx.hasChineseFont) size += 1.2;
 
   doc.fontSize(size);
 
@@ -107,6 +138,7 @@ function applySegmentStyle(doc, seg, ctx) {
   if (seg.code) doc.fillColor("#1e293b");
   else if (seg.link) doc.fillColor("#1d4ed8");
   else if (seg.strike) doc.fillColor("#64748b");
+  else if (seg.bold && ctx.hasChineseFont) doc.fillColor("#020617");
   else doc.fillColor("#0f172a");
   // 禁止调用 doc.underline(x,y,w,h)：那是「注释下划线」API，误传 false 会导致 Rect NaN
 }
@@ -271,8 +303,9 @@ function renderList(doc, list, ctx, depth) {
     let first = true;
 
     for (const block of item.tokens || []) {
-      if (block.type === "paragraph") {
-        const segs = flattenInline(block.tokens?.length ? block.tokens : [{ type: "text", text: block.text || "" }]);
+      // GFM 列表项常见为 block.type === "text"（带内联 tokens），不是 paragraph
+      if (block.type === "paragraph" || block.type === "text") {
+        const segs = flattenInline(resolveInlineTokens(block));
         if (first && segs.length) {
           segs[0] = { ...segs[0], text: prefix + (segs[0].text || "") };
         } else if (first) {
@@ -304,16 +337,16 @@ function renderBlockTokens(doc, tokens, ctx, listDepth = 0) {
         if (ctx.hasChineseFont) doc.font(ctx.chineseFontName);
         else doc.font("Helvetica-Bold");
         doc.fillColor("#0f172a").fontSize(hs);
-        const hToks = token.tokens?.length ? token.tokens : [{ type: "text", text: token.text || "" }];
-        drawSegments(doc, flattenInline(hToks), ctx, ctx.margin, ctx.contentWidth);
+        drawSegments(doc, flattenInline(resolveInlineTokens(token)), ctx, ctx.margin, ctx.contentWidth);
         ctx.baseSize = save;
         doc.moveDown(0.15);
         break;
       }
       case "paragraph":
+      case "text":
         drawSegments(
           doc,
-          flattenInline(token.tokens?.length ? token.tokens : [{ type: "text", text: token.text || "" }]),
+          flattenInline(resolveInlineTokens(token)),
           ctx,
           ctx.margin,
           ctx.contentWidth
@@ -377,7 +410,7 @@ export function renderMarkdownOnPdf(doc, markdown, opts = {}) {
 
   let tokens;
   try {
-    tokens = lexer(String(markdown || ""), { gfm: true });
+    tokens = lexer(String(markdown || ""), MARKED_LEXER_OPTS);
   } catch {
     tokens = [
       {

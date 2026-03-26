@@ -1,4 +1,6 @@
-// 测试链式任务（onComplete回调）
+/**
+ * 调度器基础功能测试
+ */
 import assert from "node:assert/strict";
 import test from "node:test";
 import { access, unlink } from 'fs/promises';
@@ -7,7 +9,6 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TASKS_FILE = join(__dirname, '../data/scheduled_tasks.callback.test.json');
-
 const USER_A = "test_user_callback";
 
 async function loadScheduler() {
@@ -23,162 +24,118 @@ async function cleanupFile() {
   } catch {}
 }
 
-test("scheduleTask with onComplete - 任务完成后触发回调", async () => {
+test("scheduleTask: 创建普通定时任务", async () => {
   await cleanupFile();
   const { scheduleTask, stopScheduler } = await loadScheduler();
-  
-  // 创建带有回调的任务
-  const onComplete = {
-    taskType: "email_send",
-    params: {
-      to: "test@example.com",
-      subject: "执行结果",
-      content: "{{result}}"
-    }
-  };
-  
-  const result = await scheduleTask(
-    USER_A, 
-    5, 
-    "exec_code", 
-    { code: "1 + 1", language: "javascript" }, 
-    "执行代码并发送结果",
-    onComplete
-  );
-  
-  assert.equal(result.success, true);
-  assert.ok(result.taskId);
-  
-  // 验证任务存储了回调
-  const fs = await import('fs/promises');
-  const data = await fs.readFile(TASKS_FILE, 'utf-8');
-  const tasks = JSON.parse(data);
-  const task = tasks.find(t => t.id === result.taskId);
-  
-  assert.ok(task, "任务应存在");
-  assert.ok(task.onComplete, "任务应存储回调");
-  assert.equal(task.onComplete.taskType, "email_send");
-  assert.equal(task.onComplete.params.to, "test@example.com");
-  
-  stopScheduler();
-  await cleanupFile();
-});
 
-test("scheduleTask without onComplete - 普通任务正常工作", async () => {
-  await cleanupFile();
-  const { scheduleTask, stopScheduler } = await loadScheduler();
-  
   const result = await scheduleTask(
-    USER_A, 
-    5, 
-    "exec_code", 
-    { code: "console.log('hello')", language: "javascript" }, 
+    USER_A,
+    5,
+    "exec_code",
+    { code: "console.log('hello')", language: "javascript" },
     "普通任务"
   );
-  
+
   assert.equal(result.success, true);
-  
-  // 验证任务没有回调
-  const fs = await import('fs/promises');
-  const data = await fs.readFile(TASKS_FILE, 'utf-8');
-  const tasks = JSON.parse(data);
-  const task = tasks.find(t => t.id === result.taskId);
-  
-  assert.ok(task, "任务应存在");
-  assert.ok(!task.onComplete, "普通任务不应有回调");
-  
+  assert.ok(result.taskId);
+  assert.ok(result.executeAt);
+
   stopScheduler();
   await cleanupFile();
 });
 
-test("executeCallback - {{result}} 占位符替换", async () => {
-  // 模拟回调参数替换逻辑
-  const parentResult = { output: "计算结果: 42" };
-  const callbackParams = {
-    to: "user@example.com",
-    subject: "结果通知",
-    content: "执行结果：{{result}}"
-  };
-  
-  const resultStr = parentResult.output !== undefined
-    ? String(parentResult.output)
-    : JSON.stringify(parentResult);
-  
-  // 替换占位符
-  for (const [key, value] of Object.entries(callbackParams)) {
-    if (typeof value === 'string' && value.includes('{{result}}')) {
-      callbackParams[key] = value.replace(/\{\{result\}\}/g, resultStr);
-    }
-  }
-  
-  assert.equal(callbackParams.content, '执行结果：计算结果: 42', "占位符应优先替换为 parentResult.output");
-});
-
-test("三层链式任务 - exec_code → pdf_write → email_send", async () => {
+test("scheduleTask: 任务对象不包含 onComplete", async () => {
   await cleanupFile();
   const { scheduleTask, stopScheduler } = await loadScheduler();
-  
-  // 第三步：发送邮件（带附件）
-  const emailCallback = {
-    taskType: "email_send",
-    params: {
-      to: "2293188960@qq.com",
-      subject: "计算结果",
-      content: "平均值计算完成，请查看附件",
-      options: JSON.stringify({
-        attachments: [{ filename: "result.pdf", path: "output/result.pdf" }]
-      })
-    }
-  };
-  
-  // 第二步：写入PDF（嵌套邮件回调）
-  const pdfCallback = {
-    taskType: "pdf_write",
-    params: {
-      filePath: "output/result.pdf",
-      content: "计算结果：{{result}}",
-      options: JSON.stringify({ title: "平均值计算" })
-    },
-    onComplete: emailCallback
-  };
-  
-  // 第一步：执行Python代码
+
   const result = await scheduleTask(
-    USER_A, 
-    2, 
-    "exec_code", 
-    { 
-      code: "data = [1,2,3,4,5]; avg = sum(data)/len(data); print(f'平均值: {avg}')", 
-      language: "python" 
-    }, 
-    "计算平均值并生成PDF发送邮件",
-    pdfCallback
+    USER_A,
+    5,
+    "exec_code",
+    { code: "1 + 1", language: "javascript" },
+    "测试任务"
   );
-  
+
   assert.equal(result.success, true);
-  
-  // 验证任务链结构
+
   const fs = await import('fs/promises');
   const data = await fs.readFile(TASKS_FILE, 'utf-8');
   const tasks = JSON.parse(data);
   const task = tasks.find(t => t.id === result.taskId);
-  
+
   assert.ok(task, "任务应存在");
-  
-  // 第一层：exec_code
-  assert.equal(task.taskType, "exec_code");
-  assert.ok(task.onComplete, "第一层应有回调");
-  assert.equal(task.onComplete.taskType, "pdf_write");
-  
-  // 第二层：pdf_write
-  assert.ok(task.onComplete.onComplete, "第二层应有嵌套回调");
-  assert.equal(task.onComplete.onComplete.taskType, "email_send");
-  
-  // 第三层：email_send
-  const emailParams = task.onComplete.onComplete.params;
-  assert.equal(emailParams.to, "2293188960@qq.com");
-  assert.ok(emailParams.options.includes("result.pdf"), "邮件应包含PDF附件");
-  
+  assert.ok(!('onComplete' in task), "任务对象不应包含 onComplete 属性");
+
+  stopScheduler();
+  await cleanupFile();
+});
+
+test("scheduleTask: 无效参数返回错误", async () => {
+  await cleanupFile();
+  const { scheduleTask, stopScheduler } = await loadScheduler();
+
+  // 无效 sessionId（email_send 需 sessionId）
+  const res1 = await scheduleTask(null, 5, "email_send", { to: "a@b.com", subject: "t", content: "c" }, "测试");
+  assert.equal(res1.success, false);
+
+  // 延迟为负数
+  const res2 = await scheduleTask(USER_A, -1, "exec_code", {}, "测试");
+  assert.equal(res2.success, false);
+
+  stopScheduler();
+  await cleanupFile();
+});
+
+test("getTasks: 查询任务列表", async () => {
+  await cleanupFile();
+  const { scheduleTask, getTasks, stopScheduler } = await loadScheduler();
+
+  await scheduleTask(USER_A, 10, "exec_code", { code: "1", language: "javascript" }, "任务1");
+  await scheduleTask(USER_A, 20, "exec_code", { code: "2", language: "javascript" }, "任务2");
+
+  const all = getTasks(USER_A, 'all');
+  assert.ok(all.length >= 2, "应至少看到2个任务");
+
+  const pending = getTasks(USER_A, 'pending');
+  assert.ok(pending.length >= 2, "应至少看到2个待执行任务");
+
+  stopScheduler();
+  await cleanupFile();
+});
+
+test("cancelTask: 取消待执行任务", async () => {
+  await cleanupFile();
+  const { scheduleTask, cancelTask, getTasks, stopScheduler } = await loadScheduler();
+
+  const res = await scheduleTask(USER_A, 60, "exec_code", { code: "1", language: "javascript" }, "待取消");
+  assert.equal(res.success, true);
+
+  const cancelRes = await cancelTask(USER_A, res.taskId);
+  assert.equal(cancelRes.success, true);
+
+  const cancelled = getTasks(USER_A, 'cancelled');
+  assert.ok(cancelled.some(t => t.id === res.taskId), "任务应被标记为取消");
+
+  stopScheduler();
+  await cleanupFile();
+});
+
+test("用户隔离: 只能操作自己的任务", async () => {
+  await cleanupFile();
+  const { scheduleTask, cancelTask, stopScheduler } = await loadScheduler();
+
+  const USER_B = "test_user_B";
+  const resA = await scheduleTask(USER_A, 60, "exec_code", { code: "A", language: "javascript" }, "A的任务");
+  const resB = await scheduleTask(USER_B, 60, "exec_code", { code: "B", language: "javascript" }, "B的任务");
+
+  // A 无法取消 B 的任务
+  const cancelB = await cancelTask(USER_A, resB.taskId);
+  assert.equal(cancelB.success, false);
+
+  // A 可以取消自己的任务
+  const cancelA = await cancelTask(USER_A, resA.taskId);
+  assert.equal(cancelA.success, true);
+
   stopScheduler();
   await cleanupFile();
 });

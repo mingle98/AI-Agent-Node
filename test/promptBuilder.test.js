@@ -26,6 +26,6 @@ test("buildSystemPrompt: should include tools, skills and rules", () => {
   assert.match(prompt, /你是一个R，D/);
   assert.match(prompt, /使用规则/);
   assert.match(prompt, /智能决策示例/);
-  assert.match(prompt, /链式 onComplete 回调/);
-  assert.match(prompt, /exec_code \/ script_generator \/ pdf_write \/ email_send/);
+  assert.match(prompt, /定时任务调度|schedule_task/);
+  assert.match(prompt, /支持用户隔离|只执行一次/);
 });

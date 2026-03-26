@@ -156,34 +156,41 @@ export async function sendEmail(options) {
 export async function sendTemplateEmail(options) {
   const { to, template, variables = {}, subject, from, smtp } = options;
 
-  // 内置模板 - 专业美观的邮件模板集合
+  // 内置模板 — 统一设计语言：内容优先、视觉克制、专业排版
   const templates = {
-    // 通用通知模板
+    // ── 通用通知 ──────────────────────────────────────────────
     notification: `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--[if mso]><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
 </head>
-<body style="margin: 0; padding: 0; background-color: #f5f7fa; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f5f7fa;">
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:'PingFang SC','Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f5f5f5;">
     <tr>
-      <td align="center" style="padding: 40px 20px;">
-        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+      <td align="center" style="padding:36px 16px 48px;">
+        <!-- 主卡片 -->
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#ffffff;border-top:3px solid #3b82f6;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.06);">
+          <!-- 标题区 -->
           <tr>
-            <td style="padding: 40px;">
-              <div style="text-align: center; margin-bottom: 30px;">
-                <div style="width: 50px; height: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; display: inline-block; line-height: 50px; color: white; font-size: 24px;">📢</div>
-              </div>
-              <h1 style="color: #1a1a2e; font-size: 24px; font-weight: 600; margin: 0 0 20px 0; text-align: center;">{{title}}</h1>
-              <div style="background-color: #f8f9fa; border-left: 4px solid #667eea; padding: 20px; margin: 20px 0; border-radius: 0 8px 8px 0;">
-                <p style="color: #4a5568; font-size: 16px; line-height: 1.8; margin: 0; white-space: pre-wrap;">{{message}}</p>
-              </div>
-              <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
-                <p style="color: #a0aec0; font-size: 12px; margin: 0;">此邮件由系统自动发送，请勿回复</p>
-                <p style="color: #cbd5e0; font-size: 11px; margin: 8px 0 0 0;">{{time}}</p>
-              </div>
+            <td style="padding:32px 40px 28px;border-bottom:1px solid #f0f0f0;">
+              <p style="margin:0 0 6px;font-size:11px;letter-spacing:.08em;color:#9ca3af;text-transform:uppercase;">系统通知</p>
+              <h1 style="margin:0;font-size:20px;font-weight:600;color:#111827;line-height:1.4;">{{title}}</h1>
+            </td>
+          </tr>
+          <!-- 内容区 -->
+          <tr>
+            <td style="padding:28px 40px 32px;">
+              <p style="margin:0;font-size:15px;color:#374151;line-height:1.9;white-space:pre-wrap;">{{message}}</p>
+            </td>
+          </tr>
+          <!-- 页脚 -->
+          <tr>
+            <td style="padding:20px 40px 28px;border-top:1px solid #f0f0f0;">
+              <p style="margin:0 0 4px;font-size:12px;color:#9ca3af;">{{time}}</p>
+              <p style="margin:0;font-size:11px;color:#d1d5db;">此邮件由系统自动发送，请勿直接回复。</p>
             </td>
           </tr>
         </table>
@@ -192,38 +199,58 @@ export async function sendTemplateEmail(options) {
   </table>
 </body>
 </html>`,
-    // 告警通知模板
+
+    // ── 告警通知 ──────────────────────────────────────────────
     alert: `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--[if mso]><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
 </head>
-<body style="margin: 0; padding: 0; background-color: #fef2f2; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #fef2f2;">
+<body style="margin:0;padding:0;background:#fff5f5;font-family:'PingFang SC','Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#fff5f5;">
     <tr>
-      <td align="center" style="padding: 40px 20px;">
-        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(239,68,68,0.15); overflow: hidden;">
+      <td align="center" style="padding:36px 16px 48px;">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#ffffff;border-top:3px solid #ef4444;border-radius:6px;box-shadow:0 1px 4px rgba(239,68,68,.1);">
+          <!-- 标题区 -->
           <tr>
-            <td style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); padding: 30px 40px; text-align: center;">
-              <div style="font-size: 48px; margin-bottom: 10px;">⚠️</div>
-              <h1 style="color: #ffffff; font-size: 22px; font-weight: 600; margin: 0;">{{title}}</h1>
+            <td style="padding:32px 40px 28px;border-bottom:1px solid #fee2e2;">
+              <p style="margin:0 0 6px;font-size:11px;letter-spacing:.08em;color:#f87171;text-transform:uppercase;">告警通知</p>
+              <h1 style="margin:0;font-size:20px;font-weight:600;color:#111827;line-height:1.4;">{{title}}</h1>
             </td>
           </tr>
+          <!-- 内容区 -->
           <tr>
-            <td style="padding: 40px;">
-              <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-                <p style="color: #991b1b; font-size: 16px; line-height: 1.8; margin: 0; white-space: pre-wrap;">{{message}}</p>
-              </div>
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f9fafb; border-radius: 8px;">
+            <td style="padding:28px 40px 20px;">
+              <!-- 告警信息框 -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#fef2f2;border:1px solid #fecaca;border-radius:4px;margin-bottom:20px;">
                 <tr>
-                  <td style="padding: 15px 20px;">
-                    <p style="color: #6b7280; font-size: 13px; margin: 0;"><strong>告警时间：</strong>{{time}}</p>
-                    <p style="color: #6b7280; font-size: 13px; margin: 8px 0 0 0;"><strong>告警级别：</strong><span style="color: #ef4444;">紧急</span></p>
+                  <td style="padding:16px 20px;">
+                    <p style="margin:0;font-size:14px;color:#991b1b;line-height:1.8;white-space:pre-wrap;">{{message}}</p>
                   </td>
                 </tr>
               </table>
+              <!-- 元信息 -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding:4px 0;">
+                    <p style="margin:0;font-size:13px;color:#6b7280;"><span style="color:#4b5563;font-weight:500;">告警时间</span>&ensp;{{time}}</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:4px 0;">
+                    <p style="margin:0;font-size:13px;color:#6b7280;"><span style="color:#4b5563;font-weight:500;">告警级别</span>&ensp;<span style="color:#ef4444;font-weight:600;">紧急</span></p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <!-- 页脚 -->
+          <tr>
+            <td style="padding:20px 40px 28px;border-top:1px solid #fee2e2;">
+              <p style="margin:0;font-size:11px;color:#d1d5db;">此邮件由系统自动发送，如有疑问请联系管理员。</p>
             </td>
           </tr>
         </table>
@@ -232,33 +259,48 @@ export async function sendTemplateEmail(options) {
   </table>
 </body>
 </html>`,
-    // 数据报告模板
+
+    // ── 数据报告 ──────────────────────────────────────────────
     report: `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--[if mso]><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
 </head>
-<body style="margin: 0; padding: 0; background-color: #f0f9ff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f0f9ff;">
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:'PingFang SC','Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f5f5f5;">
     <tr>
-      <td align="center" style="padding: 40px 20px;">
-        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(59,130,246,0.1); overflow: hidden;">
+      <td align="center" style="padding:36px 16px 48px;">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#ffffff;border-top:3px solid #3b82f6;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.06);">
+          <!-- 标题区 -->
           <tr>
-            <td style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 30px 40px; text-align: center;">
-              <div style="font-size: 48px; margin-bottom: 10px;">📊</div>
-              <h1 style="color: #ffffff; font-size: 22px; font-weight: 600; margin: 0;">{{title}}</h1>
+            <td style="padding:32px 40px 28px;border-bottom:1px solid #f0f0f0;">
+              <p style="margin:0 0 6px;font-size:11px;letter-spacing:.08em;color:#60a5fa;text-transform:uppercase;">数据报告</p>
+              <h1 style="margin:0;font-size:20px;font-weight:600;color:#111827;line-height:1.4;">{{title}}</h1>
             </td>
           </tr>
+          <!-- 内容区 -->
           <tr>
-            <td style="padding: 40px;">
-              <div style="background-color: #f0f9ff; border-left: 4px solid #3b82f6; padding: 20px; margin: 20px 0; border-radius: 0 8px 8px 0;">
-                <div style="color: #1e40af; font-size: 15px; line-height: 1.8; white-space: pre-wrap;">{{content}}</div>
+            <td style="padding:28px 40px 32px;">
+              <div style="border-left:3px solid #3b82f6;padding-left:16px;margin-bottom:20px;">
+                <p style="margin:0;font-size:14px;color:#374151;line-height:2;white-space:pre-wrap;">{{content}}</p>
               </div>
-              <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0f2fe;">
-                <p style="color: #93c5fd; font-size: 12px; margin: 0;">报告生成时间：{{time}}</p>
-              </div>
+              <!-- 报告信息 -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding:6px 0;border-top:1px solid #f0f0f0;">
+                    <p style="margin:0;font-size:12px;color:#9ca3af;">报告生成时间&ensp;{{time}}</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <!-- 页脚 -->
+          <tr>
+            <td style="padding:20px 40px 28px;border-top:1px solid #f0f0f0;">
+              <p style="margin:0;font-size:11px;color:#d1d5db;">此邮件由系统自动生成，如需更多分析请访问管理后台。</p>
             </td>
           </tr>
         </table>
@@ -267,29 +309,33 @@ export async function sendTemplateEmail(options) {
   </table>
 </body>
 </html>`,
-    // 感谢信模板
+
+    // ── 感谢信 ────────────────────────────────────────────────
     thanks: `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--[if mso]><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
 </head>
-<body style="margin: 0; padding: 0; background-color: #fffbeb; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #fffbeb;">
+<body style="margin:0;padding:0;background:#fafafa;font-family:'PingFang SC','Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#fafafa;">
     <tr>
-      <td align="center" style="padding: 40px 20px;">
-        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(245,158,11,0.1);">
+      <td align="center" style="padding:36px 16px 48px;">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.06);">
+          <!-- 顶部装饰条 -->
           <tr>
-            <td style="padding: 50px 40px;">
-              <div style="text-align: center; margin-bottom: 30px;">
-                <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 50%; display: inline-block; line-height: 60px; color: white; font-size: 28px;">🙏</div>
-              </div>
-              <h1 style="color: #92400e; font-size: 26px; font-weight: 600; margin: 0 0 30px 0; text-align: center;">{{title}}</h1>
-              <div style="color: #78350f; font-size: 16px; line-height: 2; white-space: pre-wrap; margin: 20px 0;">{{message}}</div>
-              <div style="text-align: center; margin-top: 40px; padding-top: 30px; border-top: 1px solid #fde68a;">
-                <p style="color: #b45309; font-size: 14px; margin: 0; font-style: italic;">此致 敬礼</p>
-                <p style="color: #d97706; font-size: 13px; margin: 10px 0 0 0;">{{time}}</p>
+            <td style="height:4px;background:linear-gradient(90deg,#f59e0b,#fbbf24);font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+          <!-- 内容区 -->
+          <tr>
+            <td style="padding:48px 48px 40px;">
+              <h1 style="margin:0 0 24px;font-size:24px;font-weight:700;color:#111827;line-height:1.4;border-bottom:2px solid #f59e0b;padding-bottom:16px;">{{title}}</h1>
+              <p style="margin:0 0 32px;font-size:15px;color:#374151;line-height:2;white-space:pre-wrap;">{{message}}</p>
+              <div style="margin-top:40px;padding-top:24px;border-top:1px solid #f0f0f0;">
+                <p style="margin:0 0 6px;font-size:14px;color:#4b5563;font-style:italic;">此致<br><strong style="color:#111827;">敬礼</strong></p>
+                <p style="margin:8px 0 0;font-size:13px;color:#9ca3af;">{{time}}</p>
               </div>
             </td>
           </tr>
@@ -299,33 +345,36 @@ export async function sendTemplateEmail(options) {
   </table>
 </body>
 </html>`,
-    // 验证码模板
+
+    // ── 验证码 ────────────────────────────────────────────────
     verification: `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--[if mso]><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
 </head>
-<body style="margin: 0; padding: 0; background-color: #fafafa; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #fafafa;">
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:'PingFang SC','Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f5f5f5;">
     <tr>
-      <td align="center" style="padding: 40px 20px;">
-        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); overflow: hidden;">
+      <td align="center" style="padding:36px 16px 48px;">
+        <table width="520" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;width:100%;background:#ffffff;border-top:3px solid #10b981;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.06);">
+          <!-- 标题区 -->
           <tr>
-            <td style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px 40px; text-align: center;">
-              <div style="font-size: 48px; margin-bottom: 10px;">🔐</div>
-              <h1 style="color: #ffffff; font-size: 22px; font-weight: 600; margin: 0;">{{title}}</h1>
+            <td style="padding:32px 40px 24px;border-bottom:1px solid #f0f0f0;text-align:center;">
+              <h1 style="margin:0 0 6px;font-size:20px;font-weight:600;color:#111827;">{{title}}</h1>
+              <p style="margin:0;font-size:13px;color:#6b7280;">{{message}}</p>
             </td>
           </tr>
+          <!-- 验证码展示 -->
           <tr>
-            <td style="padding: 40px; text-align: center;">
-              <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 30px 0;">{{message}}</p>
-              <div style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border-radius: 12px; padding: 25px 40px; margin: 30px 0; display: inline-block;">
-                <span style="color: #059669; font-size: 36px; font-weight: 700; letter-spacing: 8px;">{{code}}</span>
+            <td style="padding:32px 40px 28px;text-align:center;">
+              <div style="display:inline-block;background:#f0fdf4;border:1px solid #a7f3d0;border-radius:6px;padding:20px 48px;margin-bottom:20px;">
+                <span style="font-size:40px;font-weight:700;letter-spacing:10px;color:#059669;font-family:'SF Mono',Menlo,Monaco,Courier,monospace;">{{code}}</span>
               </div>
-              <p style="color: #9ca3af; font-size: 13px; margin: 20px 0 0 0;">验证码有效期：{{expireTime}}</p>
-              <p style="color: #d1d5db; font-size: 11px; margin: 8px 0 0 0;">{{time}}</p>
+              <p style="margin:0;font-size:12px;color:#9ca3af;">有效期 {{expireTime}}</p>
+              <p style="margin:6px 0 0;font-size:11px;color:#d1d5db;">{{time}}</p>
             </td>
           </tr>
         </table>
@@ -334,35 +383,46 @@ export async function sendTemplateEmail(options) {
   </table>
 </body>
 </html>`,
-    // 营销邮件模板
+
+    // ── 营销邮件 ──────────────────────────────────────────────
     marketing: `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--[if mso]><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
 </head>
-<body style="margin: 0; padding: 0; background-color: #fdf4ff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #fdf4ff;">
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:'PingFang SC','Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f5f5f5;">
     <tr>
-      <td align="center" style="padding: 40px 20px;">
-        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 16px; box-shadow: 0 4px 20px rgba(168,85,247,0.15); overflow: hidden;">
+      <td align="center" style="padding:36px 16px 48px;">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:6px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);">
+          <!-- 顶部 Banner -->
           <tr>
-            <td style="background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%); padding: 40px; text-align: center;">
-              <div style="font-size: 56px; margin-bottom: 15px;">🎉</div>
-              <h1 style="color: #ffffff; font-size: 28px; font-weight: 700; margin: 0 0 10px 0;">{{title}}</h1>
-              <p style="color: #e9d5ff; font-size: 14px; margin: 0;">{{subtitle}}</p>
+            <td style="background:linear-gradient(135deg,#7c3aed,#5b21b6);padding:40px 40px 36px;text-align:center;">
+              <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;color:#ffffff;line-height:1.4;">{{title}}</h1>
+              <p style="margin:0;font-size:14px;color:#ddd6fe;">{{subtitle}}</p>
             </td>
           </tr>
+          <!-- 内容区 -->
           <tr>
-            <td style="padding: 40px;">
-              <div style="color: #581c87; font-size: 16px; line-height: 1.8; white-space: pre-wrap; margin: 20px 0;">{{message}}</div>
-              <div style="text-align: center; margin: 30px 0;">
-                <a href="{{ctaLink}}" style="display: inline-block; background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%); color: #ffffff; text-decoration: none; padding: 15px 40px; border-radius: 30px; font-weight: 600;">{{ctaText}}</a>
-              </div>
-              <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #f3e8ff;">
-                <p style="color: #a855f7; font-size: 12px; margin: 0;">如不想收到此类邮件，请<a href="#" style="color: #7c3aed;">点击退订</a></p>
-              </div>
+            <td style="padding:36px 40px 28px;">
+              <p style="margin:0 0 28px;font-size:15px;color:#374151;line-height:1.9;white-space:pre-wrap;">{{message}}</p>
+              <!-- CTA 按钮 -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="text-align:center;padding:4px 0;">
+                    <a href="{{ctaLink}}" style="display:inline-block;background:#7c3aed;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 40px;border-radius:4px;">{{ctaText}}</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <!-- 页脚 -->
+          <tr>
+            <td style="padding:20px 40px 28px;border-top:1px solid #f0f0f0;">
+              <p style="margin:0;font-size:11px;color:#d1d5db;text-align:center;">{{time}}&ensp;|&ensp;<a href="#" style="color:#a78bfa;text-decoration:underline;">退订邮件</a></p>
             </td>
           </tr>
         </table>
@@ -371,43 +431,67 @@ export async function sendTemplateEmail(options) {
   </table>
 </body>
 </html>`,
-    // 邀请函模板
+
+    // ── 邀请函 ────────────────────────────────────────────────
     invitation: `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--[if mso]><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
 </head>
-<body style="margin: 0; padding: 0; background-color: #f0fdf4; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f0fdf4;">
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:'PingFang SC','Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f5f5f5;">
     <tr>
-      <td align="center" style="padding: 40px 20px;">
-        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 16px; box-shadow: 0 4px 20px rgba(34,197,94,0.15); overflow: hidden;">
+      <td align="center" style="padding:36px 16px 48px;">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:6px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);">
+          <!-- 顶部 Banner -->
           <tr>
-            <td style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); padding: 40px; text-align: center;">
-              <div style="font-size: 56px; margin-bottom: 15px;">💌</div>
-              <h1 style="color: #ffffff; font-size: 28px; font-weight: 700; margin: 0;">{{title}}</h1>
+            <td style="background:linear-gradient(135deg,#16a34a,#15803d);padding:40px 40px 36px;text-align:center;">
+              <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;color:#ffffff;line-height:1.4;">{{title}}</h1>
+              <p style="margin:0;font-size:14px;color:#bbf7d0;">诚挚邀请您的参与</p>
             </td>
           </tr>
+          <!-- 内容区 -->
           <tr>
-            <td style="padding: 40px;">
-              <p style="color: #166534; font-size: 18px; line-height: 1.8; text-align: center; margin: 0 0 30px 0;">{{message}}</p>
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f0fdf4; border-radius: 12px; margin: 30px 0;">
+            <td style="padding:36px 40px 28px;">
+              <p style="margin:0 0 28px;font-size:16px;color:#374151;line-height:1.9;text-align:center;white-space:pre-wrap;">{{message}}</p>
+              <!-- 活动信息 -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:28px;">
                 <tr>
-                  <td style="padding: 25px;">
-                    <p style="color: #15803d; font-size: 14px; margin: 8px 0;"><strong>时间：</strong>{{eventTime}}</p>
-                    <p style="color: #15803d; font-size: 14px; margin: 8px 0;"><strong>地点：</strong>{{eventLocation}}</p>
-                    <p style="color: #15803d; font-size: 14px; margin: 8px 0;"><strong>联系人：</strong>{{contact}}</p>
+                  <td style="padding:20px 24px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="padding:6px 0;font-size:13px;color:#6b7280;width:70px;"><strong style="color:#374151;">时间</strong></td>
+                        <td style="padding:6px 0;font-size:13px;color:#374151;">{{eventTime}}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:6px 0;font-size:13px;color:#6b7280;"><strong style="color:#374151;">地点</strong></td>
+                        <td style="padding:6px 0;font-size:13px;color:#374151;">{{eventLocation}}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:6px 0;font-size:13px;color:#6b7280;"><strong style="color:#374151;">联系</strong></td>
+                        <td style="padding:6px 0;font-size:13px;color:#374151;">{{contact}}</td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
               </table>
-              <div style="text-align: center; margin: 30px 0;">
-                <a href="{{rsvpLink}}" style="display: inline-block; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: #ffffff; text-decoration: none; padding: 15px 40px; border-radius: 30px; font-weight: 600;">确认出席</a>
-              </div>
-              <div style="text-align: center; margin-top: 30px;">
-                <p style="color: #86efac; font-size: 12px; margin: 0;">{{time}}</p>
-              </div>
+              <!-- 确认按钮 -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="text-align:center;padding:4px 0;">
+                    <a href="{{rsvpLink}}" style="display:inline-block;background:#16a34a;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 40px;border-radius:4px;">确认出席</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <!-- 页脚 -->
+          <tr>
+            <td style="padding:20px 40px 28px;border-top:1px solid #f0f0f0;">
+              <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">{{time}}</p>
             </td>
           </tr>
         </table>

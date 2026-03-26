@@ -114,16 +114,15 @@ export function stopScheduler() {
 }
 
 /**
- * 创建定时任务（带用户隔离 + onComplete 回调）
+ * 创建定时任务（带用户隔离）
  * @param {string} sessionId - 用户会话ID
  * @param {number} delayMinutes - 延迟分钟数
  * @param {string} taskType - 任务类型
  * @param {Object} params - 任务参数
  * @param {string} description - 任务描述
- * @param {Object} onComplete - 执行完成后触发的回调任务（可选）
  * @returns {Promise<Object>} - 任务创建结果
  */
-export async function scheduleTask(sessionId, delayMinutes, taskType, params, description = '', onComplete = null) {
+export async function scheduleTask(sessionId, delayMinutes, taskType, params, description = '') {
   if (!sessionId && toolNeedsSessionId(taskType)) {
     return { success: false, error: '缺少用户会话ID' };
   }
@@ -169,17 +168,16 @@ export async function scheduleTask(sessionId, delayMinutes, taskType, params, de
     executeAt: Date.now() + delayMinutes * 60 * 1000,
     createdAt: Date.now(),
     status: 'pending',
-    onComplete  // 存储回调任务
   };
-  
+
   // 存入内存
   scheduledTasks.set(task.id, task);
-  
+
   // 持久化到文件
   await saveTasksToFile();
-  
+
   const executeTime = new Date(task.executeAt).toLocaleString('zh-CN');
-  console.log(`⏰ 任务已创建 [${task.id}] 用户[${sessionId}]，将在 ${delayMinutes} 分钟后执行 (${executeTime})${onComplete ? '，含回调' : ''}`);
+  console.log(`⏰ 任务已创建 [${task.id}] 用户[${sessionId}]，将在 ${delayMinutes} 分钟后执行 (${executeTime})`);
   
   return {
     success: true,
@@ -414,13 +412,6 @@ async function executeTask(task) {
     task.result = sanitizeResult(result);
     
     console.log(`✅ 任务执行成功 [${task.id}]`);
-    
-    // 检查是否有回调任务
-    if (task.onComplete && task.status === 'completed') {
-      console.log(`🔄 执行任务回调 [${task.id}] → ${task.onComplete.taskType}`);
-      await executeCallback(task);
-    }
-    
   } catch (error) {
     task.status = 'failed';
     task.executedAt = Date.now();
@@ -431,90 +422,6 @@ async function executeTask(task) {
   
   // 保存状态
   await saveTasksToFile();
-}
-
-/**
- * 执行任务回调
- * @param {Object} parentTask - 父任务对象
- */
-async function executeCallback(parentTask) {
-  const callback = parentTask.onComplete;
-  if (!callback) return;
-  
-  try {
-    const { TOOLS } = await import('./index.js');
-    const toolFunc = TOOLS[callback.taskType];
-    
-    if (!toolFunc) {
-      console.error(`❌ 回调任务类型无效: ${callback.taskType}`);
-      return;
-    }
-    
-    // 准备回调参数（注入父任务结果）
-    const callbackParams = {
-      sessionId: parentTask.sessionId,
-      ...callback.params
-    };
-    
-    // 如果回调参数中包含 {{result}} 占位符，替换为父任务结果
-    // 优先使用 result.output（exec_code 等工具返回的对象），否则使用整个结果
-    let resultStr;
-    if (typeof parentTask.result === 'string') {
-      resultStr = parentTask.result;
-    } else if (parentTask.result && typeof parentTask.result === 'object') {
-      // 如果结果对象有 output 字段（如 exec_code 返回的），使用 output
-      resultStr = parentTask.result.output !== undefined 
-        ? String(parentTask.result.output)
-        : JSON.stringify(parentTask.result);
-    } else {
-      resultStr = String(parentTask.result);
-    }
-    
-    for (const [key, value] of Object.entries(callbackParams)) {
-      if (typeof value === 'string' && value.includes('{{result}}')) {
-        callbackParams[key] = value.replace(/\{\{result\}\}/g, resultStr);
-      }
-    }
-    
-    // 判断是否需要 sessionId
-    // 使用统一的工具常量
-    
-    let callbackResult;
-    if (TOOLS_NEEDING_SESSION_ID.includes(callback.taskType)) {
-      callbackResult = await toolFunc(...Object.values(callbackParams));
-    } else {
-      // 移除 sessionId
-      const { sessionId, ...paramsWithoutSession } = callbackParams;
-      callbackResult = await toolFunc(...Object.values(paramsWithoutSession));
-    }
-
-    if (callbackResult && typeof callbackResult === 'object' && callbackResult.success === false) {
-      throw new Error(callbackResult.error || `${callback.taskType} 执行失败`);
-    }
-    
-    console.log(`✅ 回调执行成功: ${callback.taskType}`);
-    
-    // 记录回调结果到父任务（清理不可序列化字段）
-    parentTask.callbackResult = sanitizeResult(callbackResult);
-    await saveTasksToFile();
-    
-    // 🔄 支持嵌套回调：如果回调任务还有 onComplete，继续触发
-    if (callback.onComplete) {
-      console.log(`🔄 触发嵌套回调: ${callback.taskType} → ${callback.onComplete.taskType}`);
-      // 创建虚拟任务对象用于嵌套回调
-      const nestedTask = {
-        sessionId: parentTask.sessionId,
-        result: callbackResult,
-        onComplete: callback.onComplete
-      };
-      await executeCallback(nestedTask);
-    }
-    
-  } catch (error) {
-    console.error(`❌ 回调执行失败: ${error.message}`);
-    parentTask.callbackError = `${callback.taskType}: ${error.message}`;
-    await saveTasksToFile();
-  }
 }
 
 /**
