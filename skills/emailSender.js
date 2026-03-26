@@ -2,6 +2,7 @@
 // 完整的邮件发送流程：信息提取 → 配置验证 → 模板选择 → 发送 → 反馈
 
 import { sendEmail, sendTemplateEmail, verifySmtpConfig } from '../tools/email.js';
+import { resolveWorkspacePath } from '../tools/fileManager.js';
 
 /**
  * 邮件发送技能 - 完整的发送流程管理
@@ -11,15 +12,17 @@ import { sendEmail, sendTemplateEmail, verifySmtpConfig } from '../tools/email.j
  * @param {string} 场景类型 - 场景类型（notification/alert/report/marketing/custom，可选）
  * @returns {Promise<Object>} - 发送结果
  */
-export async function skillEmailSender(收件人, 主题, 内容, 场景类型 = 'custom', 附件路径 = '') {
+export async function skillEmailSender(收件人, 主题, 内容, 场景类型 = 'custom', 附件路径 = '', sessionId) {
   const steps = [];
 
   try {
     console.log('📧 启动邮件发送流程...');
 
-    // 构建附件数组（支持逗号分隔的多个路径）
+    // 构建附件数组（支持逗号分隔的多个路径），解析为绝对路径
     const attachments = 附件路径
-      ? 附件路径.split(',').map(p => ({ path: p.trim() }))
+      ? 附件路径.split(',').map(p => ({
+          path: resolveWorkspacePath(p.trim(), sessionId)
+        }))
       : [];
 
     // 构建参数对象

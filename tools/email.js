@@ -154,7 +154,7 @@ export async function sendEmail(options) {
  * @returns {Promise<Object>} - 发送结果
  */
 export async function sendTemplateEmail(options) {
-  const { to, template, variables = {}, subject, from, smtp } = options;
+  const { to, template, variables = {}, subject, from, smtp, attachments = [] } = options;
 
   // 内置模板 — 统一设计语言：内容优先、视觉克制、专业排版
   const templates = {
@@ -515,7 +515,8 @@ export async function sendTemplateEmail(options) {
     subject,
     html,
     from,
-    smtp
+    smtp,
+    attachments
   });
 }
 

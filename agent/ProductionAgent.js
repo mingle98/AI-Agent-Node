@@ -281,12 +281,13 @@ export class ProductionAgent {
     return tool(...args);
   }
 
-  async runSkillCall(skillName, args) {
+  async runSkillCall(skillName, args, sessionId) {
+    console.log(`[DEBUG] skill: ${skillName}, sessionId=${sessionId}, args=`, args);
     const skill = SKILLS[skillName];
     if (!skill) {
       throw new Error(`未找到技能 ${skillName}`);
     }
-    return skill(...args);
+    return skill(...args, sessionId);
   }
 
   async executeCallableWithResilience(session, name, argsObject) {
@@ -298,7 +299,7 @@ export class ProductionAgent {
     const args = this.orderedArgsFromObject(argsObject, callable.orderedParamKeys);
     const run = async () => {
       if (callable.kind === "skill") {
-        return this.runSkillCall(name, args);
+        return this.runSkillCall(name, args, session.id);
       }
       return this.runToolCall(name, args, session.id);
     };
