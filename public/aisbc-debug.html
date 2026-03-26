@@ -322,6 +322,58 @@
         border: 1px solid #e8ecf0;
         box-shadow: 0 2px 8px rgba(0,0,0,0.06);
       }
+      .file-preview-pdf-wrap {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        margin: -14px;
+        height: calc(100% + 28px);
+      }
+      .file-preview-pdf {
+        flex: 1;
+        width: 100%;
+        min-height: 420px;
+        border: none;
+        border-radius: 0;
+        background: #f1f5f9;
+      }
+      .file-preview-fallback {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 32px 20px;
+        gap: 10px;
+        color: #718096;
+        background: #fafbfc;
+        border-top: 1px solid #f0f2f5;
+        margin-top: 8px;
+        font-size: 12px;
+        text-align: center;
+      }
+      .file-preview-fallback-icon { font-size: 32px; opacity: 0.45; }
+      .file-preview-fallback-hint { color: #a0aec0; font-size: 11px; line-height: 1.6; max-width: 280px; }
+      .file-preview-fallback-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 28px;
+        padding: 0 14px;
+        font-size: 12px;
+        border: 1px solid #cbd5e0;
+        border-radius: 6px;
+        background: #fff;
+        color: #4a5568;
+        cursor: pointer;
+        transition: all 0.15s;
+        text-decoration: none;
+      }
+      .file-preview-fallback-btn:hover {
+        border-color: #4299e1;
+        color: #4299e1;
+        background: #ebf8ff;
+      }
       .file-preview-empty {
         flex: 1;
         display: flex;
@@ -727,6 +779,16 @@
               return (customRequestConfig?.customParams?.session_id || 'default').trim() || 'default';
             };
 
+            /** 与下载按钮一致：优先 fullUrl，否则拼 workspace 静态地址 */
+            const getWorkspaceFileUrl = (node) => {
+              if (!node) return '';
+              if (node.fullUrl) return node.fullUrl;
+              if (node.url && /^https?:\/\//i.test(node.url)) return node.url;
+              const sessionId = getSessionId();
+              const segs = (node.path || '').split('/').filter(Boolean).map(encodeURIComponent);
+              return `http://localhost:3000/workspace/${encodeURIComponent(sessionId)}/${segs.join('/')}`;
+            };
+
             const filePanelCollapsed = ref(false);
 
             const queryRecursive = ref(true);
@@ -805,6 +867,13 @@
               const isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico'].includes(ext);
               if (isImage) {
                 preview.value = { loading: false, error: '', content: '', type: 'image', url: node.fullUrl || node.url || '' };
+                return;
+              }
+              if (ext === 'pdf') {
+                const pdfUrl = getWorkspaceFileUrl(node);
+                preview.value = pdfUrl
+                  ? { loading: false, error: '', content: '', type: 'pdf', url: pdfUrl }
+                  : { loading: false, error: '无法解析 PDF 地址', content: '', type: 'text', url: '' };
                 return;
               }
               preview.value = { loading: true, error: '', content: '', type: 'text', url: '' };
@@ -897,12 +966,8 @@
             };
 
             const downloadFile = (file) => {
-              if (file.fullUrl) {
-                window.open(file.fullUrl, '_blank');
-              } else {
-                const sessionId = getSessionId();
-                window.open(`http://localhost:3000/workspace/${sessionId}/${file.path}`, '_blank');
-              }
+              const url = getWorkspaceFileUrl(file);
+              if (url) window.open(url, '_blank');
             };
 
             const deleteFile = async (file) => {
@@ -1109,6 +1174,7 @@
               isExpanded,
               toggleExpand,
               selectNode,
+              getWorkspaceFileUrl,
               lastRefreshTime,
               filePanelCollapsed,
               sendQuickMsg: (msg) => {
@@ -1296,7 +1362,35 @@
                                   ? h('div', { style: 'color: #e53e3e; padding: 16px; font-size: 12px;' }, this.preview.error)
                                   : this.preview.type === 'image'
                                     ? h('img', { class: 'file-preview-image', src: this.preview.url || (this.selectedNode.fullUrl || this.selectedNode.url || '') })
-                                    : h('pre', { class: 'file-preview-content' }, this.preview.content || '（空文件或不可预览）')
+                                    : this.preview.type === 'pdf'
+                                      ? h('div', { class: 'file-preview-pdf-wrap' }, [
+                                          h('iframe', {
+                                            class: 'file-preview-pdf',
+                                            title: this.selectedNode.name,
+                                            src: this.preview.url,
+                                          }),
+                                        ])
+                                      : [
+                                          h('pre', { class: 'file-preview-content' }, this.preview.content || '（空文件或不可预览）'),
+                                          // 无法预览时显示跳转按钮
+                                          h('div', { class: 'file-preview-fallback' }, (() => {
+                                            const fileUrl = this.getWorkspaceFileUrl(this.selectedNode);
+                                            if (!fileUrl) return null;
+                                            return [
+                                              h('div', { class: 'file-preview-fallback-icon' }, '📎'),
+                                              h('div', null, '该文件类型不支持直接预览'),
+                                              h('div', { class: 'file-preview-fallback-hint' },
+                                                '可点击下方按钮在新标签页打开查看'
+                                              ),
+                                              h('a', {
+                                                class: 'file-preview-fallback-btn',
+                                                href: fileUrl,
+                                                target: '_blank',
+                                                rel: 'noopener noreferrer',
+                                              }, ['↗ 新标签页打开']),
+                                            ];
+                                          })()),
+                                        ]
                             ])
                           ]
                         : h('div', { class: 'file-preview-empty' }, [

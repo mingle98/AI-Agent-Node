@@ -382,18 +382,25 @@ async function executeTask(task) {
   try {
     // 动态导入对应工具
     const { TOOLS } = await import('./index.js');
-    
-    const toolFunc = TOOLS[task.taskType];
-    
+
+    // 工具名别名映射（skill 名 → 实际 tool 名）
+    const TASK_TYPE_ALIASES = {
+      email_sender: 'email_send',
+      pdf_sender: 'pdf_write',
+    };
+    const resolvedTaskType = TASK_TYPE_ALIASES[task.taskType] || task.taskType;
+
+    const toolFunc = TOOLS[resolvedTaskType];
+
     if (!toolFunc) {
       throw new Error(`未知的任务类型: ${task.taskType}`);
     }
-    
+
     // 执行任务
     // 使用统一的工具常量判断是否需要 sessionId
-    
+
     let result;
-    if (TOOLS_NEEDING_SESSION_ID.includes(task.taskType)) {
+    if (TOOLS_NEEDING_SESSION_ID.includes(resolvedTaskType)) {
       // 需要 sessionId 的工具：注入为第一个参数
       const paramsWithSession = { sessionId: task.sessionId, ...task.params };
       result = await toolFunc(...Object.values(paramsWithSession));
