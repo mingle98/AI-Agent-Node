@@ -483,8 +483,11 @@ export class ProductionAgent {
     sessionId = this.defaultSessionId,
     requestOptions = {}
   ) {
-    // ========== 模式选择 ==========
-    const taskMode = selectTaskMode(this, userInput, requestOptions);
+    // ========== 模式选择（异步智能决策） ==========
+    const session = this.getOrCreateSession(sessionId);
+    const sessionHistory = session.messages;
+
+    const taskMode = await selectTaskMode(this, userInput, requestOptions, sessionHistory);
 
     // 如果是 Plan+Exec 模式，调用对应的处理逻辑
     if (taskMode === "plan_exec") {

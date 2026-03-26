@@ -5,6 +5,13 @@ import { SystemMessage, HumanMessage, ToolMessage } from "@langchain/core/messag
 
 import { getPlanPhaseDivBox, getPlanStepDivBox, getToolDivBox } from "../utils/streamRenderer.js";
 
+// 评估与模式选择实现见 complexityEvaluator.js；此处仅重导出，避免 import + export 同名导致重复导出
+export {
+  selectTaskMode,
+  detectTaskComplexity,
+  detectTaskComplexitySync
+} from "./complexityEvaluator.js";
+
 /**
  * 发送流式事件
  */
@@ -40,131 +47,6 @@ function normalizeTextContent(content) {
     return content.map((part) => (typeof part === "string" ? part : (part?.text || ""))).join("");
   }
   return String(content || "");
-}
-
-/**
- * 检测任务复杂度
- * @param {string} userInput - 用户输入
- * @returns {number} 复杂度分数 0-1
- */
-export function detectTaskComplexity(userInput) {
-  const text = typeof userInput === "string" ? userInput : (userInput?.text || "");
-
-  const complexityIndicators = {
-    high: [
-      /分析[个篇堆份批]/, /整理[个篇堆份批]/, /对比/, /归纳/, /总结[出给]/,
-      /提取[出给]/, /筛选/, /统计/, /计算/, /处理[个批]/,
-      /批量/, /多个?/, /全部/, /所有/, /遍历/,
-      /逐一/, /依次/, /逐步/, /按顺/,
-      /100|一百|两百|多份/, /第一.*第二.*第三/, /首先.*然后.*最后/,
-      /流程.*图/, /步骤.*步骤/, /多.*步骤/,
-      /自动化/, /批量.*处理/, /生成.*报告/, /数据.*分析/,
-      // 多步骤序列关键词
-      /先.*再.*最后/, /首先.*然后.*最后/, /第一步.*第二步.*第三步/,
-      /先.*接着.*再.*最后/, /首先.*接着.*然后.*最后/
-    ],
-    medium: [
-      /创建.*文件/, /编写.*代码/, /查找.*并/, /搜索.*并/,
-      /帮我.*一下/, /需要.*先/, /完成.*后/,
-      /复杂/, /详细/, /全面/, /完整/,
-      // 多步骤指示词
-      /先.*再/, /然后/, /接着/, /最后/,
-      /第[一二三四五六七八九十]步/, /第一步/, /下一步/
-    ]
-  };
-
-  const lowComplexityPatterns = [
-    /是什么/, /是什么？/, /帮我看/, /解释/, /查一下/, /什么意思/,
-    /问一下/, /请问/, /怎么.*？/, /如何.*？/, /是不是/
-  ];
-
-  let score = 0;
-  let highMatchCount = 0;
-  let mediumMatchCount = 0;
-
-  // 统计 high patterns 匹配次数（多个匹配增加分数）
-  for (const pattern of complexityIndicators.high) {
-    if (pattern.test(text)) {
-      score += 0.35;
-      highMatchCount++;
-      // 多个 high 关键词叠加
-      if (highMatchCount > 1) {
-        score += 0.15;
-      }
-      break;
-    }
-  }
-
-  // 统计 medium patterns 匹配次数
-  for (const pattern of complexityIndicators.medium) {
-    if (pattern.test(text)) {
-      score += 0.2;
-      mediumMatchCount++;
-      // 多个 medium 关键词叠加
-      if (mediumMatchCount > 1) {
-        score += 0.1;
-      }
-      break;
-    }
-  }
-
-  // 步骤序列检测：先X再Y最后Z格式
-  const stepSequencePatterns = [
-    /先.+再.+最后/,
-    /首先.+然后.+最后/,
-    /先.+接着.+再.+最后/
-  ];
-  for (const pattern of stepSequencePatterns) {
-    if (pattern.test(text)) {
-      score += 0.25;
-      break;
-    }
-  }
-
-  for (const pattern of lowComplexityPatterns) {
-    if (pattern.test(text)) {
-      score -= 0.15;
-      break;
-    }
-  }
-
-  // 长度因素（降低权重）
-  const lengthFactor = Math.min(text.length / 300, 1) * 0.1;
-  score += lengthFactor;
-
-  // 多步骤指示词计数
-  const stepWords = (text.match(/先|然后|接着|再|最后|下一步|第[一二三四五六七八九十]步/g) || []).length;
-  if (stepWords >= 2) {
-    score += 0.15;
-  }
-  if (stepWords >= 3) {
-    score += 0.1;
-  }
-
-  return Math.max(0, Math.min(1, score));
-}
-
-/**
- * 选择任务执行模式
- */
-export function selectTaskMode(agent, userInput, requestOptions = {}) {
-  if (requestOptions.taskMode === "react" || requestOptions.taskMode === "plan_exec") {
-    return requestOptions.taskMode;
-  }
-
-  if (agent.taskMode === "react") return "react";
-  if (agent.taskMode === "plan_exec") return "plan_exec";
-
-  const complexity = detectTaskComplexity(userInput);
-  const threshold = agent.complexityThreshold;
-
-  if (complexity >= threshold) {
-    console.log(`📊 [Plan+Exec] 任务复杂度: ${complexity.toFixed(2)} >= ${threshold}, 启用计划模式`);
-    return "plan_exec";
-  }
-
-  console.log(`⚡ [ReAct] 任务复杂度: ${complexity.toFixed(2)} < ${threshold}, 使用快速响应`);
-  return "react";
 }
 
 /**
