@@ -76,9 +76,9 @@ export function getToolDivBox(text, stType = 'content') {
     if (!text) return '';
     const margin =
       stType === 'start'
-        ? 'margin-top:4px;'
+        ? 'margin-top:10px;'
         : stType === 'end'
-          ? 'margin-bottom:6px;'
+          ? 'margin-bottom:10px;'
           : '';
     const style = `${_toolBranch}${margin}`;
     return `<div data-tool="true" data-tool-muted="true" style="${style}">${text}</div>\n`;

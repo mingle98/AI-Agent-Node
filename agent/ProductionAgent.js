@@ -531,10 +531,10 @@ export class ProductionAgent {
         const toolExcResults = [];
         const logText = typeof userInput === "string" ? userInput : (userInput?.text || "[多模态输入]");
         console.log(`👤 [${sessionId}] 用户: ${logText}`);
-        const addMessage = this.buildHumanMessage(userInput);
-        if (this.options.debug) {
-          console.log(`👤 [${sessionId}] 用户消息:`, addMessage);
-        }
+    const addMessage = this.buildHumanMessage(userInput);
+    if (this.options.debug) {
+      console.log(`👤 [${sessionId}] 用户消息:`, addMessage.toString());
+    }
         session.messages.push(addMessage);
         await this.manageContext(session);
 
