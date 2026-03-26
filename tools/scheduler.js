@@ -24,6 +24,46 @@ let cleanupTimer = null;
 let isInitialized = false;
 
 /**
+ * 深度清理不可序列化的字段（Buffer、Error、正则、函数、Symbol 等），
+ * 防止 JSON 序列化失败或 IPC 克隆报错。
+ * @param {any} value
+ * @returns {any}
+ */
+function sanitizeResult(value) {
+  if (value === null || value === undefined) return value;
+
+  if (typeof value === 'function' || typeof value === 'symbol') return undefined;
+
+  if (Buffer.isBuffer(value)) {
+    // Buffer 转为基础对象（不含实际数据），仅保留元信息
+    return { __type: 'Buffer', length: value.length };
+  }
+
+  if (value instanceof Error) {
+    return { __type: 'Error', message: value.message, stack: value.stack };
+  }
+
+  if (value instanceof RegExp) {
+    return { __type: 'RegExp', source: value.source, flags: value.flags };
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(sanitizeResult);
+  }
+
+  if (typeof value === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (typeof v === 'function') continue;
+      out[k] = sanitizeResult(v);
+    }
+    return out;
+  }
+
+  return value;
+}
+
+/**
  * 初始化调度器
  * 从文件恢复待执行任务，启动定时检查
  */
@@ -235,7 +275,12 @@ export function getTaskById(sessionId, taskId) {
 async function loadTasksFromFile(skipOverdueExecution = false) {
   try {
     const data = await readFile(TASKS_FILE, 'utf-8');
-    const tasks = JSON.parse(data);
+    const tasks = JSON.parse(data, (key, value) => {
+      if (value && typeof value === 'object' && value.__type === 'Buffer') {
+        return { __type: 'Buffer', length: value.length, _restored: true };
+      }
+      return value;
+    });
     
     // 恢复 pending 和 overdue 的任务
     const now = Date.now();
@@ -363,10 +408,10 @@ async function executeTask(task) {
       throw new Error(result.error || `${task.taskType} 执行失败`);
     }
     
-    // 记录执行结果
+    // 记录执行结果（清理不可序列化字段，避免 JSON 序列化失败和 IPC 克隆报错）
     task.status = 'completed';
     task.executedAt = Date.now();
-    task.result = result;
+    task.result = sanitizeResult(result);
     
     console.log(`✅ 任务执行成功 [${task.id}]`);
     
@@ -449,8 +494,8 @@ async function executeCallback(parentTask) {
     
     console.log(`✅ 回调执行成功: ${callback.taskType}`);
     
-    // 记录回调结果到父任务
-    parentTask.callbackResult = callbackResult;
+    // 记录回调结果到父任务（清理不可序列化字段）
+    parentTask.callbackResult = sanitizeResult(callbackResult);
     await saveTasksToFile();
     
     // 🔄 支持嵌套回调：如果回调任务还有 onComplete，继续触发

@@ -466,7 +466,7 @@ test("ProductionAgent: constructor should set default options", () => {
   const llm = new MockLLM([]);
   const agent = new ProductionAgent(llm, null, null);
 
-  assert.equal(agent.maxIterations, 5);
+  assert.equal(agent.maxIterations, 10);
   assert.equal(agent.defaultSessionId, "default");
   assert.equal(agent.multimodalEnabled, true);
   assert.ok(agent.resilience.llmTimeoutMs > 0);

@@ -11,6 +11,7 @@ import mammoth from 'mammoth';
 import { Document, Paragraph, TextRun, Packer, PageOrientation, SectionType } from 'docx';
 import { resolveWorkspacePath, getPublicUrl, FILE_MANAGER_CONFIG } from './fileManager.js';
 import { CONFIG } from '../config.js';
+import { renderMarkdownOnPdf } from './pdfMarkdownRenderer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CHINESE_FONT_PATH = path.join(__dirname, '../assets/fonts/NotoSansSC.otf');
@@ -39,8 +40,8 @@ const CHINESE_FONT_CANDIDATES = [
   '/System/Library/Fonts/PingFang.ttc',
   '/System/Library/Fonts/STHeiti Light.ttc',
   '/System/Library/Fonts/Hiragino Sans GB.ttc',
-  '/System/Library/Fonts/Supplemental/Songti.ttc'
-].filter(fontPath => fontPath.endsWith('.otf') || fontPath.endsWith('.ttf'));
+  '/System/Library/Fonts/Supplemental/Songti.ttc',
+].filter((fontPath) => /\.(otf|ttf|ttc)$/i.test(fontPath));
 
 // ========== Excel 文件处理 ==========
 
@@ -625,7 +626,7 @@ export async function writePdf(filePath, sessionId, pages, options = {}) {
       throw new Error('需要提供 sessionId 来访问文件系统');
     }
     
-    const { overwrite = false, title = 'Document' } = options;
+    const { overwrite = false, title = 'Document', contentFormat = 'markdown' } = options;
     const absolutePath = resolveWorkspacePath(filePath, sessionId);
     const dirPath = path.dirname(absolutePath);
     
@@ -690,29 +691,49 @@ export async function writePdf(filePath, sessionId, pages, options = {}) {
         
         if (pageData.text) {
           const rawText = String(pageData.text);
-          const text = hasChineseFont
-            ? rawText
-            : rawText.replace(/[^\x00-\x7F]/g, '?');
-          totalTextLength += text.length;
-          
-          const fontSize = pageData.fontSize || 12;
+          const fontSize = pageData.fontSize || options.fontSize || 12;
           const margin = 50;
-          
-          // 使用中文字体（如果有）
-          if (hasChineseFont) {
-            try {
-              doc.font('ChineseFont');
-            } catch (fontErr) {
-              console.warn(`⚠️ 字体切换失败: ${fontErr.message}`);
-              hasChineseFont = false;
+          const pageWantsPlain = pageData.format === 'plain';
+          const optionsWantPlain = contentFormat === 'plain';
+          const usePlain = pageWantsPlain || optionsWantPlain;
+
+          if (!usePlain) {
+            if (hasChineseFont) {
+              try {
+                doc.font('ChineseFont');
+              } catch (fontErr) {
+                console.warn(`⚠️ 字体切换失败: ${fontErr.message}`);
+              }
             }
+            renderMarkdownOnPdf(doc, rawText, {
+              margin,
+              hasChineseFont,
+              chineseFontName: 'ChineseFont',
+              baseFontSize: fontSize,
+              title: i === 0 ? title : null,
+            });
+            totalTextLength += rawText.length;
+          } else {
+            const text = hasChineseFont
+              ? rawText
+              : rawText.replace(/[^\x00-\x7F]/g, '?');
+            totalTextLength += text.length;
+
+            if (hasChineseFont) {
+              try {
+                doc.font('ChineseFont');
+              } catch (fontErr) {
+                console.warn(`⚠️ 字体切换失败: ${fontErr.message}`);
+                hasChineseFont = false;
+              }
+            }
+            doc.fontSize(fontSize);
+            doc.text(text, margin, margin, {
+              width: doc.page.width - 2 * margin,
+              height: doc.page.height - 2 * margin,
+              align: 'left',
+            });
           }
-          doc.fontSize(fontSize);
-          doc.text(text, margin, margin, {
-            width: doc.page.width - 2 * margin,
-            height: doc.page.height - 2 * margin,
-            align: 'left'
-          });
         }
       }
     }

@@ -68,7 +68,7 @@ export class ProductionAgent {
     this.vectorStore = vectorStore;
     this.embeddings = embeddings;
     this.options = options;
-    this.maxIterations = options.maxIterations || 5;
+    this.maxIterations = options.maxIterations || 10;
     this.defaultSessionId = options.defaultSessionId || "default";
     this.sessionTtlMs = options.sessionTtlMs || 30 * 60 * 1000;
     this.maxSessions = options.maxSessions || 300;

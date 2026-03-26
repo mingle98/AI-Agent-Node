@@ -25,7 +25,7 @@ const _toolBranch =
   'border-radius:0;box-shadow:none;border:none;' +
   'line-height:1.35;letter-spacing:0.02em;' +
   'font-size:12px;font-weight:400;' +
-  'padding:4px 6px 1px 10px;margin:0 0 1px 12px;' +
+  'padding:4px 6px 1px 10px;margin:0 0 1px 8px;' +
   'border-left:1px solid #e5e7eb;' +
   'color:#b4bcc8;background:transparent;';
 

@@ -315,16 +315,23 @@ export const TOOL_DEFINITIONS = [
   {
     name: "pdf_write",
     func: (sessionId, filePath, content, options = "{}") => {
-      const opts = JSON.parse(options);
-      return writePdf(filePath, sessionId, [{ text: content }], { overwrite: true, ...opts });
+      const opts = typeof options === "string" ? JSON.parse(options || "{}") : (options || {});
+      const contentFormat =
+        opts.format === "plain" || opts.contentFormat === "plain" ? "plain" : "markdown";
+      const { format: _f, contentFormat: _cf, ...rest } = opts;
+      return writePdf(filePath, sessionId, [{ text: content }], {
+        overwrite: true,
+        contentFormat,
+        ...rest,
+      });
     },
-    description: "将文本内容写入用户 workspace 中的 PDF 文件，支持简单的文本到PDF转换",
+    description: "将内容写入用户 workspace 的 PDF。默认按 Markdown 渲染（标题/列表/表格/代码块/加粗/链接等样式）；纯文本请传 {\"format\":\"plain\"} 或 {\"contentFormat\":\"plain\"}",
     params: [
       { name: "文件路径", type: "string", example: "output/result.pdf", description: "PDF文件输出路径" },
-      { name: "内容", type: "string", example: "计算结果: 3.0", description: "要写入PDF的文本内容" },
-      { name: "选项", type: "object", example: '{"title":"结果文档","fontSize":12}', description: "可选：title文档标题, fontSize字体大小, overwrite默认true", required: false }
+      { name: "内容", type: "string", example: "# 报告\\n\\n正文 **加粗**", description: "Markdown 或纯文本（由选项 format 控制）" },
+      { name: "选项", type: "object", example: '{"title":"结果文档","fontSize":11}', description: "title 标题；fontSize 正文字号；format 为 plain 时关闭 Markdown 按纯文本写入；默认 Markdown 渲染", required: false }
     ],
-    example: 'pdf_write("output/result.pdf", "计算结果: 3.0", "{\"title\":\"平均值计算\"}")',
+    example: 'pdf_write("output/result.pdf", "# 标题\\n\\n段落", "{\"title\":\"我的报告\"}")',
   },
   // ========== CSV/JSON 工具 ==========
   {
