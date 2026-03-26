@@ -139,15 +139,16 @@ export const SKILL_DEFINITIONS = [
   {
     name: "email_sender",
     func: skillEmailSender,
-    description: "邮件发送助手（完整流程）",
-    functionality: "自动完成邮件信息提取、SMTP配置验证、模板选择、发送执行的全流程，适用于通知、告警、报告等场景",
+    description: "邮件发送助手（完整流程，支持附件）",
+    functionality: "自动完成邮件信息提取、SMTP配置验证、模板选择、发送执行的全流程，适用于通知、告警、报告等场景。发送报告类邮件时可通过 attachments 参数附加文件",
     params: [
       { name: "收件人", type: "string", example: "user@example.com, admin@company.com" },
       { name: "主题", type: "string", example: "系统告警通知", required: false },
       { name: "内容", type: "string", example: "CPU使用率超过90%，请及时处理" },
-      { name: "场景类型", type: "string", example: "alert", options: ["notification", "alert", "report", "custom", "thanks", "verification", "invitation"] }
+      { name: "场景类型", type: "string", example: "alert", options: ["notification", "alert", "report", "custom", "thanks", "verification", "invitation"] },
+      { name: "附件路径", type: "string", example: "output/report.pdf, output/data.xlsx", description: "附件文件路径，多个用逗号分隔（可选）", required: false }
     ],
-    example: 'email_sender("user@example.com", "系统告警", "CPU使用率超过90%", "alert")',
+    example: 'email_sender("user@example.com", "测试报告", "请查收附件中的分析报告", "report", "output/report.pdf")',
   },
   {
     name: "python_executor",

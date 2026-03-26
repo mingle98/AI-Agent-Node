@@ -11,19 +11,25 @@ import { sendEmail, sendTemplateEmail, verifySmtpConfig } from '../tools/email.j
  * @param {string} 场景类型 - 场景类型（notification/alert/report/marketing/custom，可选）
  * @returns {Promise<Object>} - 发送结果
  */
-export async function skillEmailSender(收件人, 主题, 内容, 场景类型 = 'custom') {
+export async function skillEmailSender(收件人, 主题, 内容, 场景类型 = 'custom', 附件路径 = '') {
   const steps = [];
-  
+
   try {
     console.log('📧 启动邮件发送流程...');
-    
+
+    // 构建附件数组（支持逗号分隔的多个路径）
+    const attachments = 附件路径
+      ? 附件路径.split(',').map(p => ({ path: p.trim() }))
+      : [];
+
     // 构建参数对象
     const options = {
       to: 收件人,
       subject: 主题,
       content: 内容,
       type: 场景类型,
-      template: 场景类型
+      template: 场景类型,
+      attachments
     };
     
     // ========== 步骤1: 提取并标准化邮件信息 ==========

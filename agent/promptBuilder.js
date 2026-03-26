@@ -168,7 +168,7 @@ function buildExamplesSection(skillDefinitions) {
     '- "Excel怎么统计销售额" → 用 excel_helper 技能获取公式',
     '- "纠结选哪个offer" → 用 decision_helper 技能分析',
     '- "帮我写封邮件跟进客户" → 用 email_writer 技能生成',
-    '- "发送邮件通知给xxx@example.com" → 优先用 email_sender 技能（自动完成全流程），而非直接调用 email_send 工具',
+    '- "发送邮件通知给xxx@example.com" → 优先用 email_sender 技能（自动完成全流程），而非直接调用 email_send 工具；报告类邮件记得附上文件路径',
     '- "发送系统告警邮件给管理员" → 用 email_sender 技能（自动完成发送流程）',
     '- "定时任务完成后发邮件" → 用 schedule_task 定时执行邮件发送，多步请用 Plan 模式',
     '- "2分钟后执行Python算平均值并发邮箱" → 先用 Plan 模式编排步骤，再分别用 schedule_task 定时各步骤',
@@ -216,7 +216,7 @@ function generateSkillExample(skill) {
     'excel_helper': '- "Excel怎么计算平均值排除空值" → 用 excel_helper 技能（公式和操作指导）',
     'decision_helper': '- "纠结要不要换工作" → 用 decision_helper 技能（决策分析框架）',
     'email_writer': '- "帮我写封跟进邮件" → 用 email_writer 技能（生成邮件模板）',
-    'email_sender': '- "发送告警邮件给运维团队" → 用 email_sender 技能（自动提取信息、验证配置、选择模板、执行发送）',
+    'email_sender': '- "发送告警邮件给运维团队" → 用 email_sender 技能（自动提取信息、验证配置、选择模板、执行发送）；发送报告邮件时请附加文件：email_sender("xxx@qq.com", "主题", "内容", "report", "output/report.pdf")',
     'python_executor': '- "分析这组数据的统计指标" → 用 python_executor 技能（自动生成脚本执行分析）',
   };
   
