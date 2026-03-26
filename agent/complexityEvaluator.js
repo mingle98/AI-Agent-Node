@@ -353,10 +353,9 @@ export class IntelligentComplexityEvaluator {
    * 主要评估入口
    * @param {string|object} userInput - 用户输入
    * @param {Array} sessionHistory - 会话历史（可选）
-   * @param {object} context - 额外上下文（可选）
    * @returns {object} { level, score, confidence, reasoning, requiresPlan }
    */
-  async evaluate(userInput, sessionHistory = [], context = {}) {
+  async evaluate(userInput, sessionHistory = []) {
     const text = normalizeText(userInput);
 
     this.stats.totalEvals++;
@@ -396,7 +395,7 @@ export class IntelligentComplexityEvaluator {
 
     // 5. 决定是否需要 LLM 评估
     if (confidence < this.confidenceThreshold && this.enableLLMEval && this.llm) {
-      return this.evaluateWithLLM(text, dimensions, sessionHistory, context);
+      return this.evaluateWithLLM(text, dimensions, sessionHistory);
     }
 
     // 6. 基于规则返回结果
@@ -409,11 +408,23 @@ export class IntelligentComplexityEvaluator {
   /**
    * LLM 增强评估（用于边界情况）
    */
-  async evaluateWithLLM(text, dimensions, sessionHistory, context) {
+  async evaluateWithLLM(text, dimensions, sessionHistory) {
     this.stats.llmCallCount++;
 
     try {
-      const prompt = LIGHTWEIGHT_EVAL_PROMPT.replace("{task}", text.slice(0, 500));
+      // 构建带会话历史的 Prompt
+      let prompt = LIGHTWEIGHT_EVAL_PROMPT.replace("{task}", text.slice(0, 1000));
+      if (sessionHistory && sessionHistory.length > 0) {
+        const historySummary = sessionHistory
+          .slice(-3) // 只取最近3轮
+          .map((msg) => {
+            const role = msg._getType ? msg._getType() : (msg.role || "user");
+            const content = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
+            return `${role}: ${content.slice(0, 150)}`;
+          })
+          .join("\n");
+        prompt = `【对话历史（最近3轮）】\n${historySummary}\n\n【当前任务】\n${prompt}`;
+      }
 
       // 带超时的 LLM 调用
       const timeoutPromise = new Promise((_, reject) => {
@@ -607,7 +618,7 @@ export async function detectTaskComplexity(userInput, options = {}) {
     ...options
   });
 
-  const result = await evaluator.evaluate(userInput, options.sessionHistory || [], options.context || {});
+  const result = await evaluator.evaluate(userInput, options.sessionHistory || []);
 
   return result.score;
 }

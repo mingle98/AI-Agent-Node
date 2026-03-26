@@ -53,15 +53,86 @@ test("IntelligentComplexityEvaluator: 批量处理检测", async () => {
 
 test("IntelligentComplexityEvaluator: 上下文依赖检测", async () => {
   const evaluator = new IntelligentComplexityEvaluator();
-  
+
   const sessionHistory = [
     { content: "帮我分析这些数据" },
     { content: "生成报告" }
   ];
-  
+
   // 带指代词的输入应该检测到上下文依赖
   const result = await evaluator.evaluate("把它们整理成表格", sessionHistory);
   assert.ok(result.score >= 0, "应该有基本分数");
+});
+
+test("IntelligentComplexityEvaluator: evaluateWithLLM 接收 sessionHistory", async () => {
+  // 创建一个简单的 mock LLM
+  const mockLLM = {
+    invoke: async (messages) => {
+      // 验证 sessionHistory 被传入 prompt
+      const systemPrompt = messages[0].content;
+      assert.ok(
+        systemPrompt.includes("对话历史") || systemPrompt.includes("最近3轮"),
+        "Prompt 应该包含会话历史"
+      );
+      return { content: "HIGH" };
+    }
+  };
+
+  const evaluator = new IntelligentComplexityEvaluator({
+    llm: mockLLM,
+    enableLLMEval: true,
+    confidenceThreshold: 0.99 // 设置高阈值，强制触发 LLM
+  });
+
+  const sessionHistory = [
+    { content: "帮我分析这些报告" },
+    { content: "生成对比报告" },
+    { content: "总结关键发现" }
+  ];
+
+  const result = await evaluator.evaluate("把它们整理成表格", sessionHistory);
+  assert.ok(result.score >= 0, "应该有评估结果");
+});
+
+test("IntelligentComplexityEvaluator: evaluateWithLLM 无 sessionHistory 时正常", async () => {
+  const mockLLM = {
+    invoke: async (messages) => {
+      return { content: "LOW" };
+    }
+  };
+
+  const evaluator = new IntelligentComplexityEvaluator({
+    llm: mockLLM,
+    enableLLMEval: true,
+    confidenceThreshold: 0.99
+  });
+
+  // 不传 sessionHistory
+  const result = await evaluator.evaluate("什么是 Python?");
+  assert.ok(result.score >= 0, "应该有评估结果");
+});
+
+test("IntelligentComplexityEvaluator: evaluateWithLLM LLM 超时时回退", async () => {
+  const mockLLM = {
+    invoke: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10000)); // 模拟超时
+      return { content: "HIGH" };
+    }
+  };
+
+  const evaluator = new IntelligentComplexityEvaluator({
+    llm: mockLLM,
+    enableLLMEval: true,
+    confidenceThreshold: 0.99,
+    llmTimeout: 100 // 100ms 超时
+  });
+
+  const result = await evaluator.evaluate("处理一下这个任务");
+  assert.ok(result.score >= 0, "超时后应回退到规则评估");
+  assert.ok(
+    result.reasoning?.includes("LLM不可用") || result.reasoning?.includes("回退"),
+    "应该有回退说明"
+  );
 });
 
 test("IntelligentComplexityEvaluator: 置信度计算", async () => {
