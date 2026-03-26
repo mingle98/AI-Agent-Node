@@ -9,6 +9,8 @@ import { SKILLS, SKILL_DEFINITIONS } from "../skills/index.js";
 import { buildSystemPrompt } from "./promptBuilder.js";
 import { ContextManager } from "./contextManager.js";
 import { CircuitBreaker, retryWithBackoff, withSessionLock, withTimeout } from "./resilience.js";
+import { selectTaskMode, chatWithPlanExec } from "./planExecMode.js";
+import { getToolDivBox } from "../utils/streamRenderer.js";
 
 function normalizeTextContent(content) {
   if (typeof content === "string") {
@@ -49,21 +51,6 @@ function emitToolEvent(callback, toolExcResult) {
   }
 }
 
-function getToolDivBox(text, stType = 'content') {
-  try {
-    if (!text) return '';
-    let marginStyle = () => {
-      if (stType === 'start') return 'margin-top: 30px;';
-      if (stType === 'end') return 'margin-bottom: 30px;';
-    }
-    // 工具调用提示自定义样式,且加上data-tool="true"用于前端过滤
-    return `<div data-tool="true" style="color: #868a8f; font-size: 12px;padding-left: 20px;border-left: 3px solid #b0b1b0;margin-bottom: 10px;${marginStyle()}">${text}</div>\n`;
-  } catch (error) {
-    return '';
-  }
-
-}
-
 function extractReasoningContent(chunk) {
   const raw = chunk?.additional_kwargs?.__raw_response;
   const delta = raw?.choices?.[0]?.delta;
@@ -83,8 +70,8 @@ export class ProductionAgent {
     this.options = options;
     this.maxIterations = options.maxIterations || 5;
     this.defaultSessionId = options.defaultSessionId || "default";
-    this.sessionTtlMs = options.sessionTtlMs || 30 * 60 * 1000; // 默认30分钟无访问过期
-    this.maxSessions = options.maxSessions || 300; // 默认最多保留300个会话
+    this.sessionTtlMs = options.sessionTtlMs || 30 * 60 * 1000;
+    this.maxSessions = options.maxSessions || 300;
 
     this.resilience = {
       llmTimeoutMs: options.llmTimeoutMs || 5 * 60 * 1000,
@@ -93,6 +80,12 @@ export class ProductionAgent {
       toolRetries: options.toolRetries || 2,
       retryBaseDelayMs: options.retryBaseDelayMs || 250,
     };
+
+    // ========== Plan+Exec 架构配置 ==========
+    this.taskMode = options.taskMode || "auto";  // 'auto' | 'react' | 'plan_exec'
+    this.complexityThreshold = options.complexityThreshold || 0.5;  // 复杂度阈值
+    this.maxPlanSteps = options.maxPlanSteps || 10;  // 最大计划步骤数
+    this.maxStepIterations = options.maxStepIterations || 3;  // 每个计划步骤的最大迭代次数
 
     this.systemPrompt = this.buildSystemPrompt();
     this.callableDefinitions = this.buildCallableDefinitions();
@@ -475,7 +468,49 @@ export class ProductionAgent {
     return new HumanMessage(String(input));
   }
 
+  // ========== 会话锁包装器（供 planExecMode 调用） ==========
+  async withSessionLockWrapper(fn, sessionId = this.defaultSessionId) {
+    const session = this.getOrCreateSession(sessionId);
+    return withSessionLock(session, fn);
+  }
+
+  // ========== 任务入口 ==========
   async chat(
+    userInput,
+    chunkCallback = null,
+    fullResponseCallback = null,
+    sessionId = this.defaultSessionId,
+    requestOptions = {}
+  ) {
+    // ========== 模式选择 ==========
+    const taskMode = selectTaskMode(this, userInput, requestOptions);
+
+    // 如果是 Plan+Exec 模式，调用对应的处理逻辑
+    if (taskMode === "plan_exec") {
+      return chatWithPlanExec(
+        this,
+        userInput,
+        chunkCallback,
+        fullResponseCallback,
+        sessionId,
+        requestOptions
+      );
+    }
+
+    // ========== ReAct 模式（原逻辑） ==========
+    return this.chatWithReAct(
+      userInput,
+      chunkCallback,
+      fullResponseCallback,
+      sessionId,
+      requestOptions
+    );
+  }
+
+  /**
+   * ReAct 模式执行
+   */
+  async chatWithReAct(
     userInput,
     chunkCallback = null,
     fullResponseCallback = null,
@@ -494,7 +529,6 @@ export class ProductionAgent {
       try {
         this.touchSession(session);
         const toolExcResults = [];
-        // 记录日志时只显示文本部分
         const logText = typeof userInput === "string" ? userInput : (userInput?.text || "[多模态输入]");
         console.log(`👤 [${sessionId}] 用户: ${logText}`);
         const addMessage = this.buildHumanMessage(userInput);
@@ -607,7 +641,6 @@ export class ProductionAgent {
             content: "",
             message: errorMessage,
           });
-          // 关键兜底：错误事件后补发终态事件，避免前端只监听 done 时一直等待
           emitStreamEvent(chunkCallback, {
             type: "done",
             content: fallbackText,

@@ -11,6 +11,7 @@
 - 🌊 **流式响应**: 支持实时流式输出，提升用户体验
 - 🔄 **会话管理**: 多会话支持，自动上下文管理
 - 🛡️ **容错机制**: 熔断器、重试机制、降级策略
+- 🧠 **双执行模式**: 支持 ReAct 快速响应和 Plan+Exec 计划执行两种模式，智能切换
 - 📁 **用户文件隔离**: 基于 sessionId 的独立工作空间，自动目录初始化，支持文件数量限制（100个/用户）
 - 📧 **邮件发送**: 支持 SMTP 发送，内置多种精美模板（通知/告警/报告/感谢信/验证码/邀请函/营销）
 - 🎨 **AISuspendedBallChat 兼容**: 完全符合 AISuspendedBallChat 组件接口规范
@@ -123,6 +124,10 @@ Content-Type: application/json
 - `query`: 用户消息（必填）
 - `session_id`: 会话标识（可选，默认 "default"）
 - `isStream`: 是否使用流式响应（可选，默认 false）
+- `taskMode`: 任务执行模式（可选，默认 "auto"）
+  - `auto`: 根据任务复杂度自动选择
+  - `react`: 强制使用 ReAct 快速响应模式
+  - `plan_exec`: 强制使用 Plan+Exec 计划执行模式
 
 **流式响应示例：**
 ```
@@ -406,6 +411,83 @@ export const CONFIG = {
 };
 ```
 
+### 任务执行模式
+
+系统支持两种任务执行模式，智能切换以平衡响应速度与执行质量：
+
+```mermaid
+flowchart TD
+    Start[用户输入] --> ModeSelect{模式选择}
+    ModeSelect -->|taskMode=react| React[ReAct 模式]
+    ModeSelect -->|taskMode=plan_exec| PlanExec[Plan+Exec 模式]
+    ModeSelect -->|taskMode=auto| Auto{复杂度评估}
+    Auto -->|复杂度 < 阈值| React
+    Auto -->|复杂度 >= 阈值| PlanExec
+
+    React --> ReactLoop[LLM → 工具调用 → 结果]
+    ReactLoop -->|无工具调用| ReactResult[返回结果]
+
+    PlanExec --> GeneratePlan[生成执行计划]
+    GeneratePlan -->|成功| ExecutePlan[按步骤执行计划]
+    ExecutePlan -->|全部完成| PlanResult[汇总结果]
+    GeneratePlan -->|失败| React
+```
+
+#### ReAct 模式（默认）
+
+适合简单问答和单步工具调用场景。
+
+**特点：**
+- 快速响应，无需计划生成开销
+- 每次迭代 LLM 决定是否调用工具
+- 最大迭代次数由 `maxIterations` 控制（默认 5 次）
+
+**适用场景：**
+- 简单问答
+- 单个工具调用
+- 快速查询
+
+#### Plan+Exec 模式
+
+适合复杂多步骤任务，系统先分析任务并生成执行计划，再按步骤执行。
+
+**特点：**
+- 任务分析 → 计划生成 → 分步执行
+- 支持步骤依赖关系
+- 失败时支持降级回退到 ReAct 模式
+
+**适用场景：**
+- 多步骤复杂任务（如：查资料 → 整理 → 生成报告）
+- 需要协调多个工具的任务
+- 批量处理场景
+
+**复杂度评估指标：**
+
+| 维度 | 高复杂度特征 |
+|------|-------------|
+| 关键词 | 分析、整理、对比、批量、多个、全部、遍历 |
+| 步骤序列 | "先...再...最后"、"首先...然后...最后" |
+| 动作词 | 逐一、依次、逐步、按顺序 |
+| 数量词 | 100、一百、多份、多步骤 |
+
+**执行流程：**
+
+1. **计划生成**：分析用户需求，生成可执行步骤
+2. **步骤执行**：按顺序执行每个计划步骤
+3. **上下文传递**：前一步骤结果自动传入后续步骤
+4. **结果汇总**：所有步骤完成后生成总结
+
+**流式输出事件：**
+
+| 事件类型 | 说明 |
+|---------|------|
+| `status` + `data-plan-phase` | 计划阶段（生成计划、开始执行、完成） |
+| `status` + `data-plan-step` | 步骤边界（步骤开始、完成） |
+| `status` + `data-tool` | 工具执行（工具调用开始、完成） |
+| `chunk` | 文本内容块 |
+| `reasoning` | 思考过程（需开启 `enableThinking`） |
+| `done` | 最终结果 |
+
 ## 🎨 自定义扩展
 
 ### 添加新工具
@@ -519,9 +601,15 @@ const agent = new ProductionAgent(llm, vectorStore, embeddings, {
   debug: true,                       // 调试模式
   roleName: "自定义助手",             // 角色名称
   roleDescription: "功能描述",        // 角色描述
-  maxIterations: 5,                  // 最大迭代次数
+  maxIterations: 5,                  // ReAct 模式最大迭代次数
   sessionTtlMs: 30 * 60 * 1000,     // 会话过期时间
   maxSessions: 300,                  // 最大会话数
+
+  // ========== 任务执行模式配置 ==========
+  taskMode: "auto",                 // 模式选择: auto（自动）, react（快速响应）, plan_exec（计划执行）
+  complexityThreshold: 0.5,           // 复杂度阈值 (0-1)，auto 模式下高于此值切换 Plan+Exec
+  maxPlanSteps: 10,                 // Plan+Exec 模式最大计划步骤数
+  maxStepIterations: 3,             // Plan+Exec 单步骤最大迭代次数
 });
 ```
 
