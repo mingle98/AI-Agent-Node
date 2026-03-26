@@ -440,7 +440,7 @@ flowchart TD
 **特点：**
 - 快速响应，无需计划生成开销
 - 每次迭代 LLM 决定是否调用工具
-- 最大迭代次数由 `maxIterations` 控制（默认 5 次）
+- 最大迭代次数由 `maxIterations` 控制（默认 10 次）
 
 **适用场景：**
 - 简单问答
@@ -601,7 +601,7 @@ const agent = new ProductionAgent(llm, vectorStore, embeddings, {
   debug: true,                       // 调试模式
   roleName: "自定义助手",             // 角色名称
   roleDescription: "功能描述",        // 角色描述
-  maxIterations: 5,                  // ReAct 模式最大迭代次数
+  maxIterations: 10,                  // ReAct 模式最大迭代次数
   sessionTtlMs: 30 * 60 * 1000,     // 会话过期时间
   maxSessions: 300,                  // 最大会话数
 
