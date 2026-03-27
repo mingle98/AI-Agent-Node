@@ -110,9 +110,10 @@ export class LongTermMemory {
 
     try {
       const filePath = this.getMemoryFilePath(sessionId);
-      await fs.access(filePath);
-      this._memoryFileExistsCache.set(sessionId, true);
-      return true;
+      const stat = await fs.stat(filePath);
+      const exists = stat.isFile();
+      this._memoryFileExistsCache.set(sessionId, exists);
+      return exists;
     } catch {
       this._memoryFileExistsCache.set(sessionId, false);
       return false;
@@ -130,6 +131,13 @@ export class LongTermMemory {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * 同步清除指定 sessionId 的缓存（用于测试隔离）
+   */
+  _clearSessionCache(sessionId) {
+    this._memoryFileExistsCache.delete(sessionId);
   }
 
   /**

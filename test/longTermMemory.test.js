@@ -4,6 +4,7 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import path from 'path';
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import { fileURLToPath } from 'url';
 import { LongTermMemory, LTM_INJECT_START, LTM_INJECT_END } from '../agent/longTermMemory.js';
 
@@ -79,6 +80,11 @@ describe('LongTermMemory', () => {
   
   beforeEach(() => {
     agent = new MockAgent();
+    // 获取测试用的记忆目录（必须在创建 memory 实例之前清理）
+    testMemoryDir = path.join(__dirname, '..', 'public', 'workspace', testSessionId, 'memory');
+    try {
+      fsSync.rmSync(testMemoryDir, { recursive: true, force: true });
+    } catch {}
     // 注入独立的 LLM 调用函数，绕开 withTimeout 避免 Node.js ESM IPC 序列化问题
     memory = new LongTermMemory(agent, {
       maxMemoryLength: 500,
@@ -107,19 +113,16 @@ describe('LongTermMemory', () => {
         return '暂无记忆记录';
       }
     });
-
-    // 获取测试用的记忆目录（测试函数内自行清理）
-    testMemoryDir = path.join(__dirname, '..', 'public', 'workspace', testSessionId, 'memory');
-    // 同步清理可能存在的旧测试数据
-    try {
-      fs.rmSync(testMemoryDir, { recursive: true, force: true });
-    } catch {}
+    // 再次清理缓存（防止 afterEach 的 fs.rmSync 在 sandbox 中静默失败）
+    memory._clearSessionCache(testSessionId);
   });
 
   afterEach(() => {
-    // 同步清理测试数据
+    // 同步清理缓存和磁盘文件（用 fs.unlink 代替 fs.rmSync 避免 sandbox 静默失败）
+    memory._clearSessionCache(testSessionId);
+    const filePath = path.join(testMemoryDir, 'memory.md');
     try {
-      fs.rmSync(testMemoryDir, { recursive: true, force: true });
+      fsSync.unlinkSync(filePath);
     } catch {}
   });
 
