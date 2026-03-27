@@ -314,6 +314,9 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
     });
   }
 
+  // 执行完每个步骤后，管理一次上下文以防止消息列表无限增长
+  await agent.manageContext(session);
+
   return {
     stepId,
     description,
@@ -420,6 +423,15 @@ export async function chatWithPlanExec(agent, userInput, chunkCallback, fullResp
   return agent.withSessionLockWrapper(async () => {
     try {
       agent.touchSession(session);
+
+      // 构建并记录用户消息（关键：保持与 chatWithReAct 一致的上下文处理）
+      const addMessage = agent.buildHumanMessage(userInput);
+      if (agent.options.debug) {
+        console.log(`👤 [${sessionId}] 用户消息:`, addMessage.toString());
+      }
+      session.messages.push(addMessage);
+      await agent.manageContext(session);
+
       const logText = typeof userInput === "string" ? userInput : (userInput?.text || "[多模态输入]");
       console.log(`👤 [${sessionId}] 用户: ${logText}`);
 

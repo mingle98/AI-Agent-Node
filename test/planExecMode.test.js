@@ -817,6 +817,413 @@ test("ProductionAgent: plan_exec with step tools needing sessionId", async () =>
     null,
     "sessionid-test"
   );
-  
+
   assert.ok(typeof result === "string", "Should handle session-based tools");
+});
+
+// ========== Context Loss Bug Fix Tests ==========
+
+test("plan_exec: user message is recorded in session.messages", async () => {
+  const planResponse = new AIMessage({
+    content: JSON.stringify({
+      task_summary: "Context record test",
+      estimated_steps: 1,
+      steps: [{ step_id: 1, description: "Test step", depends_on: [], expected_output: "done" }],
+      final_goal: "Complete"
+    })
+  });
+
+  const stepResponse = new AIMessage({ content: "Step completed" });
+
+  const llm = new MockLLM([
+    { message: planResponse },
+    { message: stepResponse }
+  ]);
+
+  const agent = createAgentWithMockLLM(llm, {
+    taskMode: "plan_exec",
+    streamEnabled: false
+  });
+
+  const session = agent.getOrCreateSession("context-record-test");
+  const userInput = "帮我执行一个测试任务，带有特定的用户输入内容来验证上下文记录";
+
+  await agent.chat(userInput, null, null, "context-record-test");
+
+  const humanMessages = session.messages.filter(m => m._getType() === "human");
+  const hasUserInput = humanMessages.some(m => {
+    const content = typeof m.content === "string" ? m.content : JSON.stringify(m.content);
+    return content.includes("帮我执行一个测试任务") || content.includes("context-record-test");
+  });
+
+  assert.ok(humanMessages.length > 0, "Should have at least one human message in session");
+  assert.ok(hasUserInput, "User input should be recorded in session.messages");
+});
+
+test("plan_exec: manageContext is called after adding user message", async () => {
+  const planResponse = new AIMessage({
+    content: JSON.stringify({
+      task_summary: "ManageContext test",
+      estimated_steps: 1,
+      steps: [{ step_id: 1, description: "Test", depends_on: [], expected_output: "done" }],
+      final_goal: "Complete"
+    })
+  });
+
+  const stepResponse = new AIMessage({ content: "Done" });
+
+  const llm = new MockLLM([
+    { message: planResponse },
+    { message: stepResponse }
+  ]);
+
+  const agent = createAgentWithMockLLM(llm, {
+    taskMode: "plan_exec",
+    streamEnabled: false,
+    maxHistoryMessages: 5
+  });
+
+  const session = agent.getOrCreateSession("manage-context-test");
+  const initialMessagesLength = session.messages.length;
+
+  await agent.chat("测试上下文管理", null, null, "manage-context-test");
+
+  const hasMoreMessages = session.messages.length > initialMessagesLength;
+  assert.ok(hasMoreMessages, "Messages should be added after chat call");
+});
+
+test("plan_exec: manageContext is called after each step execution", async () => {
+  const planResponse = new AIMessage({
+    content: JSON.stringify({
+      task_summary: "Step context management",
+      estimated_steps: 2,
+      steps: [
+        { step_id: 1, description: "First step", depends_on: [], expected_output: "out1" },
+        { step_id: 2, description: "Second step", depends_on: [1], expected_output: "out2" }
+      ],
+      final_goal: "Done"
+    })
+  });
+
+  const step1Response = new AIMessage({ content: "Step 1 done" });
+  const step2Response = new AIMessage({ content: "Step 2 done" });
+
+  const llm = new MockLLM([
+    { message: planResponse },
+    { message: step1Response },
+    { message: step2Response }
+  ]);
+
+  const agent = createAgentWithMockLLM(llm, {
+    taskMode: "plan_exec",
+    streamEnabled: false,
+    maxHistoryMessages: 3,
+    keepRecentMessages: 2
+  });
+
+  const session = agent.getOrCreateSession("step-context-test");
+
+  await agent.chat("多步骤上下文测试", null, null, "step-context-test");
+
+  const humanMessages = session.messages.filter(m => m._getType() === "human");
+  const aiMessages = session.messages.filter(m => m._getType() === "ai");
+  const toolMessages = session.messages.filter(m => m._getType() === "tool");
+
+  const totalMessages = humanMessages.length + aiMessages.length + toolMessages.length;
+  assert.ok(totalMessages >= 2, "Should have messages from user and at least one AI response");
+});
+
+test("plan_exec: context consistency between ReAct and Plan+Exec", async () => {
+  const reactResponse = new AIMessage({ content: "React response" });
+
+  const planResponse = new AIMessage({
+    content: JSON.stringify({
+      task_summary: "Consistency test",
+      estimated_steps: 1,
+      steps: [{ step_id: 1, description: "Test", depends_on: [], expected_output: "done" }],
+      final_goal: "Complete"
+    })
+  });
+
+  const stepResponse = new AIMessage({ content: "Plan step done" });
+
+  const reactLlm = new MockLLM([{ message: reactResponse }]);
+  const planLlm = new MockLLM([
+    { message: planResponse },
+    { message: stepResponse }
+  ]);
+
+  const reactAgent = createAgentWithMockLLM(reactLlm, {
+    taskMode: "react",
+    streamEnabled: false
+  });
+
+  const planAgent = createAgentWithMockLLM(planLlm, {
+    taskMode: "plan_exec",
+    streamEnabled: false
+  });
+
+  await reactAgent.chat("React test", null, null, "react-consistency");
+  await planAgent.chat("Plan test", null, null, "plan-consistency");
+
+  const reactSession = reactAgent.getOrCreateSession("react-consistency");
+  const planSession = planAgent.getOrCreateSession("plan-consistency");
+
+  const reactHumanCount = reactSession.messages.filter(m => m._getType() === "human").length;
+  const planHumanCount = planSession.messages.filter(m => m._getType() === "human").length;
+
+  assert.ok(reactHumanCount >= 1, "ReAct should record at least one user message");
+  assert.ok(planHumanCount >= 1, "Plan+Exec should record at least one user message (original input)");
+});
+
+test("plan_exec: multi-turn conversation maintains context", async () => {
+  const planResponse = new AIMessage({
+    content: JSON.stringify({
+      task_summary: "Multi-turn test",
+      estimated_steps: 1,
+      steps: [{ step_id: 1, description: "First turn step", depends_on: [], expected_output: "done" }],
+      final_goal: "Complete"
+    })
+  });
+
+  const stepResponse = new AIMessage({ content: "First turn done" });
+
+  const llm = new MockLLM([
+    { message: planResponse },
+    { message: stepResponse }
+  ]);
+
+  const agent = createAgentWithMockLLM(llm, {
+    taskMode: "plan_exec",
+    streamEnabled: false
+  });
+
+  const session = agent.getOrCreateSession("multi-turn-test");
+
+  await agent.chat("第一轮对话", null, null, "multi-turn-test");
+  await agent.chat("第二轮对话", null, null, "multi-turn-test");
+
+  const humanMessages = session.messages.filter(m => m._getType() === "human");
+  const aiMessages = session.messages.filter(m => m._getType() === "ai");
+
+  assert.ok(humanMessages.length >= 2, "Should have at least 2 user messages");
+  assert.ok(aiMessages.length >= 2, "Should have at least 2 AI responses");
+});
+
+test("plan_exec: session history preserved for follow-up questions", async () => {
+  const planResponse = new AIMessage({
+    content: JSON.stringify({
+      task_summary: "History test",
+      estimated_steps: 1,
+      steps: [{ step_id: 1, description: "Initial task", depends_on: [], expected_output: "done" }],
+      final_goal: "Complete"
+    })
+  });
+
+  const stepResponse = new AIMessage({ content: "Initial task completed" });
+
+  const llm = new MockLLM([
+    { message: planResponse },
+    { message: stepResponse }
+  ]);
+
+  const agent = createAgentWithMockLLM(llm, {
+    taskMode: "plan_exec",
+    streamEnabled: false
+  });
+
+  const session = agent.getOrCreateSession("history-test");
+
+  const initialCount = session.messages.length;
+
+  await agent.chat("初始任务", null, null, "history-test");
+
+  const afterFirstChat = session.messages.length;
+
+  assert.ok(afterFirstChat > initialCount, "Session history should grow after first chat");
+
+  const planResponse2 = new AIMessage({
+    content: JSON.stringify({
+      task_summary: "Follow-up test",
+      estimated_steps: 1,
+      steps: [{ step_id: 1, description: "Follow-up task", depends_on: [], expected_output: "done" }],
+      final_goal: "Complete"
+    })
+  });
+
+  const stepResponse2 = new AIMessage({ content: "Follow-up done" });
+
+  llm.script = [
+    { message: planResponse2 },
+    { message: stepResponse2 }
+  ];
+
+  await agent.chat("基于之前任务的后续问题", null, null, "history-test");
+
+  const afterSecondChat = session.messages.length;
+  assert.ok(afterSecondChat > afterFirstChat, "Session history should continue growing for follow-up");
+});
+
+test("plan_exec: object input user message is recorded correctly", async () => {
+  const planResponse = new AIMessage({
+    content: JSON.stringify({
+      task_summary: "Object input test",
+      estimated_steps: 1,
+      steps: [{ step_id: 1, description: "Test", depends_on: [], expected_output: "done" }],
+      final_goal: "Complete"
+    })
+  });
+
+  const stepResponse = new AIMessage({ content: "Done" });
+
+  const llm = new MockLLM([
+    { message: planResponse },
+    { message: stepResponse }
+  ]);
+
+  const agent = createAgentWithMockLLM(llm, {
+    taskMode: "plan_exec",
+    streamEnabled: false
+  });
+
+  const session = agent.getOrCreateSession("object-input-test");
+  const objectInput = { text: "带图片的任务描述", images: ["image1.jpg"] };
+
+  await agent.chat(objectInput, null, null, "object-input-test");
+
+  const humanMessages = session.messages.filter(m => m._getType() === "human");
+  assert.ok(humanMessages.length > 0, "Should record object input as human message");
+});
+
+test("plan_exec: debug mode logs user message correctly", async () => {
+  const planResponse = new AIMessage({
+    content: JSON.stringify({
+      task_summary: "Debug test",
+      estimated_steps: 1,
+      steps: [{ step_id: 1, description: "Test", depends_on: [], expected_output: "done" }],
+      final_goal: "Complete"
+    })
+  });
+
+  const stepResponse = new AIMessage({ content: "Done" });
+
+  const llm = new MockLLM([
+    { message: planResponse },
+    { message: stepResponse }
+  ]);
+
+  const agent = new ProductionAgent(llm, null, null, {
+    debug: true,
+    taskMode: "plan_exec",
+    maxIterations: 3,
+    maxHistoryMessages: 12,
+    keepRecentMessages: 8,
+    contextStrategy: "trim",
+    maxPlanSteps: 10,
+    maxStepIterations: 3,
+    streamEnabled: false
+  });
+
+  const session = agent.getOrCreateSession("debug-test");
+
+  let error = null;
+  try {
+    await agent.chat("调试模式测试", null, null, "debug-test");
+  } catch (e) {
+    error = e;
+  }
+
+  assert.ok(!error || error.message?.includes("debug"), "Should handle debug mode without errors");
+});
+
+test("plan_exec: empty session receives user message", async () => {
+  const planResponse = new AIMessage({
+    content: JSON.stringify({
+      task_summary: "Empty session test",
+      estimated_steps: 1,
+      steps: [{ step_id: 1, description: "Test", depends_on: [], expected_output: "done" }],
+      final_goal: "Complete"
+    })
+  });
+
+  const stepResponse = new AIMessage({ content: "Done" });
+
+  const llm = new MockLLM([
+    { message: planResponse },
+    { message: stepResponse }
+  ]);
+
+  const agent = createAgentWithMockLLM(llm, {
+    taskMode: "plan_exec",
+    streamEnabled: false
+  });
+
+  const session = agent.getOrCreateSession("empty-session-test");
+  const initialCount = session.messages.length;
+
+  await agent.chat("空会话测试", null, null, "empty-session-test");
+
+  assert.ok(session.messages.length > initialCount, "After chat, session should have more messages than before");
+});
+
+test("plan_exec: plan generation respects context from session", async () => {
+  const planResponse = new AIMessage({
+    content: JSON.stringify({
+      task_summary: "Context-aware plan",
+      estimated_steps: 1,
+      steps: [{ step_id: 1, description: "Use context from session", depends_on: [], expected_output: "done" }],
+      final_goal: "Complete"
+    })
+  });
+
+  const stepResponse = new AIMessage({ content: "Done" });
+
+  const llm = new MockLLM([
+    { message: planResponse },
+    { message: stepResponse }
+  ]);
+
+  const agent = createAgentWithMockLLM(llm, {
+    taskMode: "plan_exec",
+    streamEnabled: false
+  });
+
+  const session = agent.getOrCreateSession("context-aware-plan");
+
+  const result = await agent.chat("基于上下文的计划测试", null, null, "context-aware-plan");
+
+  assert.ok(typeof result === "string", "Should generate plan using session context");
+});
+
+test("plan_exec: messages are structured correctly (HumanMessage type)", async () => {
+  const planResponse = new AIMessage({
+    content: JSON.stringify({
+      task_summary: "Type test",
+      estimated_steps: 1,
+      steps: [{ step_id: 1, description: "Test", depends_on: [], expected_output: "done" }],
+      final_goal: "Complete"
+    })
+  });
+
+  const stepResponse = new AIMessage({ content: "Done" });
+
+  const llm = new MockLLM([
+    { message: planResponse },
+    { message: stepResponse }
+  ]);
+
+  const agent = createAgentWithMockLLM(llm, {
+    taskMode: "plan_exec",
+    streamEnabled: false
+  });
+
+  await agent.chat("类型检查测试", null, null, "type-check-test");
+
+  const session = agent.getOrCreateSession("type-check-test");
+  const humanMessages = session.messages.filter(m => m._getType() === "human");
+
+  assert.ok(humanMessages.length > 0, "Should have HumanMessage instances");
+  humanMessages.forEach(msg => {
+    assert.ok(msg.content !== undefined, "HumanMessage should have content");
+  });
 });

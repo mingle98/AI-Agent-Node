@@ -57,7 +57,7 @@
     "string-width": "4.2.3"
   },
   "engines": {
-    "node": ">=20.6.0"
+    "node": ">=22"
   },
   "resolutions": {
     "string-width": "4.2.3",
