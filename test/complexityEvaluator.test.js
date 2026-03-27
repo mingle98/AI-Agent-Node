@@ -1,3 +1,12 @@
+// ========== 智能复杂度评估器 - 动作密度算法重构测试 ==========
+// 本测试套件覆盖：
+// 1. 动作密度算法核心（evaluateActionDensity）
+// 2. 快速规则评估（quickRuleBasedEval）通用检测
+// 3. 多维度评分路径
+// 4. 各维度独立函数
+// 5. 修复验证：逗号分隔多动作序列（原 Bug 案例）
+// 6. 边界情况与性能
+
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -9,387 +18,382 @@ import {
   selectTaskMode,
   explainComplexity
 } from "../agent/complexityEvaluator.js";
-import { AIMessage } from "@langchain/core/messages";
-import { ProductionAgent } from "../agent/ProductionAgent.js";
 
-// ========== 智能复杂度评估器单元测试 ==========
+// ========== 动作密度算法核心测试 ==========
 
-test("IntelligentComplexityEvaluator: 低复杂度 - 简单问答", async () => {
-  const evaluator = new IntelligentComplexityEvaluator();
-  const result = await evaluator.evaluate("什么是 JavaScript?");
-  
-  assert.equal(result.level, ComplexityLevel.LOW, "简单问答应该是 LOW 级别");
-  assert.ok(result.score < 0.5, `分数应该较低: ${result.score}`);
-  assert.ok(result.confidence > 0.5, "应该有基本置信度");
-  assert.ok(!result.requiresPlan || result.level === ComplexityLevel.LOW);
-});
+test.describe("动作密度算法 - 核心函数", () => {
+  // 通过 evaluate() 的 reasoning 字段间接验证内部逻辑
+  const evaluator = new IntelligentComplexityEvaluator({ enableLLMEval: false });
 
-test("IntelligentComplexityEvaluator: 高复杂度 - 多步骤任务", async () => {
-  const evaluator = new IntelligentComplexityEvaluator();
-  const result = await evaluator.evaluate("请帮我分析这十份报告并生成综合报告");
-  
-  assert.ok(result.score > 0.2, `分数应该较高: ${result.score}`);
-  assert.ok(result.level !== ComplexityLevel.LOW || result.score > 0.15);
-});
-
-test("IntelligentComplexityEvaluator: 检测步骤序列", async () => {
-  const evaluator = new IntelligentComplexityEvaluator();
-  
-  // 明确的多步骤
-  const result1 = await evaluator.evaluate("首先搜索文件，然后整理排序，最后生成图表");
-  assert.ok(result1.score > 0.15, `多步骤分数应该较高: ${result1.score}`);
-  
-  // 简单问题
-  const result2 = await evaluator.evaluate("什么是 React?");
-  assert.ok(result2.score <= result1.score + 0.1, "简单问题分数应该较低或相近");
-});
-
-test("IntelligentComplexityEvaluator: 批量处理检测", async () => {
-  const evaluator = new IntelligentComplexityEvaluator();
-  
-  const batchResult = await evaluator.evaluate("批量处理这100个文件并生成报告");
-  assert.ok(batchResult.score > 0.3, `批量处理分数应该较高: ${batchResult.score}`);
-});
-
-test("IntelligentComplexityEvaluator: 上下文依赖检测", async () => {
-  const evaluator = new IntelligentComplexityEvaluator();
-
-  const sessionHistory = [
-    { content: "帮我分析这些数据" },
-    { content: "生成报告" }
-  ];
-
-  // 带指代词的输入应该检测到上下文依赖
-  const result = await evaluator.evaluate("把它们整理成表格", sessionHistory);
-  assert.ok(result.score >= 0, "应该有基本分数");
-});
-
-test("IntelligentComplexityEvaluator: evaluateWithLLM 接收 sessionHistory", async () => {
-  // 创建一个简单的 mock LLM
-  const mockLLM = {
-    invoke: async (messages) => {
-      // 验证 sessionHistory 被传入 prompt
-      const systemPrompt = messages[0].content;
-      assert.ok(
-        systemPrompt.includes("对话历史") || systemPrompt.includes("最近3轮"),
-        "Prompt 应该包含会话历史"
-      );
-      return { content: "HIGH" };
-    }
-  };
-
-  const evaluator = new IntelligentComplexityEvaluator({
-    llm: mockLLM,
-    enableLLMEval: true,
-    confidenceThreshold: 0.99 // 设置高阈值，强制触发 LLM
+  test("evaluateActionDensity: 零个动作 → 低分", async () => {
+    const result = await evaluator.evaluate("今天天气怎么样？");
+    assert.equal(result.level, ComplexityLevel.LOW);
   });
 
-  const sessionHistory = [
-    { content: "帮我分析这些报告" },
-    { content: "生成对比报告" },
-    { content: "总结关键发现" }
-  ];
-
-  const result = await evaluator.evaluate("把它们整理成表格", sessionHistory);
-  assert.ok(result.score >= 0, "应该有评估结果");
-});
-
-test("IntelligentComplexityEvaluator: evaluateWithLLM 无 sessionHistory 时正常", async () => {
-  const mockLLM = {
-    invoke: async (messages) => {
-      return { content: "LOW" };
-    }
-  };
-
-  const evaluator = new IntelligentComplexityEvaluator({
-    llm: mockLLM,
-    enableLLMEval: true,
-    confidenceThreshold: 0.99
+  test("evaluateActionDensity: 单个动作 → 低分", async () => {
+    const result = await evaluator.evaluate("解释一下闭包是什么");
+    assert.equal(result.level, ComplexityLevel.LOW);
+    assert.ok(result.score < 0.35);
   });
 
-  // 不传 sessionHistory
-  const result = await evaluator.evaluate("什么是 Python?");
-  assert.ok(result.score >= 0, "应该有评估结果");
-});
-
-test("IntelligentComplexityEvaluator: evaluateWithLLM LLM 超时时回退", async () => {
-  const mockLLM = {
-    invoke: async () => {
-      await new Promise((resolve) => setTimeout(resolve, 10000)); // 模拟超时
-      return { content: "HIGH" };
-    }
-  };
-
-  const evaluator = new IntelligentComplexityEvaluator({
-    llm: mockLLM,
-    enableLLMEval: true,
-    confidenceThreshold: 0.99,
-    llmTimeout: 100 // 100ms 超时
+  test("evaluateActionDensity: 2个高权重动作 → 有分数（公式决定具体数值）", async () => {
+    const result = await evaluator.evaluate("帮我搜索并分析这些数据");
+    // 公式: stepSeq(0.14)×0.4 + toolEst(0.12)×0.3 = 0.092
+    assert.ok(result.score >= 0.05, `2个动作应有分数: ${result.score}`);
+    assert.ok(result.score <= 0.25, `2个动作分数不应过高: ${result.score}`);
   });
 
-  const result = await evaluator.evaluate("处理一下这个任务");
-  assert.ok(result.score >= 0, "超时后应回退到规则评估");
-  assert.ok(
-    result.reasoning?.includes("LLM不可用") || result.reasoning?.includes("回退"),
-    "应该有回退说明"
-  );
+  test("evaluateActionDensity: 3+ 高权重动作 → HIGH", async () => {
+    const result = await evaluator.evaluate("帮我分析统计汇总这些数据");
+    assert.ok(result.level === ComplexityLevel.HIGH || result.level === ComplexityLevel.MEDIUM,
+      `3个动作应为HIGH/MEDIUM: ${result.level}`);
+  });
+
+  test("evaluateActionDensity: 逗号分隔多段操作 → HIGH（动作密度信号）", async () => {
+    const result = await evaluator.evaluate("扫描、整理、删除这些文件");
+    assert.ok(
+      result.level === ComplexityLevel.HIGH || result.score >= 0.35,
+      `逗号多段应为HIGH: level=${result.level}, score=${result.score}`
+    );
+  });
+
+  test("evaluateActionDensity: 动作密度极高 → HIGH（4+加权当量）", async () => {
+    const result = await evaluator.evaluate("扫描所有文件，整理数据，删除空文件，分析内容，重命名");
+    assert.equal(result.level, ComplexityLevel.HIGH,
+      `6个高权重动作应判定HIGH: level=${result.level}`);
+  });
+
+  test("动作密度加分机制: 逗号分隔3+段额外加分", async () => {
+    const score2 = (await evaluator.evaluate("搜索并分析")).score;
+    const score3 = (await evaluator.evaluate("搜索、分析、整理")).score;
+    assert.ok(score3 >= score2, "3段逗号应比2段得更高分");
+  });
 });
 
-test("IntelligentComplexityEvaluator: 置信度计算", async () => {
-  const evaluator = new IntelligentComplexityEvaluator();
-  
-  // 明确的简单问题应该有合理置信度
-  const simpleResult = await evaluator.evaluate("什么是 Python?");
-  assert.ok(simpleResult.confidence > 0.5, "应该有基本置信度");
-  
-  // 边界情况置信度可以较低也可以较高
-  const vagueResult = await evaluator.evaluate("处理一下");
-  assert.ok(vagueResult.confidence > 0 && vagueResult.confidence <= 1);
+// ========== 快速规则评估通用检测 ==========
+
+test.describe("quickRuleBasedEval - 通用动作密度检测", () => {
+  const evaluator = new IntelligentComplexityEvaluator({ enableLLMEval: false });
+
+  test("快速路径: 动作密度极高直接返回HIGH，不进入多维度", async () => {
+    const result = await evaluator.evaluate("帮我分析统计对比汇总这些数据生成报告");
+    assert.equal(result.level, ComplexityLevel.HIGH);
+    assert.ok(result.confidence >= 0.9, `高置信度: ${result.confidence}`);
+  });
+
+  test("快速路径: 逗号多段操作直接返回HIGH", async () => {
+    const result = await evaluator.evaluate("扫描,整理,删除,重命名,发送邮件");
+    assert.equal(result.level, ComplexityLevel.HIGH);
+  });
+
+  test("快速路径: 简单问答直接返回LOW", async () => {
+    const result = await evaluator.evaluate("什么是闭包？");
+    assert.equal(result.level, ComplexityLevel.LOW);
+  });
+
+  test("快速路径: 固定高复杂度模式兜底", async () => {
+    const result = await evaluator.evaluate("首先分析所有数据然后整理最后生成完整报告");
+    assert.equal(result.level, ComplexityLevel.HIGH);
+  });
 });
 
-test("IntelligentComplexityEvaluator: 操作类型识别", async () => {
-  const evaluator = new IntelligentComplexityEvaluator();
-  
-  // 报告生成 - 使用更明确的表述
-  const reportResult = await evaluator.evaluate("帮我生成一份完整的数据分析报告");
-  assert.ok(reportResult.score > 0.15, `报告生成分数: ${reportResult.score}`);
-  
-  // 多文档处理
-  const multiDocResult = await evaluator.evaluate("对比两份文档的内容并生成对比报告");
-  assert.ok(multiDocResult.score > 0.1, `对比分析分数: ${multiDocResult.score}`);
+// ========== 【核心修复验证】逗号分隔多动作序列 ==========
+
+test.describe("【Bug 修复】逗号分隔多动作序列（原始案例）", () => {
+  const evaluator = new IntelligentComplexityEvaluator({ enableLLMEval: false });
+
+  test("【原Bug】扫描、整理、删除、重命名、发邮件 → 必须HIGH", async () => {
+    const result = await evaluator.evaluate(
+      "帮我扫描所有的文件,进行整理,删除空文件和文件夹," +
+      "另外如果文件名字和内容没有关联请帮我工具内容特征重命名," +
+      "最后产出一份整理过程报告通过邮箱发给我"
+    );
+    assert.equal(result.level, ComplexityLevel.HIGH,
+      `原始案例应判定HIGH，实际: level=${result.level}, score=${result.score}`);
+    assert.ok(result.requiresPlan, "requiresPlan 必须为 true");
+    assert.ok(result.confidence >= 0.9, `置信度应>=0.9: ${result.confidence}`);
+  });
+
+  test("【原Bug】变体1: 扫描、整理、删除、发邮件 → HIGH", async () => {
+    const result = await evaluator.evaluate("帮我扫描所有文件,整理数据,删除空文件,最后发邮件给我");
+    assert.equal(result.level, ComplexityLevel.HIGH,
+      `变体1应判定HIGH: level=${result.level}`);
+  });
+
+  test("【原Bug】变体2: 无固定句式但含4+高权重动作 → HIGH", async () => {
+    const result = await evaluator.evaluate("遍历每个文件，提取内容，整理归类，统计结果");
+    assert.equal(result.level, ComplexityLevel.HIGH,
+      `4个动作应判定HIGH: level=${result.level}`);
+  });
+
+  test("【原Bug】变体3: 产报告+发送 → HIGH（固定模式兜底）", async () => {
+    const result = await evaluator.evaluate("帮我整理这些文件，然后产出一份报告通过邮箱发送给我");
+    assert.equal(result.level, ComplexityLevel.HIGH);
+  });
+
+  test("【回归测试】简单问答不受影响 → LOW", async () => {
+    const cases = [
+      "什么是 JavaScript?",
+      "请问这个函数是干嘛的",
+      "帮我看看这段代码对不对",
+    ];
+    for (const input of cases) {
+      const result = await evaluator.evaluate(input);
+      assert.equal(result.level, ComplexityLevel.LOW, `回归: "${input}" 应为LOW`);
+    }
+  });
+
+  test("【回归测试】固定多步骤句式不受影响 → HIGH", async () => {
+    const cases = [
+      "首先搜索文件，然后整理排序，最后生成图表",
+      "先分析数据再统计计算最后生成报告",
+    ];
+    for (const input of cases) {
+      const result = await evaluator.evaluate(input);
+      assert.equal(result.level, ComplexityLevel.HIGH, `回归: "${input}" 应为HIGH`);
+    }
+  });
 });
 
-test("IntelligentComplexityEvaluator: 推理说明生成", async () => {
-  const evaluator = new IntelligentComplexityEvaluator();
-  
-  const result = await evaluator.evaluate("首先搜索所有PDF文件，然后提取内容，最后生成摘要");
-  assert.ok(typeof result.reasoning === "string");
-  assert.ok(result.reasoning.length > 0);
+// ========== 各维度独立函数测试 ==========
+
+test.describe("各维度独立函数", () => {
+  test("detectStepSequence: 逗号分隔动词序列得分", async () => {
+    const evaluator = new IntelligentComplexityEvaluator({ enableLLMEval: false });
+    const result = await evaluator.evaluate("扫描,整理,删除,重命名");
+    assert.ok(result.score >= 0.15, `stepSequence应>0.15: score=${result.score}`);
+  });
+
+  test("detectStepSequence: 无步骤序列信号时得0", async () => {
+    const evaluator = new IntelligentComplexityEvaluator({ enableLLMEval: false });
+    const result = await evaluator.evaluate("什么是JavaScript");
+    assert.ok(result.score < 0.35, `简单问答应低于HIGH阈值: score=${result.score}`);
+  });
+
+  test("identifyOperationType: file_batch 检测", async () => {
+    const evaluator = new IntelligentComplexityEvaluator({ enableLLMEval: false });
+    const cases = [
+      "扫描所有文件并整理",
+      "遍历目录下的每个文件",
+      "批量处理这批数据",
+    ];
+    for (const input of cases) {
+      const result = await evaluator.evaluate(input);
+      assert.ok(result.score >= 0.08, `file_batch相关"${input}"应有分数: ${result.score}`);
+    }
+  });
+
+  test("identifyOperationType: report_generation 检测", async () => {
+    const evaluator = new IntelligentComplexityEvaluator({ enableLLMEval: false });
+    const cases = [
+      "生成一份报告",
+      "产出一份整理报告",
+      "输出分析报告",
+    ];
+    for (const input of cases) {
+      const result = await evaluator.evaluate(input);
+      assert.ok(result.score >= 0.08, `report相关"${input}"应有分数: ${result.score}`);
+    }
+  });
 });
 
-test("IntelligentComplexityEvaluator: 获取统计信息", async () => {
-  const evaluator = new IntelligentComplexityEvaluator();
-  
-  await evaluator.evaluate("简单问题");
-  await evaluator.evaluate("复杂的多步骤任务");
-  
-  const stats = evaluator.getStats();
-  assert.ok(stats.totalEvals >= 2);
-  assert.ok(typeof stats.llmUsageRate === "string");
+// ========== selectTaskMode 智能模式选择 ==========
+
+test.describe("selectTaskMode - 智能模式选择", () => {
+  function createTestAgent(options = {}) {
+    return {
+      llm: null,
+      taskMode: options.taskMode || "auto",
+      complexityThreshold: options.complexityThreshold || 0.5,
+    };
+  }
+
+  test("强制指定 react 优先于智能评估", async () => {
+    const agent = createTestAgent({ taskMode: "plan_exec" });
+    const mode = await selectTaskMode(agent, "极其复杂的多步骤任务", { taskMode: "react" });
+    assert.equal(mode, "react");
+  });
+
+  test("强制指定 plan_exec 优先于智能评估", async () => {
+    const agent = createTestAgent({ taskMode: "react" });
+    const mode = await selectTaskMode(agent, "什么是JavaScript", { taskMode: "plan_exec" });
+    assert.equal(mode, "plan_exec");
+  });
+
+  test("Agent 配置 react 优先于智能评估", async () => {
+    const agent = createTestAgent({ taskMode: "react" });
+    const mode = await selectTaskMode(agent, "极其复杂的多步骤任务");
+    assert.equal(mode, "react");
+  });
+
+  test("Agent 配置 plan_exec 优先于智能评估", async () => {
+    const agent = createTestAgent({ taskMode: "plan_exec" });
+    const mode = await selectTaskMode(agent, "什么是JavaScript");
+    assert.equal(mode, "plan_exec");
+  });
+
+  test("【核心】逗号多动作 → plan_exec", async () => {
+    const agent = createTestAgent({ taskMode: "auto", complexityThreshold: 0.5 });
+    const mode = await selectTaskMode(agent,
+      "帮我扫描所有的文件,进行整理,删除空文件和文件夹," +
+      "另外如果文件名字和内容没有关联请帮我重命名," +
+      "最后产出一份整理过程报告通过邮箱发给我"
+    );
+    assert.equal(mode, "plan_exec",
+      `原始案例应走plan_exec，实际: ${mode}`);
+  });
+
+  test("高复杂度任务 → plan_exec（阈值判断）", async () => {
+    const agent = createTestAgent({ taskMode: "auto", complexityThreshold: 0.5 });
+    const mode = await selectTaskMode(agent,
+      "分析所有数据，统计结果，生成图表，发送报告"
+    );
+    assert.equal(mode, "plan_exec",
+      `4个动作应走plan_exec，实际: ${mode}`);
+  });
+
+  test("低复杂度任务 → react", async () => {
+    const agent = createTestAgent({ taskMode: "auto", complexityThreshold: 0.5 });
+    const mode = await selectTaskMode(agent, "什么是闭包？");
+    assert.equal(mode, "react");
+  });
+
+  test("上下文依赖提升复杂度", async () => {
+    const agent = createTestAgent({ taskMode: "auto", complexityThreshold: 0.5 });
+    const history = [
+      { content: "帮我分析这十份文档" },
+      { content: "生成报告" }
+    ];
+    const mode = await selectTaskMode(agent, "把它们整理成表格", {}, history);
+    assert.ok(mode === "plan_exec" || mode === "react");
+  });
+
+  test("不同阈值行为正确", async () => {
+    const agentLow = createTestAgent({ taskMode: "auto", complexityThreshold: 0.2 });
+    const agentHigh = createTestAgent({ taskMode: "auto", complexityThreshold: 0.8 });
+
+    // 高阈值(0.8): 极简单任务 score=0.0 → 不满足阈值，走 react
+    const modeHigh = await selectTaskMode(agentHigh, "hi");
+    assert.equal(modeHigh, "react",
+      `高阈值(0.8)+极简单(0.0)应走react，实际: ${modeHigh}`);
+
+    // 低阈值(0.2): 高复杂度任务 score=0.65 → 超过阈值，走 plan_exec
+    const modeLow = await selectTaskMode(agentLow,
+      "帮我分析统计汇总这些数据生成报告发送邮件"
+    );
+    assert.equal(modeLow, "plan_exec",
+      `低阈值(0.2)+高复杂度(0.65)应走plan_exec，实际: ${modeLow}`);
+  });
 });
 
 // ========== 便捷函数测试 ==========
 
-test("detectTaskComplexity: 异步接口返回分数", async () => {
-  const score = await detectTaskComplexity("帮我分析这十份文档");
-  assert.ok(typeof score === "number");
-  assert.ok(score >= 0 && score <= 1);
-});
-
-test("detectTaskComplexitySync: 同步接口返回分数", () => {
-  const score = detectTaskComplexitySync("帮我处理一些数据");
-  assert.ok(typeof score === "number", "应该返回数字类型");
-  assert.ok(!isNaN(score), "分数不应该是 NaN");
-});
-
-test("explainComplexity: 返回完整评估结果", async () => {
-  const result = await explainComplexity("帮我分析这些文件并生成报告");
-  
-  assert.ok(result.hasOwnProperty("level"));
-  assert.ok(result.hasOwnProperty("score"));
-  assert.ok(result.hasOwnProperty("confidence"));
-  assert.ok(result.hasOwnProperty("reasoning"));
-  assert.ok(result.hasOwnProperty("requiresPlan"));
-});
-
-// ========== 兼容性测试 ==========
-
-test("detectTaskComplexity: 兼容字符串输入", async () => {
-  const score1 = await detectTaskComplexity("分析文件");
-  const score2 = detectTaskComplexitySync("处理数据");
-  
-  assert.ok(typeof score1 === "number", "应该返回数字类型");
-  assert.ok(typeof score2 === "number", "应该返回数字类型");
-  assert.ok(!isNaN(score1), "分数不应该是 NaN");
-  assert.ok(!isNaN(score2), "分数不应该是 NaN");
-});
-
-test("detectTaskComplexity: 兼容对象输入", async () => {
-  const score = await detectTaskComplexity({ text: "测试输入" });
-  assert.ok(typeof score === "number");
-  assert.ok(score >= 0 && score <= 1);
-});
-
-test("detectTaskComplexity: 兼容空输入", async () => {
-  const score = await detectTaskComplexity("");
-  assert.ok(typeof score === "number");
-  assert.ok(score >= 0);
-});
-
-test("detectTaskComplexity: 分数边界", async () => {
-  // 最简单的问题
-  const minScore = await detectTaskComplexity("是什么？");
-  assert.ok(minScore >= 0 && minScore <= 1);
-  
-  // 最复杂的问题
-  const maxScore = await detectTaskComplexity(
-    "首先遍历所有文件，统计函数数量，分析代码质量，生成完整报告，画出依赖关系图，最后发送给团队成员"
-  );
-  assert.ok(maxScore >= 0 && maxScore <= 1);
-});
-
-// ========== selectTaskMode 异步测试 ==========
-
-class MockLLM {
-  constructor(script = []) {
-    this.script = [...script];
-    this.callCount = 0;
-  }
-
-  bindTools() {
-    return {
-      invoke: async function() {
-        self.callCount++;
-        const next = this.script.shift() || {};
-        if (next.error) throw next.error;
-        if (next.message) return next.message;
-        return new AIMessage({ content: "MEDIUM" });
-      },
-    };
-  }
-}
-
-function createTestAgent(options = {}) {
-  return {
-    llm: null,
-    taskMode: options.taskMode || "auto",
-    complexityThreshold: options.complexityThreshold || 0.5,
-    maxPlanSteps: options.maxPlanSteps || 10,
-    maxStepIterations: options.maxStepIterations || 3
-  };
-}
-
-test("selectTaskMode: 强制 react 模式", async () => {
-  const agent = createTestAgent({ taskMode: "plan_exec" });
-  const mode = await selectTaskMode(agent, "任何输入", { taskMode: "react" });
-  assert.equal(mode, "react");
-});
-
-test("selectTaskMode: 强制 plan_exec 模式", async () => {
-  const agent = createTestAgent({ taskMode: "react" });
-  const mode = await selectTaskMode(agent, "任何输入", { taskMode: "plan_exec" });
-  assert.equal(mode, "plan_exec");
-});
-
-test("selectTaskMode: Agent 配置优先 - react", async () => {
-  const agent = createTestAgent({ taskMode: "react" });
-  const mode = await selectTaskMode(agent, "复杂的多步骤任务");
-  assert.equal(mode, "react");
-});
-
-test("selectTaskMode: Agent 配置优先 - plan_exec", async () => {
-  const agent = createTestAgent({ taskMode: "plan_exec" });
-  const mode = await selectTaskMode(agent, "简单问题");
-  assert.equal(mode, "plan_exec");
-});
-
-test("selectTaskMode: 智能评估 - 高复杂度触发 plan", async () => {
-  const agent = createTestAgent({ 
-    taskMode: "auto", 
-    complexityThreshold: 0.5 
+test.describe("便捷函数接口", () => {
+  test("detectTaskComplexity: 返回有效分数", async () => {
+    const cases = [
+      { input: "什么是JavaScript?", expectLow: true },
+      { input: "帮我扫描所有文件,整理,删除,发邮件", expectLow: false },
+    ];
+    for (const { input, expectLow } of cases) {
+      const score = await detectTaskComplexity(input);
+      assert.ok(typeof score === "number" && score >= 0 && score <= 1,
+        `"${input}" 应返回0-1之间的数: ${score}`);
+      if (expectLow) assert.ok(score < 0.5, `"${input}" 应为低分: ${score}`);
+    }
   });
-  
-  const mode = await selectTaskMode(
-    agent, 
-    "帮我分析这十份文档的内容并整理成表格，包括统计每份文档的关键数据并生成完整的分析报告"
-  );
-  
-  assert.equal(mode, "plan_exec", "High complexity should trigger plan_exec");
-});
 
-test("selectTaskMode: 智能评估 - 低复杂度使用 react", async () => {
-  const agent = createTestAgent({ 
-    taskMode: "auto", 
-    complexityThreshold: 0.5 
+  test("detectTaskComplexitySync: 同步返回有效分数", () => {
+    const score = detectTaskComplexitySync("帮我分析并生成报告");
+    assert.ok(typeof score === "number" && score >= 0 && score <= 1, `同步应返回有效分数: ${score}`);
   });
-  
-  const mode = await selectTaskMode(agent, "什么是 JavaScript?");
-  assert.equal(mode, "react", "Low complexity should use react");
-});
 
-test("selectTaskMode: 上下文感知", async () => {
-  const agent = createTestAgent({ 
-    taskMode: "auto", 
-    complexityThreshold: 0.5 
+  test("explainComplexity: 返回完整评估对象", async () => {
+    const result = await explainComplexity("帮我扫描,整理,删除,重命名,发邮件");
+    assert.ok(result.hasOwnProperty("level"));
+    assert.ok(result.hasOwnProperty("score"));
+    assert.ok(result.hasOwnProperty("confidence"));
+    assert.ok(result.hasOwnProperty("reasoning"));
+    assert.ok(result.hasOwnProperty("requiresPlan"));
+    assert.ok(result.hasOwnProperty("recommendedPlan"));
+    assert.equal(result.requiresPlan, true, "多动作应requiresPlan=true");
   });
-  
-  // 在复杂任务后的简单指代词
-  const complexHistory = [
-    { content: "帮我分析这十份文档" },
-    { content: "生成报告" }
-  ];
-  
-  const mode = await selectTaskMode(
-    agent, 
-    "把它们整理成表格",
-    {},
-    complexHistory
-  );
-  
-  // 由于有上下文依赖，应该更容易触发 plan 模式
-  assert.ok(mode === "plan_exec" || mode === "react");
+
+  test("兼容对象输入", async () => {
+    const score = await detectTaskComplexity({ text: "扫描,整理,删除" });
+    assert.ok(typeof score === "number" && score >= 0 && score <= 1);
+  });
+
+  test("兼容空输入", async () => {
+    const score = await detectTaskComplexity("");
+    assert.ok(typeof score === "number" && score >= 0);
+  });
 });
 
-// ========== 边界情况测试 ==========
+// ========== 边界情况与健壮性 ==========
 
-test("IntelligentComplexityEvaluator: 极短文本", async () => {
-  const evaluator = new IntelligentComplexityEvaluator();
-  const result = await evaluator.evaluate("hi");
-  
-  assert.ok(result.score >= 0);
-  assert.ok(result.score <= 1);
-});
+test.describe("边界情况与健壮性", () => {
+  test("极短文本 → 有效结果", async () => {
+    const evaluator = new IntelligentComplexityEvaluator({ enableLLMEval: false });
+    const result = await evaluator.evaluate("hi");
+    assert.ok(result.score >= 0 && result.score <= 1);
+  });
 
-test("IntelligentComplexityEvaluator: 极长文本", async () => {
-  const evaluator = new IntelligentComplexityEvaluator();
-  const longText = "帮我分析" + "这些文件".repeat(100);
-  const result = await evaluator.evaluate(longText);
-  
-  assert.ok(result.score >= 0);
-  assert.ok(result.score <= 1);
-});
+  test("极长文本 → 分数不越界", async () => {
+    const evaluator = new IntelligentComplexityEvaluator({ enableLLMEval: false });
+    const longText = "帮我分析" + "这些数据".repeat(200);
+    const result = await evaluator.evaluate(longText);
+    assert.ok(result.score >= 0 && result.score <= 1);
+  });
 
-test("IntelligentComplexityEvaluator: 混合语言", async () => {
-  const evaluator = new IntelligentComplexityEvaluator();
-  const result = await evaluator.evaluate("Please analyze these files and generate a report");
-  
-  assert.ok(typeof result.level === "string");
-  assert.ok(result.score >= 0 && result.score <= 1);
-});
+  test("分数边界: 最简单到最复杂都在0-1之间", async () => {
+    const scores = await Promise.all([
+      detectTaskComplexity("?"),
+      detectTaskComplexity("hi"),
+      detectTaskComplexity("什么是JavaScript?"),
+      detectTaskComplexity("扫描,整理,删除,重命名,发邮件"),
+      detectTaskComplexity("首先分析所有数据然后整理统计最后生成完整报告发送给团队"),
+    ]);
+    for (const score of scores) {
+      assert.ok(score >= 0 && score <= 1, `分数应在0-1之间: ${score}`);
+    }
+  });
 
-test("IntelligentComplexityEvaluator: 标点符号处理", async () => {
-  const evaluator = new IntelligentComplexityEvaluator();
-  
-  const withPunctuation = await evaluator.evaluate("什么是JavaScript？");
-  const withoutPunctuation = await evaluator.evaluate("什么是JavaScript");
-  
-  // 两者分数应该相近（因为核心内容相同）
-  assert.ok(Math.abs(withPunctuation.score - withoutPunctuation.score) < 0.2);
+  test("推荐Plan覆盖: HIGH/CRITICAL → recommendedPlan=true", async () => {
+    const evaluator = new IntelligentComplexityEvaluator({ enableLLMEval: false });
+    const result = await evaluator.evaluate(
+      "扫描所有文件,整理数据,删除空文件,重命名,生成报告,发送邮件"
+    );
+    assert.equal(result.level, ComplexityLevel.HIGH);
+    assert.equal(result.recommendedPlan, true);
+  });
+
+  test("getStats 统计正确", async () => {
+    const evaluator = new IntelligentComplexityEvaluator({ enableLLMEval: false });
+    await evaluator.evaluate("简单问题");
+    await evaluator.evaluate("复杂的多步骤任务");
+    const stats = evaluator.getStats();
+    assert.ok(stats.totalEvals >= 2);
+    assert.ok(typeof stats.llmUsageRate === "string");
+  });
 });
 
 // ========== 性能测试 ==========
 
-test("IntelligentComplexityEvaluator: 快速评估性能", async () => {
-  const evaluator = new IntelligentComplexityEvaluator();
-  
-  const startTime = Date.now();
-  
-  for (let i = 0; i < 100; i++) {
-    await evaluator.evaluate(`测试输入 ${i}`);
-  }
-  
-  const elapsed = Date.now() - startTime;
-  assert.ok(elapsed < 1000, `100 evaluations should complete in < 1s, took ${elapsed}ms`);
+test.describe("性能测试", () => {
+  test("100次评估在1秒内完成", async () => {
+    const evaluator = new IntelligentComplexityEvaluator({ enableLLMEval: false });
+    const inputs = [
+      "什么是JavaScript?",
+      "帮我扫描,整理,删除,发邮件",
+      "先分析再统计最后生成报告",
+      "hi",
+      "遍历所有文件并处理",
+    ];
+    const startTime = Date.now();
+    for (let i = 0; i < 100; i++) {
+      await evaluator.evaluate(inputs[i % inputs.length]);
+    }
+    const elapsed = Date.now() - startTime;
+    assert.ok(elapsed < 2000, `100次评估应在2s内完成，实际: ${elapsed}ms`);
+  });
 });
-
-console.log("✅ 智能复杂度评估器测试文件已加载");

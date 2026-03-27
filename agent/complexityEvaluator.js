@@ -103,6 +103,89 @@ function calculateLengthFactor(text) {
 }
 
 /**
+ * 动作关键词库：覆盖所有常见操作动词
+ * 分类：文件操作、分析处理、生成创建、网络通讯、系统控制
+ */
+const ACTION_KEYWORDS = {
+  // 高权重动作（明确需要多步骤）
+  highWeight: [
+    "扫描", "遍历", "清理", "整理", "删除", "重命名", "迁移", "备份",
+    "分析", "统计", "对比", "汇总", "归纳", "提取", "筛选", "排序",
+    "生成", "创建", "编写", "修改", "重构", "部署", "发布", "上传",
+    "发送", "推送", "通知", "邮件", "导出", "导入", "同步"
+  ],
+  // 中等权重动作
+  mediumWeight: [
+    "查找", "搜索", "读取", "写入", "编辑", "查询", "获取", "检查",
+    "验证", "转换", "格式化", "压缩", "解压", "加密", "解密", "下载"
+  ],
+  // 低权重动作（单一步骤）
+  lowWeight: [
+    "打开", "显示", "展示", "告诉", "解释", "说明", "回答", "提供"
+  ]
+};
+
+/**
+ * 构建动作关键词正则
+ */
+const ALL_ACTION_PATTERN = new RegExp(
+  [...ACTION_KEYWORDS.highWeight, ...ACTION_KEYWORDS.mediumWeight, ...ACTION_KEYWORDS.lowWeight].join("|"),
+  "gi"
+);
+
+/**
+ * 通用动作密度评估：统计句子中独立动作的数量和类型
+ * 不依赖固定句式，而是感知"动作密度"
+ */
+function evaluateActionDensity(text) {
+  const matches = text.match(ALL_ACTION_PATTERN) || [];
+
+  if (matches.length === 0) return { score: 0, count: 0, types: [] };
+
+  // 去重（避免"整理、整理"重复计数）
+  const uniqueActions = [...new Set(matches.map(w => w))];
+
+  // 分类统计
+  const types = { high: 0, medium: 0, low: 0 };
+  for (const action of uniqueActions) {
+    if (ACTION_KEYWORDS.highWeight.some(k => k === action)) types.high++;
+    else if (ACTION_KEYWORDS.mediumWeight.some(k => k === action)) types.medium++;
+    else types.low++;
+  }
+
+  // 核心公式：动作密度 = 动作数量 + 加权类型加成
+  // 高权重动作每个算1.5个动作当量，中权重1.0，低权重0.3
+  const weightedCount = types.high * 1.5 + types.medium * 1.0 + types.low * 0.3;
+
+  // 逗号/顿号分隔的动作列表是高密度信号
+  const separatorCount = ((text.match(/[，,、]/g) || []).length);
+
+  // 分数计算
+  let score = 0;
+  if (weightedCount >= 5) score = 0.45;
+  else if (weightedCount >= 4) score = 0.38;
+  else if (weightedCount >= 3) score = 0.28;
+  else if (weightedCount >= 2) score = 0.15;
+  else if (weightedCount >= 1) score = 0.08;
+
+  // 逗号分隔 3+ 个动作段 → 额外加分
+  if (separatorCount >= 3) score += 0.15;
+  else if (separatorCount >= 2) score += 0.08;
+
+  // 高权重动作占比超过 40% → 额外加分
+  const total = types.high + types.medium + types.low;
+  if (total > 0 && types.high / total > 0.4) score += 0.05;
+
+  return {
+    score: Math.min(score, 0.5),
+    count: uniqueActions.length,
+    weightedCount,
+    separatorCount,
+    types
+  };
+}
+
+/**
  * 步骤序列检测（增强版）
  */
 function detectStepSequence(text) {
@@ -114,11 +197,7 @@ function detectStepSequence(text) {
     { regex: /首先(.+)接着(.+)然后(.+)最后/gi, weight: 0.4 },
     { regex: /依次(.+)、依次(.+)、依次/gi, weight: 0.3 },
     { regex: /逐一(.+)、逐一(.+)/gi, weight: 0.3 },
-    { regex: /(?:第[一二三四五六七八九十\d]+步|第一步|下一步|下一步|最后一步)/gi, weight: 0.2 },
-    // 新增：逗号分隔的多动作序列（如：扫描、整理、删除、重命名、发送）
-    { regex: /^(扫描|整理|删除|分析|处理|生成|发送|重命名|提取|统计)[，,].*(整理|删除|重命名|分析|处理|生成|发送|提取|统计)/gi, weight: 0.35 },
-    // 新增：逗号分隔的动词序列（3个以上动作词被逗号连接）
-    { regex: /(扫描|整理|删除|重命名|分析|处理|生成|发送|提取|统计)[，,](扫描|整理|删除|重命名|分析|处理|生成|发送|提取|统计)[，,](扫描|整理|删除|重命名|分析|处理|生成|发送|提取|统计)/gi, weight: 0.4 }
+    { regex: /(?:第[一二三四五六七八九十\d]+步|第一步|下一步|下一步|最后一步)/gi, weight: 0.2 }
   ];
 
   let totalWeight = 0;
@@ -140,33 +219,39 @@ function detectStepSequence(text) {
   else if (indicatorCount >= 3) totalWeight += 0.15;
   else if (indicatorCount >= 2) totalWeight += 0.1;
 
-  return Math.min(totalWeight, 0.5);
+  // 动作密度补充分数（覆盖无固定句式的情况）
+  const density = evaluateActionDensity(text);
+  const densityBonus = density.score;
+
+  return Math.min(totalWeight + densityBonus * 0.5, 0.5);
 }
 
 /**
- * 工具需求数量估算
+ * 工具需求数量估算：基于动作密度的通用估算
+ * 核心思路：动作数量 → 估计工具调用次数
  */
 function estimateToolCount(text) {
   let score = 0;
 
+  // 1. 传统正则模式（保留但降低权重）
   for (const pattern of TOOL_COMPLEXITY_MAP.highTools) {
     if (pattern.test(text)) {
-      score += 0.35;
+      score += 0.2;
       break;
     }
   }
 
   for (const pattern of TOOL_COMPLEXITY_MAP.mediumTools) {
     if (pattern.test(text)) {
-      score += 0.15;
+      score += 0.1;
       break;
     }
   }
 
-  // 数量词检测
+  // 2. 数量词检测
   const quantifiers = [
-    { pattern: /(?:所有|全部|整个|全部的|整个的)/g, weight: 0.25 },
-    { pattern: /\d+[个份批堆页张]/g, weight: 0.15 },
+    { pattern: /(?:所有|全部|整个|全部的|整个的)/g, weight: 0.2 },
+    { pattern: /\d+[个份批堆页张]/g, weight: 0.12 },
     { pattern: /多[个份]|[几许]个/g, weight: 0.1 }
   ];
 
@@ -176,6 +261,11 @@ function estimateToolCount(text) {
       break;
     }
   }
+
+  // 3. 动作密度驱动工具数量估算（核心改进）
+  const density = evaluateActionDensity(text);
+  const actionBasedScore = Math.min(density.weightedCount * 0.06, 0.25);
+  score = Math.max(score, actionBasedScore);
 
   return Math.min(score, 0.4);
 }
@@ -305,6 +395,10 @@ function analyzeContextDependency(sessionHistory, currentInput) {
 
 /**
  * 快速规则评估（用于 LLM 调用前的快速路径）
+ * 策略：
+ *   - LOW: 明显的简单问答，不含操作意图
+ *   - HIGH: 任意满足以下之一：动作密度极高 / 固定高复杂度模式
+ *   - null: 进入多维度评估
  */
 function quickRuleBasedEval(text) {
   // 明显的简单问题
@@ -312,15 +406,24 @@ function quickRuleBasedEval(text) {
     return { level: ComplexityLevel.LOW, confidence: 0.9 };
   }
 
-  // 明显的极高复杂度
+  // 动作密度通用检测：3+ 个高权重动作 或 4+ 个总动作 = HIGH
+  const density = evaluateActionDensity(text);
+  if (density.weightedCount >= 4 || density.count >= 5) {
+    return { level: ComplexityLevel.HIGH, confidence: 0.92, reason: `动作密度极高(${density.weightedCount}当量)` };
+  }
+
+  // 逗号分隔的独立动作段 × 3+ = HIGH
+  if (density.separatorCount >= 2 && density.count >= 3) {
+    return { level: ComplexityLevel.HIGH, confidence: 0.9, reason: `多段操作序列(${density.separatorCount + 1}段)` };
+  }
+
+  // 固定高复杂度模式（兜底已知复杂场景）
   if (/^(所有|全部).*(分析|整理|统计)/.test(text) ||
       /生成.*完整.*报告/.test(text) ||
       /^(自动化|批量).*处理/.test(text) ||
       /分析.*并.*生成.*报告/.test(text) ||
       /(首先|先).*(然后|再).*(最后)/.test(text) ||
       /分析.*整理.*统计/.test(text) ||
-      // 新增：逗号分隔的多动作序列（明显的高复杂度）
-      /(扫描|整理|删除|重命名)[，,].*(整理|删除|重命名|分析|处理)[，,].*(重命名|分析|处理|发送|整理)/.test(text) ||
       /产.*报告.*发送/.test(text)) {
     return { level: ComplexityLevel.HIGH, confidence: 0.95 };
   }
@@ -381,20 +484,24 @@ export class IntelligentComplexityEvaluator {
     }
 
     // 2. 多维度评分
-    const dimensions = {
+    const rawDimensions = {
       stepSequence: detectStepSequence(text),
       toolEstimate: estimateToolCount(text),
       operationScore: calculateOperationScore(text),
       lengthFactor: calculateLengthFactor(text),
       contextDependency: analyzeContextDependency(sessionHistory, text)
     };
+    // 防御：任何维度值为 undefined/undefined → 0，防止 NaN 传染
+    const dimensions = Object.fromEntries(
+      Object.entries(rawDimensions).map(([k, v]) => [k, (typeof v === "number" && !isNaN(v)) ? v : 0])
+    );
 
-    // 3. 计算综合分数（提高基础权重）
+    // 3. 计算综合分数（调整权重以适配新的动作密度算法）
     const weights = {
-      stepSequence: 0.35,
-      toolEstimate: 0.30,
+      stepSequence: 0.40,   // 提升：含动作密度的步骤序列
+      toolEstimate: 0.30,   // 提升：含动作密度的工具估算
       operationScore: 0.15,
-      lengthFactor: 0.1,
+      lengthFactor: 0.05,   // 降低：长度不再是主要信号
       contextDependency: 0.1
     };
 
@@ -542,10 +649,10 @@ export class IntelligentComplexityEvaluator {
    */
   calculateWeightedScore(dimensions) {
     const weights = {
-      stepSequence: 0.35,
+      stepSequence: 0.40,
       toolEstimate: 0.30,
       operationScore: 0.15,
-      lengthFactor: 0.1,
+      lengthFactor: 0.05,
       contextDependency: 0.1
     };
 
@@ -590,10 +697,12 @@ export class IntelligentComplexityEvaluator {
    * 构建结果对象
    */
   buildResult(level, score, confidence, reasoning) {
+    const safeScore = (typeof score === "number" && !isNaN(score)) ? score : 0;
+    const safeConfidence = (typeof confidence === "number" && !isNaN(confidence)) ? confidence : 0.5;
     return {
       level,
-      score: Math.max(0, Math.min(1, score)),
-      confidence: Math.max(0, Math.min(1, confidence)),
+      score: Math.max(0, Math.min(1, safeScore)),
+      confidence: Math.max(0, Math.min(1, safeConfidence)),
       reasoning,
       requiresPlan: level === ComplexityLevel.HIGH || level === ComplexityLevel.CRITICAL,
       recommendedPlan: level !== ComplexityLevel.LOW
@@ -649,27 +758,30 @@ export function detectTaskComplexitySync(text) {
     return quickResult.level === ComplexityLevel.LOW ? 0.1 : 0.6;
   }
   
-  // 多维度评分
-  const dimensions = {
+  // 多维度评分（同步版本）
+  const rawDimensions = {
     stepSequence: detectStepSequence(normalizedText),
     toolEstimate: estimateToolCount(normalizedText),
     operationScore: calculateOperationScore(normalizedText),
     lengthFactor: calculateLengthFactor(normalizedText),
-    contextDependency: 0 // 同步版本不支持上下文
+    contextDependency: 0
   };
-  
+  const dimensions = Object.fromEntries(
+    Object.entries(rawDimensions).map(([k, v]) => [k, (typeof v === "number" && !isNaN(v)) ? v : 0])
+  );
+
   const weights = {
-    stepSequence: 0.35,
+    stepSequence: 0.40,
     toolEstimate: 0.30,
     operationScore: 0.15,
-    lengthFactor: 0.1,
+    lengthFactor: 0.05,
     contextDependency: 0.1
   };
-  
+
   const totalScore = Object.entries(dimensions).reduce((sum, [key, value]) => {
     return sum + (value * weights[key]);
   }, 0);
-  
+
   return Math.max(0, Math.min(1, totalScore));
 }
 
