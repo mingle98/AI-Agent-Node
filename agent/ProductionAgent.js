@@ -11,6 +11,7 @@ import { ContextManager } from "./contextManager.js";
 import { CircuitBreaker, retryWithBackoff, withSessionLock, withTimeout } from "./resilience.js";
 import { selectTaskMode, chatWithPlanExec } from "./planExecMode.js";
 import { getToolDivBox } from "../utils/streamRenderer.js";
+import { LongTermMemory } from "./longTermMemory.js";
 
 function normalizeTextContent(content) {
   if (typeof content === "string") {
@@ -86,6 +87,16 @@ export class ProductionAgent {
     this.complexityThreshold = options.complexityThreshold || 0.5;  // 复杂度阈值
     this.maxPlanSteps = options.maxPlanSteps || 10;  // 最大计划步骤数
     this.maxStepIterations = options.maxStepIterations || 3;  // 每个计划步骤的最大迭代次数
+
+    // ========== 长期记忆配置 ==========
+    this.longTermMemoryEnabled = options.longTermMemoryEnabled !== false;  // 默认开启
+    this.longTermMemory = null;
+    if (this.longTermMemoryEnabled) {
+      this.longTermMemory = new LongTermMemory(this, {
+        maxMemoryLength: options.maxMemoryLength || CONFIG.maxMemoryLength,
+        updateInterval: options.memoryUpdateInterval || CONFIG.memoryUpdateInterval,
+      });
+    }
 
     this.systemPrompt = this.buildSystemPrompt();
     this.callableDefinitions = this.buildCallableDefinitions();
@@ -416,6 +427,31 @@ export class ProductionAgent {
   }
 
   /**
+   * 独立的记忆提取 LLM 调用，不走主链路 resilience 机制，避免污染 CircuitBreaker
+   * @param {Array} messages - 包含系统提示的消息数组
+   * @returns {Promise<string>} - LLM 返回的文本内容
+   */
+  async extractMemoryWithLLM(messages) {
+    if (!this.llm) {
+      throw new Error("LLM 未配置");
+    }
+
+    const extractTimeoutMs = 5 * 60 * 1000; // 5 分钟超时，与主链路一致
+
+    try {
+      const { message } = await withTimeout(
+        this.collectFromInvoke(this.llm, messages),
+        extractTimeoutMs,
+        "Memory extraction LLM"
+      );
+      return normalizeTextContent(message.content);
+    } catch (error) {
+      console.error(`❌ [记忆] 独立 LLM 调用失败: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * 构建多模态 HumanMessage 内容
    * @param {string|Object} input - 用户输入，可以是纯文本字符串或包含图片的对象
    * @param {string} input.text - 用户输入的文本
@@ -486,6 +522,19 @@ export class ProductionAgent {
     // ========== 模式选择（异步智能决策） ==========
     const session = this.getOrCreateSession(sessionId);
     const sessionHistory = session.messages;
+
+    // ========== 长期记忆注入（首次对话或有记忆文件时） ==========
+    if (this.longTermMemory) {
+      try {
+        // 如果有记忆文件且未注入，先注入
+        const hasMemory = await this.longTermMemory.hasMemoryFile(sessionId);
+        if (hasMemory) {
+          await this.longTermMemory.injectMemory(sessionId, session);
+        }
+      } catch (error) {
+        console.warn(`⚠️ [记忆] ${sessionId} 记忆注入失败: ${error.message}`);
+      }
+    }
 
     const taskMode = await selectTaskMode(this, userInput, requestOptions, sessionHistory);
 
@@ -582,6 +631,16 @@ export class ProductionAgent {
               });
             }
             fullResponseCallback?.(aiText, toolExcResults);
+
+            // ========== 长期记忆更新检查 ==========
+            if (this.longTermMemory) {
+              try {
+                await this.longTermMemory.checkAndUpdateMemory(sessionId, session);
+              } catch (error) {
+                console.warn(`⚠️ [记忆] ${sessionId} 记忆更新失败: ${error.message}`);
+              }
+            }
+
             return aiText;
           }
 
@@ -639,6 +698,15 @@ export class ProductionAgent {
         const errorMessage = error?.message || "未知错误";
         const fallbackText = "抱歉，服务暂时繁忙，请稍后重试。";
 
+        // ========== 长期记忆更新检查（即使出错也检查） ==========
+        if (this.longTermMemory) {
+          try {
+            await this.longTermMemory.checkAndUpdateMemory(sessionId, session);
+          } catch (error) {
+            console.warn(`⚠️ [记忆] ${sessionId} 记忆更新失败: ${error.message}`);
+          }
+        }
+
         if (streamEnabled) {
           emitStreamEvent(chunkCallback, {
             type: "error",
@@ -681,6 +749,12 @@ export class ProductionAgent {
       const firstSystemMessage = session.messages.find((m) => m._getType() === "system");
       session.messages = firstSystemMessage ? [firstSystemMessage] : [];
       session.contextManager.reset();
+
+      // 重置长期记忆状态（保留记忆文件，只清除内存状态）
+      if (this.longTermMemory) {
+        this.longTermMemory.resetSessionMemoryState(sessionId);
+      }
+
       console.log(`🔄 会话已重置: ${sessionId}`);
     });
   }

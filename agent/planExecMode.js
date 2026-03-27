@@ -424,6 +424,18 @@ export async function chatWithPlanExec(agent, userInput, chunkCallback, fullResp
     try {
       agent.touchSession(session);
 
+      // ========== 长期记忆注入（首次对话或有记忆文件时） ==========
+      if (agent.longTermMemory) {
+        try {
+          const hasMemory = await agent.longTermMemory.hasMemoryFile(sessionId);
+          if (hasMemory) {
+            await agent.longTermMemory.injectMemory(sessionId, session);
+          }
+        } catch (error) {
+          console.warn(`⚠️ [记忆] ${sessionId} 记忆注入失败: ${error.message}`);
+        }
+      }
+
       // 构建并记录用户消息（关键：保持与 chatWithReAct 一致的上下文处理）
       const addMessage = agent.buildHumanMessage(userInput);
       if (agent.options.debug) {
@@ -452,6 +464,15 @@ export async function chatWithPlanExec(agent, userInput, chunkCallback, fullResp
 
       const allToolResults = results.flatMap(r => r.toolResults || []);
 
+      // ========== 长期记忆更新检查 ==========
+      if (agent.longTermMemory) {
+        try {
+          await agent.longTermMemory.checkAndUpdateMemory(sessionId, session);
+        } catch (error) {
+          console.warn(`⚠️ [记忆] ${sessionId} 记忆更新失败: ${error.message}`);
+        }
+      }
+
       if (streamEnabled) {
         emitStreamEvent(chunkCallback, {
           type: "done",
@@ -467,6 +488,15 @@ export async function chatWithPlanExec(agent, userInput, chunkCallback, fullResp
       const errorMessage = error?.message || "未知错误";
       const fallbackText = "抱歉，任务执行过程中出现错误，请稍后重试。";
       console.error(`❌ [Plan+Exec] 执行失败: ${errorMessage}`);
+
+      // ========== 长期记忆更新检查（即使出错也检查） ==========
+      if (agent.longTermMemory) {
+        try {
+          await agent.longTermMemory.checkAndUpdateMemory(sessionId, session);
+        } catch (error) {
+          console.warn(`⚠️ [记忆] ${sessionId} 记忆更新失败: ${error.message}`);
+        }
+      }
 
       if (streamEnabled) {
         emitStreamEvent(chunkCallback, {
