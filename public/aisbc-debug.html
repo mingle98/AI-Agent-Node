@@ -988,6 +988,14 @@
                 });
                 const data = await resp.json();
                 if (data.success) {
+                  // 若删除的是当前正在预览的文件，清空选中与预览，避免仍显示已删除内容
+                  if (selectedNode.value && selectedNode.value.path === file.path) {
+                    selectedNode.value = null;
+                    preview.value = { loading: false, error: '', content: '', type: '', url: '' };
+                  }
+                  if (selectedFiles.selected?.has(file.path)) {
+                    selectedFiles.selected.delete(file.path);
+                  }
                   await fetchFileList();
                 } else {
                   alert(data.error || '删除失败');
