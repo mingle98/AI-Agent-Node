@@ -197,6 +197,8 @@ app.post("/api/chat", async (req, res, next) => {
       if (clientAborted) return;
       clientAborted = true;
       console.log("⛓️‍💥 SSE 客户端断开:", reason);
+      // 通知 agent 中止该 session 的处理流程
+      agent.abortSession(sessionId);
     };
     // fetch AbortController / network abort usually triggers 'aborted'
     req.on("aborted", () => onDisconnect("req.aborted"));

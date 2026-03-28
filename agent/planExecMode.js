@@ -4,6 +4,7 @@
 import { SystemMessage, HumanMessage, ToolMessage } from "@langchain/core/messages";
 
 import { getPlanPhaseDivBox, getPlanStepDivBox, getToolDivBox } from "../utils/streamRenderer.js";
+import { AbortError } from "./ProductionAgent.js";
 
 // 评估与模式选择实现见 complexityEvaluator.js；此处仅重导出，避免 import + export 同名导致重复导出
 export {
@@ -205,6 +206,11 @@ async function generatePlan(agent, userInput, session, chunkCallback, streamEnab
  * 执行单个计划步骤
  */
 async function executePlanStep(agent, session, step, stepContext, chunkCallback, streamEnabled) {
+  // 检查 abort 标志
+  if (session.aborted) {
+    throw new AbortError(`[${session.id}] Session 已中止`);
+  }
+
   const stepId = step.step_id || 0;
   const description = step.description || "";
   const stepMaxIterations = agent.maxStepIterations;
@@ -231,12 +237,18 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
   while (iterations < stepMaxIterations) {
     iterations += 1;
 
+    // 检查 abort 标志
+    if (session.aborted) {
+      throw new AbortError(`[${session.id}] Session 已中止`);
+    }
+
     const { message: aiResponse } = await agent.invokeLLMWithResilience(
       session,
       session.messages,
       {
         streamEnabled,
         onChunk: streamEnabled ? (chunk) => {
+          if (session.aborted) return; // 检查 abort 后忽略后续 chunk
           if (chunk?.reasoning) {
             emitStreamEvent(chunkCallback, { type: "reasoning", content: chunk.reasoning });
           }
@@ -247,6 +259,11 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
         } : null
       }
     );
+
+    // LLM 调用后检查 abort
+    if (session.aborted) {
+      throw new AbortError(`[${session.id}] Session 已中止`);
+    }
 
     const toolCalls = aiResponse.tool_calls || [];
     const aiText = normalizeTextContent(aiResponse.content);
@@ -259,6 +276,11 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
     }
 
     for (const toolCall of toolCalls) {
+      // 检查 abort 标志
+      if (session.aborted) {
+        throw new AbortError(`[${session.id}] Session 已中止`);
+      }
+
       if (streamEnabled) {
         emitStreamEvent(chunkCallback, {
           type: "status",
@@ -344,6 +366,11 @@ async function executePlan(agent, plan, session, chunkCallback, streamEnabled) {
   }
 
   for (let i = 0; i < steps.length; i++) {
+    // 检查 abort 标志
+    if (session.aborted) {
+      throw new AbortError(`[${session.id}] Session 已中止`);
+    }
+
     const step = steps[i];
 
     if (step.depends_on && step.depends_on.length > 0) {
@@ -422,6 +449,11 @@ export async function chatWithPlanExec(agent, userInput, chunkCallback, fullResp
 
   return agent.withSessionLockWrapper(async () => {
     try {
+      // 检查 session 是否已被标记为中止
+      if (session.aborted) {
+        throw new AbortError(`[${sessionId}] Session 已中止`);
+      }
+
       agent.touchSession(session);
 
       // ========== 长期记忆注入（首次对话或有记忆文件时） ==========
@@ -436,6 +468,11 @@ export async function chatWithPlanExec(agent, userInput, chunkCallback, fullResp
         }
       }
 
+      // 检查 abort 标志
+      if (session.aborted) {
+        throw new AbortError(`[${sessionId}] Session 已中止`);
+      }
+
       // 构建并记录用户消息（关键：保持与 chatWithReAct 一致的上下文处理）
       const addMessage = agent.buildHumanMessage(userInput);
       if (agent.options.debug) {
@@ -443,6 +480,11 @@ export async function chatWithPlanExec(agent, userInput, chunkCallback, fullResp
       }
       session.messages.push(addMessage);
       await agent.manageContext(session);
+
+      // 检查 abort 标志
+      if (session.aborted) {
+        throw new AbortError(`[${sessionId}] Session 已中止`);
+      }
 
       const logText = typeof userInput === "string" ? userInput : (userInput?.text || "[多模态输入]");
       console.log(`👤 [${sessionId}] 用户: ${logText}`);
@@ -452,6 +494,11 @@ export async function chatWithPlanExec(agent, userInput, chunkCallback, fullResp
       if (!plan) {
         console.log(`⚠️ [Plan+Exec] 计划生成失败，回退到 ReAct 模式`);
         return agent.chatWithReAct(userInput, chunkCallback, fullResponseCallback, sessionId, requestOptions);
+      }
+
+      // 检查 abort 标志
+      if (session.aborted) {
+        throw new AbortError(`[${sessionId}] Session 已中止`);
       }
 
       const { results, finalSummary } = await executePlan(
@@ -485,9 +532,12 @@ export async function chatWithPlanExec(agent, userInput, chunkCallback, fullResp
       return finalSummary;
 
     } catch (error) {
+      const isAbortError = error instanceof AbortError;
       const errorMessage = error?.message || "未知错误";
-      const fallbackText = "抱歉，任务执行过程中出现错误，请稍后重试。";
-      console.error(`❌ [Plan+Exec] 执行失败: ${errorMessage}`);
+      const fallbackText = isAbortError ? "请求已被中止" : "抱歉，任务执行过程中出现错误，请稍后重试。";
+      if (!isAbortError) {
+        console.error(`❌ [Plan+Exec] 执行失败: ${errorMessage}`);
+      }
 
       // ========== 长期记忆更新检查（即使出错也检查） ==========
       if (agent.longTermMemory) {
@@ -499,17 +549,20 @@ export async function chatWithPlanExec(agent, userInput, chunkCallback, fullResp
       }
 
       if (streamEnabled) {
-        emitStreamEvent(chunkCallback, {
-          type: "error",
-          content: "",
-          message: errorMessage,
-        });
-        emitStreamEvent(chunkCallback, {
-          type: "done",
-          content: fallbackText,
-          finalText: fallbackText,
-        });
-        fullResponseCallback?.(fallbackText, []);
+        // AbortError 不发送 error 事件，静默中止
+        if (!isAbortError) {
+          emitStreamEvent(chunkCallback, {
+            type: "error",
+            content: "",
+            message: errorMessage,
+          });
+          emitStreamEvent(chunkCallback, {
+            type: "done",
+            content: fallbackText,
+            finalText: fallbackText,
+          });
+          fullResponseCallback?.(fallbackText, []);
+        }
         return fallbackText;
       }
 

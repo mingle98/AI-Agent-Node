@@ -13,6 +13,14 @@ import { selectTaskMode, chatWithPlanExec } from "./planExecMode.js";
 import { getToolDivBox } from "../utils/streamRenderer.js";
 import { LongTermMemory } from "./longTermMemory.js";
 
+// ========== 会话中止错误类 ==========
+export class AbortError extends Error {
+  constructor(message = "Session aborted by client") {
+    super(message);
+    this.name = "AbortError";
+  }
+}
+
 function normalizeTextContent(content) {
   if (typeof content === "string") {
     return content;
@@ -73,6 +81,7 @@ export class ProductionAgent {
     this.defaultSessionId = options.defaultSessionId || "default";
     this.sessionTtlMs = options.sessionTtlMs || 30 * 60 * 1000;
     this.maxSessions = options.maxSessions || 300;
+
 
     this.resilience = {
       llmTimeoutMs: options.llmTimeoutMs || 5 * 60 * 1000,
@@ -207,6 +216,7 @@ export class ProductionAgent {
         failureThreshold: this.options.toolFailureThreshold || 3,
         cooldownMs: this.options.toolBreakerCooldownMs || 10000,
       }),
+      aborted: false,
     };
     this.sessions.set(sessionId, session);
     return session;
@@ -239,6 +249,21 @@ export class ProductionAgent {
     for (let i = 0; i < overflowCount; i++) {
       this.sessions.delete(sorted[i][0]);
     }
+  }
+
+  abortSession(sessionId) {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      return false;
+    }
+    session.aborted = true;
+    console.log(`🛑 [${sessionId}] Session 已标记为中止`);
+    return true;
+  }
+
+  isSessionAborted(sessionId) {
+    const session = this.sessions.get(sessionId);
+    return session?.aborted === true;
   }
 
   getOrCreateSession(sessionId = this.defaultSessionId) {
@@ -523,6 +548,9 @@ export class ProductionAgent {
     const session = this.getOrCreateSession(sessionId);
     const sessionHistory = session.messages;
 
+    // 重置 abort 标志，允许新请求开始
+    session.aborted = false;
+
     // ========== 长期记忆注入（首次对话或有记忆文件时） ==========
     if (this.longTermMemory) {
       try {
@@ -580,6 +608,11 @@ export class ProductionAgent {
 
     return withSessionLock(session, async () => {
       try {
+        // 检查 session 是否已被标记为中止
+        if (session.aborted) {
+          throw new AbortError(`[${sessionId}] Session 已中止`);
+        }
+
         this.touchSession(session);
         const toolExcResults = [];
         const logText = typeof userInput === "string" ? userInput : (userInput?.text || "[多模态输入]");
@@ -596,6 +629,11 @@ export class ProductionAgent {
           iterations += 1;
           console.log(`🤖 [${sessionId}] 助手:`);
 
+          // 每次迭代前检查 abort 标志
+          if (session.aborted) {
+            throw new AbortError(`[${sessionId}] Session 已中止`);
+          }
+
           const { message: aiResponse, streamedText } = await this.invokeLLMWithResilience(
             session,
             session.messages,
@@ -604,6 +642,7 @@ export class ProductionAgent {
               enableThinking,
               onChunk: streamEnabled
                 ? (chunk) => {
+                  if (session.aborted) return; // 检查 abort 后忽略后续 chunk
                   if (chunk?.reasoning) {
                     emitStreamEvent(chunkCallback, { type: "reasoning", content: chunk.reasoning });
                   }
@@ -614,6 +653,12 @@ export class ProductionAgent {
                 : null,
             }
           );
+
+          // LLM 调用后检查 abort
+          if (session.aborted) {
+            throw new AbortError(`[${sessionId}] Session 已中止`);
+          }
+
           const toolCalls = aiResponse.tool_calls || [];
 
           const aiText = normalizeTextContent(aiResponse.content);
@@ -644,6 +689,11 @@ export class ProductionAgent {
             return aiText;
           }
 
+          // 工具调用前检查 abort
+          if (session.aborted) {
+            throw new AbortError(`[${sessionId}] Session 已中止`);
+          }
+
           session.messages.push(aiResponse);
 
           if (streamEnabled) {
@@ -651,6 +701,10 @@ export class ProductionAgent {
           }
 
           for (const toolCall of toolCalls) {
+            if (session.aborted) {
+              throw new AbortError(`[${sessionId}] Session 已中止`);
+            }
+
             if (streamEnabled) {
               emitStreamEvent(chunkCallback, {
                 type: "status",
@@ -695,8 +749,9 @@ export class ProductionAgent {
 
         throw new Error("达到最大迭代次数");
       } catch (error) {
+        const isAbortError = error instanceof AbortError;
         const errorMessage = error?.message || "未知错误";
-        const fallbackText = "抱歉，服务暂时繁忙，请稍后重试。";
+        const fallbackText = isAbortError ? "请求已被中止" : "抱歉，服务暂时繁忙，请稍后重试。";
 
         // ========== 长期记忆更新检查（即使出错也检查） ==========
         if (this.longTermMemory) {
@@ -708,17 +763,20 @@ export class ProductionAgent {
         }
 
         if (streamEnabled) {
-          emitStreamEvent(chunkCallback, {
-            type: "error",
-            content: "",
-            message: errorMessage,
-          });
-          emitStreamEvent(chunkCallback, {
-            type: "done",
-            content: fallbackText,
-            finalText: fallbackText,
-          });
-          fullResponseCallback?.(fallbackText, []);
+          // AbortError 不发送 error 事件，静默中止
+          if (!isAbortError) {
+            emitStreamEvent(chunkCallback, {
+              type: "error",
+              content: "",
+              message: errorMessage,
+            });
+            emitStreamEvent(chunkCallback, {
+              type: "done",
+              content: fallbackText,
+              finalText: fallbackText,
+            });
+            fullResponseCallback?.(fallbackText, []);
+          }
           return fallbackText;
         }
 
