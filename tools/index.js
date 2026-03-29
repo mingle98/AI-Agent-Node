@@ -558,7 +558,7 @@ export const TOOL_DEFINITIONS = [
     description: "创建定时任务（延迟 N 分钟后执行一次指定工具）。用户ID由系统自动注入。多步骤场景请使用 Plan 模式编排多个定时任务",
     params: [
       { name: "延迟分钟数", type: "number", example: 2, description: "延迟多少分钟后执行任务" },
-      { name: "任务类型", type: "string", example: "daily_news", options: ["daily_news", "email_send", "email_template", "exec_code", "script_generator", "pdf_write"], description: "要执行的任务类型，对应工具名" },
+      { name: "任务类型", type: "string", example: "daily_news", options: ["daily_news", "email_send", "email_sender", "email_template", "exec_code", "script_generator", "pdf_write"], description: "要执行的任务类型，对应工具名" },
       { name: "任务参数", type: "object", example: '{"code":"console.log(1+2)","language":"javascript"}', description: "任务参数，直接传递到对应工具的各参数位置（如 email_send 需传入 to/subject/content/options）" },
       { name: "任务描述", type: "string", example: "2分钟后执行代码", description: "任务描述（可选）", required: false }
     ],

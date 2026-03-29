@@ -137,7 +137,7 @@ function buildRulesSection() {
 14. 图片操作 → 使用 image_info/svg_write 工具；压缩图片必须使用 image_compress（单张）或 image_compress_batch（批量）工具，支持 jpg/png/gif/webp/avif
 15. 压缩/解压操作 → 使用 zip_compress/zip_extract/zip_info/zip_list 工具
 16. 邮件发送 → 【优先使用 email_sender 技能】，它会自动完成信息提取、SMTP验证、模板选择、发送全流程；定时邮件请使用 schedule_task 工具
-17. 定时任务调度 → 使用 schedule_task 工具（延迟执行邮件发送、脚本执行等，支持用户隔离，只执行一次）
+17. 定时任务调度 → 使用 schedule_task 工具（延迟执行邮件发送、脚本执行等，支持用户隔离，只执行一次）；taskParams 为 JSON 字符串，定时邮件须含 to/subject/content
 18. 定时邮件示例：先用 daily_news 或其他工具生成内容，再用 schedule_task 定时发送邮件（多次定时任务请分开调用）
 19. 查看定时任务 → 使用 schedule_list 工具（查询当前用户的待执行/已完成任务）
 20. 取消定时任务 → 使用 schedule_cancel 工具（只能取消自己的任务）

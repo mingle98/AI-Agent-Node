@@ -24,11 +24,53 @@ let cleanupTimer = null;
 let isInitialized = false;
 
 /**
+ * 将定时任务里的 email_sender 参数映射为技能形参（显式字段 only，不做启发式猜测）。
+ * skillEmailSender(收件人, 主题, 内容, 场景类型, 附件路径, sessionId)
+ * 部分模型会把参数写成 arg1..arg5，与技能形参顺序一致。
+ * @param {Record<string, unknown>|null|undefined} params
+ * @returns {[string, string, string, string, string]}
+ */
+export function normalizeEmailSenderTaskParams(params) {
+  if (!params || typeof params !== 'object') {
+    return ['', '', '', 'custom', ''];
+  }
+
+  const p = /** @type {Record<string, unknown>} */ (params);
+
+  const to = String(
+    p.收件人 ?? p.to ?? p.recipient ?? p.email ?? p.arg1 ?? ''
+  ).trim();
+  const subject = String(
+    p.主题 ?? p.subject ?? p.arg2 ?? ''
+  ).trim();
+  const content = String(
+    p.内容 ?? p.content ?? p.body ?? p.html ?? p.arg3 ?? ''
+  ).trim();
+  const scenario = String(
+    p.场景类型 ?? p.type ?? p.template ?? p.scenario ?? p.arg4 ?? 'custom'
+  ).trim() || 'custom';
+
+  const rawAtt = p.附件路径 ?? p.attachmentPath ?? p.attachment ?? p.attachments ?? p.arg5;
+  let attachmentStr = '';
+  if (Array.isArray(rawAtt)) {
+    attachmentStr = rawAtt
+      .map((a) => (typeof a === 'string' ? a : a && typeof a === 'object' && 'path' in a ? String(/** @type {{path?:string}} */(a).path) : ''))
+      .filter(Boolean)
+      .join(', ');
+  } else if (rawAtt != null && rawAtt !== '') {
+    attachmentStr = String(rawAtt).trim();
+  }
+
+  return [to, subject, content, scenario, attachmentStr];
+}
+
+/**
  * 深度清理不可序列化的字段（Buffer、Error、正则、函数、Symbol 等），
  * 防止 JSON 序列化失败或 IPC 克隆报错。
  * @param {any} value
  * @returns {any}
  */
+
 function sanitizeResult(value) {
   if (value === null || value === undefined) return value;
 
@@ -385,28 +427,38 @@ async function executeTask(task) {
 
     // 工具名别名映射（skill 名 → 实际 tool 名）
     const TASK_TYPE_ALIASES = {
-      email_sender: 'email_send',
       pdf_sender: 'pdf_write',
     };
     const resolvedTaskType = TASK_TYPE_ALIASES[task.taskType] || task.taskType;
 
-    const toolFunc = TOOLS[resolvedTaskType];
-
-    if (!toolFunc) {
-      throw new Error(`未知的任务类型: ${task.taskType}`);
-    }
-
-    // 执行任务
-    // 使用统一的工具常量判断是否需要 sessionId
-
     let result;
-    if (TOOLS_NEEDING_SESSION_ID.includes(resolvedTaskType)) {
-      // 需要 sessionId 的工具：注入为第一个参数
-      const paramsWithSession = { sessionId: task.sessionId, ...task.params };
-      result = await toolFunc(...Object.values(paramsWithSession));
+
+    // email_sender 是技能，参数语义与底层 email_send（第 5 参为 JSON 字符串）不同，必须走技能入口
+    if (task.taskType === 'email_sender') {
+      const { SKILLS } = await import('../skills/index.js');
+      const skillFn = SKILLS.email_sender;
+      if (typeof skillFn !== 'function') {
+        throw new Error('email_sender 技能未注册');
+      }
+      const [to, subject, content, scenario, attachmentStr] = normalizeEmailSenderTaskParams(task.params);
+      result = await skillFn(to, subject, content, scenario, attachmentStr, task.sessionId);
     } else {
-      // 不需要 sessionId 的工具：直接使用原始参数
-      result = await toolFunc(...Object.values(task.params));
+      const toolFunc = TOOLS[resolvedTaskType];
+
+      if (!toolFunc) {
+        throw new Error(`未知的任务类型: ${task.taskType}`);
+      }
+
+      // 执行任务
+      // 使用统一的工具常量判断是否需要 sessionId
+      if (TOOLS_NEEDING_SESSION_ID.includes(resolvedTaskType)) {
+        // 需要 sessionId 的工具：注入为第一个参数
+        const paramsWithSession = { sessionId: task.sessionId, ...task.params };
+        result = await toolFunc(...Object.values(paramsWithSession));
+      } else {
+        // 不需要 sessionId 的工具：直接使用原始参数
+        result = await toolFunc(...Object.values(task.params));
+      }
     }
 
     if (result && typeof result === 'object' && result.success === false) {

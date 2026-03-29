@@ -407,7 +407,7 @@ describe('LongTermMemory', () => {
   describe('长期记忆配置', () => {
     it('应该使用默认配置', () => {
       const memoryWithDefaults = new LongTermMemory(agent);
-      assert.strictEqual(memoryWithDefaults.maxMemoryLength, 1500);
+      assert.strictEqual(memoryWithDefaults.maxMemoryLength, 1000);
       assert.strictEqual(memoryWithDefaults.updateInterval, 5);
     });
 
