@@ -11,7 +11,8 @@ import { ContextManager } from "./contextManager.js";
 import { CircuitBreaker, retryWithBackoff, withSessionLock, withTimeout } from "./resilience.js";
 import { selectTaskMode, chatWithPlanExec } from "./planExecMode.js";
 import { getToolDivBox } from "../utils/streamRenderer.js";
-import { LongTermMemory } from "./longTermMemory.js";
+import { LongTermMemory, LTM_INJECT_START, LTM_INJECT_END } from "./longTermMemory.js";
+import { selectActiveCapabilities, expandCapabilitiesToAll } from "./capabilityRouter.js";
 
 // ========== 会话中止错误类 ==========
 export class AbortError extends Error {
@@ -69,6 +70,22 @@ function extractReasoningContent(chunk) {
   return typeof delta?.reasoning_content === "string" ? delta?.reasoning_content : "";
 }
 
+function extractMemoryBlock(systemPrompt = "") {
+  if (typeof systemPrompt !== "string" || !systemPrompt) {
+    return "";
+  }
+  const startIdx = systemPrompt.indexOf(LTM_INJECT_START);
+  const endMarkerIdx = systemPrompt.indexOf(LTM_INJECT_END);
+  if (startIdx < 0 || endMarkerIdx < 0) {
+    return "";
+  }
+  const endIdx = endMarkerIdx + LTM_INJECT_END.length;
+  if (endIdx <= startIdx) {
+    return "";
+  }
+  return systemPrompt.substring(startIdx, endIdx);
+}
+
 export class ProductionAgent {
   constructor(llm, vectorStore, embeddings, options = {}) {
     this.llm = llm;
@@ -107,7 +124,10 @@ export class ProductionAgent {
       });
     }
 
-    this.systemPrompt = this.buildSystemPrompt();
+    this.capabilityRoutingEnabled = options.capabilityRoutingEnabled === true;
+    this.compactSystemPrompt = options.compactSystemPrompt !== false;
+    this.baseSystemPrompt = this.buildSystemPrompt();
+    this.systemPrompt = this.baseSystemPrompt;
     this.callableDefinitions = this.buildCallableDefinitions();
     // console.log('🧧callableDefinitions:', JSON.stringify(this.callableDefinitions, null, 2));
 
@@ -134,7 +154,7 @@ export class ProductionAgent {
 
     if (this.options.debug) {
       console.log("\n" + "=".repeat(70));
-      console.log("📝 系统提示：");
+      console.log("📝 基础系统提示（全量能力模板，仅初始化展示）：");
       console.log("=".repeat(70));
       console.log(systemPrompt);
       console.log("=".repeat(70) + "\n");
@@ -188,8 +208,85 @@ export class ProductionAgent {
     return callableMap;
   }
 
-  getStructuredTools() {
-    return [...this.callableDefinitions.values()].map((item) => item.schema);
+  getStructuredTools(capabilityNames = null) {
+    if (!Array.isArray(capabilityNames) || capabilityNames.length === 0) {
+      return [...this.callableDefinitions.values()].map((item) => item.schema);
+    }
+    const allowed = new Set(capabilityNames);
+    return [...this.callableDefinitions.values()]
+      .filter((item) => allowed.has(item.name))
+      .map((item) => item.schema);
+  }
+
+  resolveCapabilitySelection(userInput) {
+    if (!this.capabilityRoutingEnabled) {
+      return expandCapabilitiesToAll(TOOL_DEFINITIONS, SKILL_DEFINITIONS);
+    }
+
+    return selectActiveCapabilities({
+      userInput,
+      toolDefinitions: TOOL_DEFINITIONS,
+      skillDefinitions: SKILL_DEFINITIONS,
+      alwaysOnTools: this.options.alwaysOnTools || ["search_knowledge", "analyze_code", "exec_code"],
+      alwaysOnSkills: this.options.alwaysOnSkills || [],
+      maxTools: this.options.maxActiveTools || 14,
+      maxSkills: this.options.maxActiveSkills || 8,
+    });
+  }
+
+  buildSystemPromptForCapabilities(capabilitySelection) {
+    const toolNames = capabilitySelection?.toolNames || [];
+    const skillNames = capabilitySelection?.skillNames || [];
+
+    const toolSet = new Set(toolNames);
+    const skillSet = new Set(skillNames);
+
+    const activeTools = TOOL_DEFINITIONS.filter((d) => toolSet.has(d.name));
+    const activeSkills = SKILL_DEFINITIONS.filter((d) => skillSet.has(d.name));
+
+    return buildSystemPrompt(activeTools, activeSkills, {
+      roleName: this.options.roleName || "智能问答助手",
+      roleDescription: this.options.roleDescription || "可以帮助用户解决问题",
+      compact: this.compactSystemPrompt,
+    });
+  }
+
+  applyCapabilitySelectionToSession(session, capabilitySelection) {
+    const selected = capabilitySelection || expandCapabilitiesToAll(TOOL_DEFINITIONS, SKILL_DEFINITIONS);
+    session.activeCapabilities = selected;
+    session.activeCapabilityNames = selected.capabilityNames || [];
+
+    const firstSystemMessage = session.messages.find((m) => m._getType && m._getType() === "system");
+    const previousPrompt = typeof firstSystemMessage?.content === "string"
+      ? firstSystemMessage.content
+      : String(firstSystemMessage?.content || "");
+    const existingMemoryBlock = extractMemoryBlock(previousPrompt);
+
+    const rebuiltPrompt = this.buildSystemPromptForCapabilities(selected);
+    session.activeSystemPrompt = existingMemoryBlock
+      ? `${rebuiltPrompt}\n${existingMemoryBlock}`
+      : rebuiltPrompt;
+
+    if (this.options.debug) {
+      console.log(
+        `🧭 [${session.id}] 激活能力: tools=${selected.toolNames?.length || 0}, skills=${selected.skillNames?.length || 0}, total=${session.activeCapabilityNames.length}/${this.callableDefinitions.size}`
+      );
+      console.log(`🧭 [${session.id}] 能力清单: ${session.activeCapabilityNames.join(", ")}`);
+      console.log(`🧠 [${session.id}] 记忆块保留: ${existingMemoryBlock ? "是" : "否"}`);
+      console.log("\n" + "=".repeat(70));
+      console.log(`📝 [${session.id}] 重构后系统提示（按激活能力）：`);
+      console.log("=".repeat(70));
+      console.log(session.activeSystemPrompt);
+      console.log("=".repeat(70) + "\n");
+    }
+
+    const firstSystemIndex = session.messages.findIndex((m) => m._getType && m._getType() === "system");
+    const nextSystemMessage = new SystemMessage(session.activeSystemPrompt);
+    if (firstSystemIndex >= 0) {
+      session.messages[firstSystemIndex] = nextSystemMessage;
+    } else {
+      session.messages.unshift(nextSystemMessage);
+    }
   }
 
   createSession(sessionId) {
@@ -216,6 +313,9 @@ export class ProductionAgent {
         failureThreshold: this.options.toolFailureThreshold || 3,
         cooldownMs: this.options.toolBreakerCooldownMs || 10000,
       }),
+      activeCapabilities: null,
+      activeCapabilityNames: null,
+      activeSystemPrompt: this.baseSystemPrompt,
       aborted: false,
     };
     this.sessions.set(sessionId, session);
@@ -361,8 +461,12 @@ export class ProductionAgent {
   }
 
   async invokeLLMWithResilience(session, messages, options = {}) {
-    const { onChunk = null, streamEnabled = true, enableThinking } = options || {};
-    const tools = this.getStructuredTools();
+    const { onChunk = null, streamEnabled = true, enableThinking, capabilityNames = null } = options || {};
+    const tools = this.getStructuredTools(capabilityNames || session?.activeCapabilityNames);
+
+    if (this.options.debug) {
+      console.log(`🧰 [${session?.id || "unknown"}] 本轮绑定工具/技能数量: ${tools.length}`);
+    }
 
     const invokePrimary = async () => {
       if (!this.llm?.bindTools) {
@@ -564,6 +668,11 @@ export class ProductionAgent {
       }
     }
 
+    if (this.capabilityRoutingEnabled) {
+      const capabilitySelection = this.resolveCapabilitySelection(userInput);
+      this.applyCapabilitySelectionToSession(session, capabilitySelection);
+    }
+
     const taskMode = await selectTaskMode(this, userInput, requestOptions, sessionHistory);
 
     // 如果是 Plan+Exec 模式，调用对应的处理逻辑
@@ -602,6 +711,14 @@ export class ProductionAgent {
     this.messages = session.messages;
     const streamEnabled = requestOptions?.streamEnabled ?? CONFIG.streamEnabled;
     const enableThinking = streamEnabled ? requestOptions?.enableThinking : undefined;
+    // 内部参数：仅用于 plan_exec 回退 ReAct 时避免重复写入同一条用户消息
+    const skipUserMessageAppend = requestOptions?.skipUserMessageAppend === true;
+
+    if (this.capabilityRoutingEnabled && (!session.activeCapabilityNames || session.activeCapabilityNames.length === 0)) {
+      const capabilitySelection = this.resolveCapabilitySelection(userInput);
+      this.applyCapabilitySelectionToSession(session, capabilitySelection);
+    }
+
     if (this.options.debug) {
       console.log(`messages length is:`, this.messages?.length);
     }
@@ -617,12 +734,14 @@ export class ProductionAgent {
         const toolExcResults = [];
         const logText = typeof userInput === "string" ? userInput : (userInput?.text || "[多模态输入]");
         console.log(`👤 [${sessionId}] 用户: ${logText}`);
-    const addMessage = this.buildHumanMessage(userInput);
-    if (this.options.debug) {
-      console.log(`👤 [${sessionId}] 用户消息:`, addMessage.toString());
-    }
-        session.messages.push(addMessage);
-        await this.manageContext(session);
+        if (!skipUserMessageAppend) {
+          const addMessage = this.buildHumanMessage(userInput);
+          if (this.options.debug) {
+            console.log(`👤 [${sessionId}] 用户消息:`, addMessage.toString());
+          }
+          session.messages.push(addMessage);
+          await this.manageContext(session);
+        }
 
         let iterations = 0;
         while (iterations < this.maxIterations) {
@@ -664,6 +783,21 @@ export class ProductionAgent {
           const aiText = normalizeTextContent(aiResponse.content);
 
           if (toolCalls.length === 0) {
+            const shouldExpandCapabilities =
+              this.capabilityRoutingEnabled &&
+              iterations === 1 &&
+              (session.activeCapabilityNames?.length || 0) < this.callableDefinitions.size &&
+              !aiText.trim();
+
+            if (shouldExpandCapabilities) {
+              const expanded = expandCapabilitiesToAll(TOOL_DEFINITIONS, SKILL_DEFINITIONS);
+              this.applyCapabilitySelectionToSession(session, expanded);
+              if (this.options.debug) {
+                console.log(`🔁 [${sessionId}] 首轮无输出，扩展为全量能力后重试`);
+              }
+              continue;
+            }
+
             session.messages.push(aiResponse);
             if (streamEnabled) {
               if (!streamedText) {

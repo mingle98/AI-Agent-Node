@@ -8,4 +8,5 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 - Added: Custom component rendering support (streaming & non-streaming).
 - Added: `daily_news` tool and documentation updates.
+- Added: Dynamic capability routing switch `capabilityRoutingEnabled` and related docs.
 

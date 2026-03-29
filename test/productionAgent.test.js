@@ -3,13 +3,16 @@ import test from "node:test";
 
 import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { ProductionAgent } from "../agent/ProductionAgent.js";
+import { LTM_INJECT_START, LTM_INJECT_END } from "../agent/longTermMemory.js";
 
 class MockLLM {
   constructor(script = []) {
     this.script = [...script];
+    this.lastBoundTools = [];
   }
 
-  bindTools() {
+  bindTools(tools = []) {
+    this.lastBoundTools = tools;
     return {
       stream: async function* () {
         const next = this.script.shift() || {};
@@ -469,6 +472,7 @@ test("ProductionAgent: constructor should set default options", () => {
   assert.equal(agent.maxIterations, 10);
   assert.equal(agent.defaultSessionId, "default");
   assert.equal(agent.multimodalEnabled, true);
+  assert.equal(agent.capabilityRoutingEnabled, false);
   assert.ok(agent.resilience.llmTimeoutMs > 0);
   assert.ok(agent.resilience.toolTimeoutMs > 0);
 });
@@ -494,5 +498,67 @@ test("ProductionAgent.buildCallableDefinitions: should include tools and skills"
   assert.ok(agent.callableDefinitions.size > 0);
   assert.ok(agent.callableDefinitions.has("render_mermaid"));
   assert.ok(agent.callableDefinitions.has("mermaid_diagram"));
+});
+
+test("ProductionAgent.getStructuredTools: should filter by capability names", () => {
+  const llm = new MockLLM([]);
+  const agent = createAgentWithMockLLM(llm);
+
+  const tools = agent.getStructuredTools(["render_mermaid", "mermaid_diagram"]);
+  const names = tools.map((t) => t.function?.name).filter(Boolean);
+
+  assert.deepEqual(names.sort(), ["mermaid_diagram", "render_mermaid"]);
+});
+
+test("ProductionAgent.resolveCapabilitySelection: should expand to all when routing disabled", () => {
+  const llm = new MockLLM([]);
+  const agent = createAgentWithMockLLM(llm, { capabilityRoutingEnabled: false });
+
+  const selected = agent.resolveCapabilitySelection("任意输入");
+  assert.equal(selected.capabilityNames.length, agent.callableDefinitions.size);
+});
+
+test("ProductionAgent.chat: should expand capabilities and retry when first round empty", async () => {
+  const llm = new MockLLM([
+    { chunks: [new AIMessage({ content: "" })] },
+    { chunks: [new AIMessage({ content: "expanded ok" })] },
+  ]);
+  const agent = createAgentWithMockLLM(llm, {
+    maxIterations: 3,
+    capabilityRoutingEnabled: true,
+  });
+
+  const totalCapabilities = agent.callableDefinitions.size;
+  const initialSelected = agent.resolveCapabilitySelection("你好").capabilityNames.length;
+  assert.ok(initialSelected < totalCapabilities, "initial selected capabilities should be a subset");
+
+  const result = await agent.chat("你好", null, null, "cap-expand-test");
+  assert.equal(result, "expanded ok");
+
+  const session = agent.getOrCreateSession("cap-expand-test");
+  assert.equal(session.activeCapabilityNames.length, totalCapabilities);
+  assert.equal(llm.lastBoundTools.length, totalCapabilities);
+});
+
+test("ProductionAgent.applyCapabilitySelectionToSession: should preserve memory block in system prompt", () => {
+  const llm = new MockLLM([]);
+  const agent = createAgentWithMockLLM(llm);
+  const session = agent.getOrCreateSession("preserve-memory-test");
+
+  const memoryBlock = `${LTM_INJECT_START}\n## 用户记忆\n- 喜欢技术新闻\n${LTM_INJECT_END}`;
+  session.messages[0] = new SystemMessage(`old prompt\n${memoryBlock}`);
+
+  const selected = {
+    toolNames: ["search_knowledge"],
+    skillNames: [],
+    capabilityNames: ["search_knowledge"],
+  };
+
+  agent.applyCapabilitySelectionToSession(session, selected);
+
+  const content = String(session.messages[0].content);
+  assert.match(content, new RegExp(LTM_INJECT_START));
+  assert.match(content, /喜欢技术新闻/);
+  assert.match(content, new RegExp(LTM_INJECT_END));
 });
 

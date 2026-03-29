@@ -11,19 +11,20 @@ export function buildSystemPrompt(toolDefinitions, skillDefinitions, options = {
   const {
     roleName = "智能客服助手",
     roleDescription = "可以帮助用户解决问题",
+    compact = false,
   } = options;
 
   // 构建工具列表
-  const toolsSection = buildToolsSection(toolDefinitions);
+  const toolsSection = buildToolsSection(toolDefinitions, { compact });
   
   // 构建技能列表
-  const skillsSection = buildSkillsSection(skillDefinitions);
+  const skillsSection = buildSkillsSection(skillDefinitions, { compact });
   
   // 构建使用规则
-  const rulesSection = buildRulesSection();
+  const rulesSection = buildRulesSection({ compact });
   
   // 构建决策示例
-  const examplesSection = buildExamplesSection(skillDefinitions);
+  const examplesSection = buildExamplesSection(skillDefinitions, { compact });
 
   return `你是一个${roleName}，${roleDescription}
 
@@ -41,7 +42,8 @@ ${examplesSection}
 /**
  * 构建工具列表部分
  */
-function buildToolsSection(toolDefinitions) {
+function buildToolsSection(toolDefinitions, options = {}) {
+  const { compact = false } = options;
   if (!toolDefinitions || toolDefinitions.length === 0) {
     return "🔧 基础工具：暂无可用工具";
   }
@@ -54,6 +56,10 @@ function buildToolsSection(toolDefinitions) {
       }
       return `${p.name}${optionalMark}`;
     }).join(', ');
+
+    if (compact) {
+      return `${index + 1}. ${tool.name}(${paramsDesc}) - ${tool.description}`;
+    }
     
     return `${index + 1}. ${tool.name}(${paramsDesc}) - ${tool.description}
    示例：${tool.example}`;
@@ -67,7 +73,8 @@ ${toolsList}`;
 /**
  * 构建技能列表部分
  */
-function buildSkillsSection(skillDefinitions) {
+function buildSkillsSection(skillDefinitions, options = {}) {
+  const { compact = false } = options;
   if (!skillDefinitions || skillDefinitions.length === 0) {
     return "🎯 高级技能：暂无可用技能";
   }
@@ -82,6 +89,10 @@ function buildSkillsSection(skillDefinitions) {
     }).join(', ');
     
     let description = `${index + 1}. ${skill.name}(${paramsDesc}) - ${skill.description}`;
+
+    if (compact) {
+      return description;
+    }
     
     if (skill.functionality) {
       description += `\n   功能：${skill.functionality}`;
@@ -108,7 +119,21 @@ ${skillsList}`;
 /**
  * 构建使用规则部分
  */
-function buildRulesSection() {
+function buildRulesSection(options = {}) {
+  const { compact = false } = options;
+
+  if (compact) {
+    return `📋 使用规则：
+1. 优先选择最匹配用户意图的工具或技能，避免无关调用
+2. 知识查询优先 search_knowledge；代码相关优先 analyze_code / code_review / debug_assistant
+3. 图表与流程梳理优先 mermaid_diagram 或 ai_agent_echart，必要时再调用 render_mermaid
+4. 文件、Office、压缩、图片、邮件等场景使用对应专用工具
+5. 涉及执行脚本可使用 exec_code 或 python_executor
+6. 文件操作遵循 sessionId 隔离；路径以用户 workspace 为根目录
+7. 参数要完整准确；失败时给出可执行修复建议
+8. 回答需准确、友好、专业`;
+  }
+
   return `📋 使用规则：
 1. 知识查询 → 使用 search_knowledge 工具（AI Agent资料、组件文档）
 2. 代码分析 → 使用 analyze_code 工具（解释逻辑、问题排查）
@@ -155,7 +180,8 @@ function buildRulesSection() {
 /**
  * 构建智能决策示例部分
  */
-function buildExamplesSection(skillDefinitions) {
+function buildExamplesSection(skillDefinitions, options = {}) {
+  const { compact = false } = options;
   // 可以根据技能定义自动生成示例
   const examples = [
     '- "AI Agent是什么？" → 用 search_knowledge 工具查询',
@@ -198,8 +224,10 @@ function buildExamplesSection(skillDefinitions) {
     });
   }
 
+  const finalExamples = compact ? examples.slice(0, 8) : examples;
+
   return `💡 智能决策示例：
-${examples.join('\n')}`;
+${finalExamples.join('\n')}`;
 }
 
 /**

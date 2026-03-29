@@ -148,7 +148,7 @@ function parsePlan(planText) {
 async function generatePlan(agent, userInput, session, chunkCallback, streamEnabled) {
   const text = typeof userInput === "string" ? userInput : (userInput?.text || "");
   const planSystemPrompt = buildPlanSystemPrompt(
-    () => agent.getStructuredTools(),
+    () => agent.getStructuredTools(session?.activeCapabilityNames),
     agent.maxPlanSteps
   );
 
@@ -456,6 +456,11 @@ export async function chatWithPlanExec(agent, userInput, chunkCallback, fullResp
 
       agent.touchSession(session);
 
+      if (agent.capabilityRoutingEnabled && (!session.activeCapabilityNames || session.activeCapabilityNames.length === 0)) {
+        const capabilitySelection = agent.resolveCapabilitySelection(userInput);
+        agent.applyCapabilitySelectionToSession(session, capabilitySelection);
+      }
+
       // ========== 长期记忆注入（首次对话或有记忆文件时） ==========
       if (agent.longTermMemory) {
         try {
@@ -493,7 +498,11 @@ export async function chatWithPlanExec(agent, userInput, chunkCallback, fullResp
 
       if (!plan) {
         console.log(`⚠️ [Plan+Exec] 计划生成失败，回退到 ReAct 模式`);
-        return agent.chatWithReAct(userInput, chunkCallback, fullResponseCallback, sessionId, requestOptions);
+        return agent.chatWithReAct(userInput, chunkCallback, fullResponseCallback, sessionId, {
+          ...(requestOptions || {}),
+          // 内部参数：避免回退到 ReAct 时重复 append 同一条用户消息
+          skipUserMessageAppend: true,
+        });
       }
 
       // 检查 abort 标志

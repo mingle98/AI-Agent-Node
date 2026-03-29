@@ -628,25 +628,34 @@ test("ProductionAgent: react mode is unchanged after plan_exec addition", async 
 test("ProductionAgent: plan_exec mode handles plan fallback to react on invalid plan", async () => {
   const invalidPlanResponse = new AIMessage({ content: "This is not a valid plan format" });
   const fallbackResponse = new AIMessage({ content: "Fallback response after plan failure" });
-  
+
   const llm = new MockLLM([
     { message: invalidPlanResponse },
     { message: fallbackResponse }
   ]);
-  
-  const agent = createAgentWithMockLLM(llm, { 
+
+  const agent = createAgentWithMockLLM(llm, {
     taskMode: "plan_exec",
-    streamEnabled: false 
+    streamEnabled: false
   });
-  
+
+  const sessionId = "fallback-test";
   const result = await agent.chat(
     "无效计划测试",
     null,
     null,
-    "fallback-test"
+    sessionId
   );
-  
+
   assert.ok(typeof result === "string", "Should handle plan failure gracefully");
+
+  const session = agent.getOrCreateSession(sessionId);
+  const humanMessages = session.messages.filter((m) => m._getType() === "human");
+  const userMessages = humanMessages.filter((m) => {
+    const content = typeof m.content === "string" ? m.content : JSON.stringify(m.content);
+    return content.includes("无效计划测试");
+  });
+  assert.equal(userMessages.length, 1, "fallback to ReAct should not duplicate original user message");
 });
 
 test("ProductionAgent: plan_exec mode respects maxStepIterations", async () => {
@@ -1226,4 +1235,34 @@ test("plan_exec: messages are structured correctly (HumanMessage type)", async (
   humanMessages.forEach(msg => {
     assert.ok(msg.content !== undefined, "HumanMessage should have content");
   });
+});
+
+test("plan_exec: should initialize active capabilities before planning", async () => {
+  const planResponse = new AIMessage({
+    content: JSON.stringify({
+      task_summary: "Capability init",
+      estimated_steps: 1,
+      steps: [{ step_id: 1, description: "生成计划并执行", depends_on: [], expected_output: "done" }],
+      final_goal: "Complete"
+    })
+  });
+
+  const stepResponse = new AIMessage({ content: "Done" });
+  const llm = new MockLLM([
+    { message: planResponse },
+    { message: stepResponse }
+  ]);
+
+  const agent = createAgentWithMockLLM(llm, {
+    taskMode: "plan_exec",
+    streamEnabled: false,
+    capabilityRoutingEnabled: true,
+  });
+
+  await agent.chat("帮我画流程图并说明", null, null, "plan-capability-init-test");
+
+  const session = agent.getOrCreateSession("plan-capability-init-test");
+  assert.ok(Array.isArray(session.activeCapabilityNames));
+  assert.ok(session.activeCapabilityNames.length > 0);
+  assert.equal(session.messages[0]._getType(), "system");
 });

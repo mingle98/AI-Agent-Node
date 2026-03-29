@@ -13,6 +13,7 @@
 - 🧠 **长期记忆**: 基于 sessionId 的用户画像持久化，自动提取关键信息并注入上下文
 - 🛡️ **容错机制**: 熔断器、重试机制、降级策略
 - 🧠 **双执行模式**: 支持 ReAct 快速响应和 Plan+Exec 计划执行两种模式，智能切换
+- 🧭 **动态能力路由**: 支持按用户请求动态裁剪工具/技能能力面，降低无关能力干扰（可通过 `capabilityRoutingEnabled` 开关控制）
 - 📁 **用户文件隔离**: 基于 sessionId 的独立工作空间，自动目录初始化，支持文件数量限制（100个/用户）
 - 📧 **邮件发送**: 支持 SMTP 发送，内置多种精美模板（通知/告警/报告/感谢信/验证码/邀请函/营销）
 - 🎨 **AISuspendedBallChat 兼容**: 完全符合 AISuspendedBallChat 组件接口规范
@@ -406,10 +407,11 @@ import { SuspendedBallChat } from 'ai-suspended-ball-chat'
 
 ```javascript
 export const CONFIG = {
-  maxHistoryMessages: 20,     // 最大历史消息数
-  maxContextLength: 8000,     // 最大上下文 token 数
-  ragTopK: 3,                 // RAG 检索返回数量
-  streamEnabled: true,        // 是否启用流式输出
+  maxHistoryMessages: 20,        // 最大历史消息数
+  maxContextLength: 8000,        // 最大上下文 token 数
+  ragTopK: 3,                    // RAG 检索返回数量
+  streamEnabled: true,           // 是否启用流式输出
+  capabilityRoutingEnabled: false, // 是否启用动态能力路由（建议先完善 capabilityRouter.js 再开启）
 };
 ```
 
@@ -689,6 +691,9 @@ const agent = new ProductionAgent(llm, vectorStore, embeddings, {
   complexityThreshold: 0.5,           // 复杂度阈值 (0-1)，auto 模式下高于此值切换 Plan+Exec
   maxPlanSteps: 10,                 // Plan+Exec 模式最大计划步骤数
   maxStepIterations: 3,             // Plan+Exec 单步骤最大迭代次数
+
+  // ========== 动态能力路由配置 ==========
+  capabilityRoutingEnabled: false,  // 启用后按请求动态选择工具/技能；关闭则保持全量能力注入
 });
 ```
 
