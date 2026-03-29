@@ -14,6 +14,6 @@ export const CONFIG = {
   baseUrl: process.env.BASE_URL || `http://${HOST}:${PORT}`,
 
   // ========== 长期记忆配置 ==========
-  maxMemoryLength: 1200,           // 记忆文件最大字数
+  maxMemoryLength: 1000,           // 记忆文件最大字数
   memoryUpdateInterval: 5,         // 记忆更新间隔（对话轮数）
 };

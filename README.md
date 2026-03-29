@@ -443,12 +443,12 @@ export const CONFIG = {
 
 **配置选项：**
 
-| 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| `maxMemoryLength` | 1500 | 最大记忆字数 |
-| `updateInterval` | 5 | 记忆更新间隔（对话轮数） |
-| `memoryDir` | memory | 记忆目录名 |
-| `memoryFile` | memory.md | 记忆文件名 |
+| 配置项　　　　　　| 默认值　　| 说明　　　　　　　　　　 |
+| -------------------| -----------| --------------------------|
+| `maxMemoryLength` | 1000　　　| 最大记忆字数　　　　　　 |
+| `updateInterval`　| 5　　　　 | 记忆更新间隔（对话轮数） |
+| `memoryDir`　　　 | memory　　| 记忆目录名　　　　　　　 |
+| `memoryFile`　　　| memory.md | 记忆文件名　　　　　　　 |
 
 **使用方式：**
 

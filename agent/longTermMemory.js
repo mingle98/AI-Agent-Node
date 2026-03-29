@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 // ========== 配置 ==========
 const MEMORY_DIR = 'memory';
 const MEMORY_FILE = 'memory.md';
-const DEFAULT_MAX_MEMORY_LENGTH = 1500;  // 默认最大记忆字数
+const DEFAULT_MAX_MEMORY_LENGTH = 1000;  // 默认最大记忆字数
 const DEFAULT_UPDATE_INTERVAL = 5;       // 默认更新间隔（对话轮数）
 
 /** 注入到系统提示词中的记忆块边界，便于更新时整块替换，避免「已注入」锁死旧内容 */
