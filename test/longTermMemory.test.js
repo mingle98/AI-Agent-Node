@@ -1,6 +1,6 @@
 // ========== 长期记忆模块测试 ==========
 
-import { describe, it, beforeEach, afterEach } from 'node:test';
+import { describe, it, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import path from 'path';
 import fs from 'fs/promises';
@@ -10,6 +10,25 @@ import { LongTermMemory, LTM_INJECT_START, LTM_INJECT_END } from '../agent/longT
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const __ORIGINAL_CONSOLE__ = {
+  log: console.log,
+  warn: console.warn,
+  error: console.error,
+};
+
+before(() => {
+  if (process.env.TEST_DEBUG_LOGS === '1') return;
+  console.log = () => {};
+  console.warn = () => {};
+  console.error = () => {};
+});
+
+after(() => {
+  console.log = __ORIGINAL_CONSOLE__.log;
+  console.warn = __ORIGINAL_CONSOLE__.warn;
+  console.error = __ORIGINAL_CONSOLE__.error;
+});
 
 // 模拟 ProductionAgent
 class MockAgent {

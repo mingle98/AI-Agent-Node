@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { before, after } from "node:test";
 
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 import { ProductionAgent } from "../agent/ProductionAgent.js";
@@ -10,6 +10,25 @@ import {
   detectTaskComplexitySync,
   selectTaskMode
 } from "../agent/complexityEvaluator.js";
+
+const __ORIGINAL_CONSOLE__ = {
+  log: console.log,
+  warn: console.warn,
+  error: console.error,
+};
+
+before(() => {
+  if (process.env.TEST_DEBUG_LOGS === "1") return;
+  console.log = () => {};
+  console.warn = () => {};
+  console.error = () => {};
+});
+
+after(() => {
+  console.log = __ORIGINAL_CONSOLE__.log;
+  console.warn = __ORIGINAL_CONSOLE__.warn;
+  console.error = __ORIGINAL_CONSOLE__.error;
+});
 
 class MockLLM {
   constructor(script = []) {
