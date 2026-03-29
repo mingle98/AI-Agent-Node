@@ -97,6 +97,47 @@ test.describe("quickRuleBasedEval - 通用动作密度检测", () => {
   });
 });
 
+// ========== 长提示词优先 LLM（避免纯关键词 HIGH） ==========
+
+test.describe("长提示词优先 LLM 语义评估", () => {
+  test("达到字数阈值且提供 LLM 时：跳过关键词快速 HIGH，以 LLM 级别为准", async () => {
+    const mockLlm = {
+      async invoke() {
+        return { content: "MEDIUM" };
+      }
+    };
+    const longText =
+      "帮我梳理一下我文件资源,如果有重复的文件只需保留一份,空文件夹也需要删除," +
+      "另外根据文件的内容完成更加合理直观的文件重新命名," +
+      "最后定时1分钟后把处理报告以pdf形式发到我邮箱里";
+    assert.ok(longText.length >= 80, "测试句应达到本用例的 preferLlmMinLength(80)");
+    const ev = new IntelligentComplexityEvaluator({
+      llm: mockLlm,
+      enableLLMEval: true,
+      preferLlmMinLength: 80
+    });
+    const r = await ev.evaluate(longText);
+    assert.equal(r.level, ComplexityLevel.MEDIUM);
+    assert.ok(r.reasoning.includes("语义评估"), `reasoning: ${r.reasoning}`);
+  });
+
+  test("未达字数阈值：仍可走关键词快速 HIGH（不强制 LLM）", async () => {
+    const mockLlm = {
+      async invoke() {
+        return { content: "LOW" };
+      }
+    };
+    const ev = new IntelligentComplexityEvaluator({
+      llm: mockLlm,
+      enableLLMEval: true,
+      preferLlmMinLength: 500
+    });
+    const r = await ev.evaluate("扫描,整理,删除,重命名,发送邮件");
+    assert.equal(r.level, ComplexityLevel.HIGH);
+    assert.ok(r.reasoning.includes("快速规则"));
+  });
+});
+
 // ========== 【核心修复验证】逗号分隔多动作序列 ==========
 
 test.describe("【Bug 修复】逗号分隔多动作序列（原始案例）", () => {

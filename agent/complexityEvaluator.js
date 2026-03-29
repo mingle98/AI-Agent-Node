@@ -18,17 +18,17 @@ export const ComplexityLevel = {
  */
 const LIGHTWEIGHT_EVAL_PROMPT = `你是一个任务复杂度评估专家。
 
-请快速判断以下任务的复杂度级别：
+请根据语义判断以下任务的复杂度级别（不要仅凭个别词就判 HIGH）：
 
 任务：{task}
 
 复杂度级别说明：
 - LOW（低）：简单问答、定义解释、单次查询、无需多步骤
-- MEDIUM（中）：需要2-3个简单步骤、简单的文件操作、基础数据处理
-- HIGH（高）：需要多个步骤/工具、文件批量处理、报告生成、复杂数据分析、对比分析
-- CRITICAL（极高）：超复杂任务，需要5步以上、涉及多文件/多工具协同、自动化流程
+- MEDIUM（中）：需要 2～4 步、常规文件操作、单次发邮件/单次定时、基础整理
+- HIGH（高）：大量批量操作、跨多类工具深度协同、复杂数据分析与多份报告、强自动化流水线
+- CRITICAL（极高）：超复杂任务，需要 5 步以上且涉及多文件/多工具/多轮决策
 
-请只输出一个词：LOW、MIDDLE 或 HIGH（将 MEDIUM 映射为 MEDIUM，CRITICAL 映射为 HIGH）
+请只输出一个词：LOW、MEDIUM 或 HIGH（不要输出 MIDDLE；CRITICAL 视作 HIGH）
 
 注意：只需要输出一个词，不要解释。`;
 
@@ -52,7 +52,9 @@ const TOOL_COMPLEXITY_MAP = {
     // 新增：多步骤操作关键词
     /扫描/, /删除/, /重命名/, /邮箱/, /邮件.*发送/, /发送.*邮件/,
     /发.*邮件/, /整理.*过程/, /删除.*文件/, /文件.*扫描/,
-    /产.*报告/, /输出.*报告/, /发送.*报告/, /重命名.*文件/
+    /产.*报告/, /输出.*报告/, /发送.*报告/, /重命名.*文件/,
+    // 文件治理多步（易只命中「删除」等单点，整体分被低估）
+    /重复.*文件|去重|空文件夹|梳理.*(文件|资源)|文件资源/
   ],
   
   // 中等复杂度工具模式
@@ -109,7 +111,7 @@ function calculateLengthFactor(text) {
 const ACTION_KEYWORDS = {
   // 高权重动作（明确需要多步骤）
   highWeight: [
-    "扫描", "遍历", "清理", "整理", "删除", "重命名", "迁移", "备份",
+    "扫描", "遍历", "清理", "整理", "梳理", "删除", "重命名", "迁移", "备份",
     "分析", "统计", "对比", "汇总", "归纳", "提取", "筛选", "排序",
     "生成", "创建", "编写", "修改", "重构", "部署", "发布", "上传",
     "发送", "推送", "通知", "邮件", "导出", "导入", "同步"
@@ -279,11 +281,14 @@ function identifyOperationType(text) {
   if (/多[个份批].*(文件|文档|报告)/.test(text) ||
       /(遍历|搜索|扫描).*(所有|全部)?.*文件/.test(text) ||
       /批量.*处理/.test(text) ||
-      /扫描.*文件/.test(text)) {
+      /扫描.*文件/.test(text) ||
+      /(重复|去重|空文件夹)/.test(text) && /文件|文件夹|资源/.test(text) ||
+      /梳理.{0,80}(文件|资源)/.test(text)) {
     types.push("file_batch");
   }
 
-  if (/生成.*报告|整理.*报告|分析.*报告|产.*报告|输出.*报告|发送.*报告/.test(text)) {
+  if (/生成.*报告|整理.*报告|分析.*报告|产.*报告|输出.*报告|发送.*报告/.test(text) ||
+      /处理报告|报告.*(邮箱|邮件)|发到.*邮箱|邮箱里|发到我邮箱/) {
     types.push("report_generation");
   }
 
@@ -428,6 +433,15 @@ function quickRuleBasedEval(text) {
     return { level: ComplexityLevel.HIGH, confidence: 0.95 };
   }
 
+  // 多步文件治理 + 交付报告/邮件（逗号分句多但动作词计数易偏低）
+  if (
+    /(梳理|整理|去重|重复|空文件夹|重命名|删除)/.test(text) &&
+    /(文件|文件夹|资源)/.test(text) &&
+    /(报告|邮箱|邮件)/.test(text)
+  ) {
+    return { level: ComplexityLevel.HIGH, confidence: 0.88, reason: "file_governance_with_report_or_email" };
+  }
+
   // 需要 LLM 进一步判断的边界情况
   return null;
 }
@@ -446,12 +460,20 @@ function normalizeText(text) {
 /**
  * ========== 智能复杂度评估核心类 ==========
  */
+/** 默认：用户输入不少于该字数且已配置 llm 时，跳过关键词 HIGH 快速通道，走 LLM 语义评估（约两句以上中文需求） */
+export const DEFAULT_PREFER_LLM_MIN_LENGTH = 100;
+
 export class IntelligentComplexityEvaluator {
   constructor(options = {}) {
     this.llm = options.llm || null;
     this.enableLLMEval = options.enableLLMEval !== false; // 默认启用 LLM 评估
     this.llmTimeout = options.llmTimeout || 3000; // 3秒超时
     this.confidenceThreshold = options.confidenceThreshold || 0.7; // 置信度阈值
+    /** 达到该字数且存在 llm 时优先语义评估（不启用关键词 HIGH 捷径，仍保留「明显简单问句」LOW 捷径） */
+    this.preferLlmMinLength =
+      typeof options.preferLlmMinLength === "number"
+        ? options.preferLlmMinLength
+        : DEFAULT_PREFER_LLM_MIN_LENGTH;
 
     // 自适应阈值（可选）
     this.adaptiveThreshold = options.adaptiveThreshold || null;
@@ -475,12 +497,22 @@ export class IntelligentComplexityEvaluator {
 
     this.stats.totalEvals++;
 
-    // 1. 快速规则评估
-    const quickResult = quickRuleBasedEval(text);
+    const preferLlmMin = this.preferLlmMinLength ?? DEFAULT_PREFER_LLM_MIN_LENGTH;
+    const shouldPreferLlm =
+      text.length >= preferLlmMin && this.enableLLMEval && this.llm != null;
+
+    // 1. 快速规则评估（长提示词 + 已配置 llm 时：跳过关键词 HIGH，避免与语义评估冲突）
+    let quickResult = null;
+    if (!shouldPreferLlm) {
+      quickResult = quickRuleBasedEval(text);
+    } else if (isSimpleQuestion(text)) {
+      quickResult = { level: ComplexityLevel.LOW, confidence: 0.9 };
+    }
+
     if (quickResult && quickResult.confidence > 0.85) {
-      // 简单问题返回低分，高复杂度返回高分
       const score = quickResult.level === ComplexityLevel.LOW ? 0.1 : 0.65;
-      return this.buildResult(quickResult.level, score, quickResult.confidence, "快速规则");
+      const reasonTag = shouldPreferLlm ? "快速规则(仅显式简单问句)" : "快速规则";
+      return this.buildResult(quickResult.level, score, quickResult.confidence, reasonTag);
     }
 
     // 2. 多维度评分
@@ -512,9 +544,13 @@ export class IntelligentComplexityEvaluator {
     // 4. 置信度计算
     const confidence = this.calculateConfidence(dimensions, text);
 
-    // 5. 决定是否需要 LLM 评估
-    if (confidence < this.confidenceThreshold && this.enableLLMEval && this.llm) {
-      return this.evaluateWithLLM(text, dimensions, sessionHistory);
+    // 5. LLM：长提示词强制语义评估；否则仅在置信度不足时调用
+    const useLlm =
+      this.enableLLMEval &&
+      this.llm &&
+      (shouldPreferLlm || confidence < this.confidenceThreshold);
+    if (useLlm) {
+      return this.evaluateWithLLM(text, dimensions, sessionHistory, { preferLlm: shouldPreferLlm });
     }
 
     // 6. 基于规则返回结果
@@ -525,9 +561,28 @@ export class IntelligentComplexityEvaluator {
   }
 
   /**
-   * LLM 增强评估（用于边界情况）
+   * 将复杂度级别映射为与阈值可比的分值（用于长提示词语义路径与规则分对齐）
    */
-  async evaluateWithLLM(text, dimensions, sessionHistory) {
+  scoreFromLevel(level) {
+    switch (level) {
+      case ComplexityLevel.LOW:
+        return 0.1;
+      case ComplexityLevel.MEDIUM:
+        return 0.36;
+      case ComplexityLevel.HIGH:
+        return 0.65;
+      case ComplexityLevel.CRITICAL:
+        return 0.85;
+      default:
+        return 0.35;
+    }
+  }
+
+  /**
+   * LLM 增强评估（用于边界情况或长提示词强制语义评估）
+   * @param {{ preferLlm?: boolean }} [opts] preferLlm 为 true 时以 LLM 级别为主，分数与级别对齐
+   */
+  async evaluateWithLLM(text, dimensions, sessionHistory, opts = {}) {
     this.stats.llmCallCount++;
 
     try {
@@ -552,7 +607,7 @@ export class IntelligentComplexityEvaluator {
 
       const llmPromise = this.llm.invoke([
         new SystemMessage(prompt),
-        new HumanMessage("判断这个任务的复杂度级别，只回答 LOW、MEDIUM 或 HIGH")
+        new HumanMessage("判断这个任务的复杂度级别，只回答 LOW、MEDIUM 或 HIGH 三个词之一")
       ]);
 
       const response = await Promise.race([llmPromise, timeoutPromise]);
@@ -569,16 +624,24 @@ export class IntelligentComplexityEvaluator {
         llmLevel = ComplexityLevel.HIGH;
       }
 
-      // LLM 结果与规则结果融合
-      const ruleLevel = this.scoreToLevel(this.calculateWeightedScore(dimensions));
-      const finalLevel = this.fuseResults(ruleLevel, llmLevel, dimensions);
+      const ruleScore = this.calculateWeightedScore(dimensions);
+      const ruleLevel = this.scoreToLevel(ruleScore);
 
-      return this.buildResult(
-        finalLevel,
-        this.calculateWeightedScore(dimensions),
-        0.85,
-        `规则评估 + LLM语义分析: ${llmAnswer}`
-      );
+      let finalLevel;
+      let finalScore;
+      let reasoning;
+
+      if (opts.preferLlm) {
+        finalLevel = llmLevel;
+        finalScore = Math.max(ruleScore, this.scoreFromLevel(finalLevel));
+        reasoning = `长提示词(≥${this.preferLlmMinLength ?? DEFAULT_PREFER_LLM_MIN_LENGTH}字)语义评估: ${llmAnswer}`;
+      } else {
+        finalLevel = this.fuseResults(ruleLevel, llmLevel, dimensions);
+        finalScore = ruleScore;
+        reasoning = `规则评估 + LLM语义分析: ${llmAnswer}`;
+      }
+
+      return this.buildResult(finalLevel, finalScore, 0.85, reasoning);
 
     } catch (error) {
       // LLM 调用失败，回退到规则评估
@@ -798,10 +861,14 @@ export async function selectTaskMode(agent, userInput, requestOptions = {}, sess
   if (agent.taskMode === "react") return "react";
   if (agent.taskMode === "plan_exec") return "plan_exec";
 
-  // 3. 智能评估
+  // 3. 智能评估（长提示词优先走 LLM，避免纯关键词误判）
   const evaluator = new IntelligentComplexityEvaluator({
     llm: agent.llm,
-    enableLLMEval: true
+    enableLLMEval: true,
+    preferLlmMinLength:
+      typeof agent.preferLlmMinLength === "number"
+        ? agent.preferLlmMinLength
+        : DEFAULT_PREFER_LLM_MIN_LENGTH
   });
 
   const result = await evaluator.evaluate(userInput, sessionHistory);
