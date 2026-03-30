@@ -1380,24 +1380,26 @@
                                         ])
                                       : [
                                           h('pre', { class: 'file-preview-content' }, this.preview.content || '（空文件或不可预览）'),
-                                          // 无法预览时显示跳转按钮
-                                          h('div', { class: 'file-preview-fallback' }, (() => {
-                                            const fileUrl = this.getWorkspaceFileUrl(this.selectedNode);
-                                            if (!fileUrl) return null;
-                                            return [
-                                              h('div', { class: 'file-preview-fallback-icon' }, '📎'),
-                                              h('div', null, '该文件类型不支持直接预览'),
-                                              h('div', { class: 'file-preview-fallback-hint' },
-                                                '可点击下方按钮在新标签页打开查看'
-                                              ),
-                                              h('a', {
-                                                class: 'file-preview-fallback-btn',
-                                                href: fileUrl,
-                                                target: '_blank',
-                                                rel: 'noopener noreferrer',
-                                              }, ['↗ 新标签页打开']),
-                                            ];
-                                          })()),
+                                          // 只有在无法预览（没有内容或发生错误）时显示跳转按钮
+                                          (!this.preview.content || this.preview.error)
+                                            ? h('div', { class: 'file-preview-fallback' }, (() => {
+                                              const fileUrl = this.getWorkspaceFileUrl(this.selectedNode);
+                                              if (!fileUrl) return null;
+                                              return [
+                                                h('div', { class: 'file-preview-fallback-icon' }, '📎'),
+                                                h('div', null, '该文件类型不支持直接预览'),
+                                                h('div', { class: 'file-preview-fallback-hint' },
+                                                  '可点击下方按钮在新标签页打开查看'
+                                                ),
+                                                h('a', {
+                                                  class: 'file-preview-fallback-btn',
+                                                  href: fileUrl,
+                                                  target: '_blank',
+                                                  rel: 'noopener noreferrer',
+                                                }, ['↗ 新标签页打开']),
+                                              ];
+                                            })())
+                                            : null,
                                         ]
                             ])
                           ]
