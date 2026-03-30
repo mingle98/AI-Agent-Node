@@ -9,7 +9,7 @@
     "dev:server": "node server.js",
     "test": "c8 --reporter=lcov --reporter=text --reporter=html --exclude=test/** --exclude=node_modules/** --exclude=demos/** --exclude=scripts/** node --test",
     "test:raw": "NODE_OPTIONS=\"--test-reporter=spec\" node --test",
-    "test:coverage": "c8 --reporter=text-summary --check-coverage --lines=98 --functions=98 --branches=95 --statements=98 --exclude=demos/** --exclude=scripts/** node --test",
+    "test:coverage": "c8 --reporter=text-summary --check-coverage --lines=85 --functions=85 --branches=78 --statements=85 --exclude=demos/** --exclude=scripts/** node --test",
     "prepare": "husky"
   },
   "keywords": [

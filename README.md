@@ -1,5 +1,14 @@
 # AI Agent Node 简易脚手架
 
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![License](https://img.shields.io/github/license/mingle98/AI-Agent-Node)](./LICENSE)
+[![CI](https://github.com/mingle98/AI-Agent-Node/actions/workflows/ci.yml/badge.svg)](https://github.com/mingle98/AI-Agent-Node/actions/workflows/ci.yml)
+[![Coverage](https://github.com/mingle98/AI-Agent-Node/actions/workflows/coverage.yml/badge.svg)](https://github.com/mingle98/AI-Agent-Node/actions/workflows/coverage.yml)
+[![GitHub stars](https://img.shields.io/github/stars/mingle98/AI-Agent-Node?style=social)](https://github.com/mingle98/AI-Agent-Node/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/mingle98/AI-Agent-Node)](https://github.com/mingle98/AI-Agent-Node/issues)
+[![Top Language](https://img.shields.io/github/languages/top/mingle98/AI-Agent-Node)](https://github.com/mingle98/AI-Agent-Node)
+[![Code Size](https://img.shields.io/github/languages/code-size/mingle98/AI-Agent-Node)](https://github.com/mingle98/AI-Agent-Node)
+
 一个生产级的 AI Agent Node.js 脚手架，提供模块化架构、RAG 知识库检索、工具调用和技能管理等功能。
 
 ## 🚀 特性
