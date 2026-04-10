@@ -222,7 +222,7 @@ GET /api/files/quota?session_id=user123
   "usedSize": 52428800,
   "usedSizeFormatted": "50 MB",
   "maxSize": 209715200,
-  "maxSizeFormatted": "200 MB",
+  "maxSizeFormatted": "100 MB",
   "remainingSize": 157286400,
   "remainingSizeFormatted": "150 MB",
   "usedPercent": "25.00",
@@ -391,7 +391,7 @@ import { SuspendedBallChat } from 'ai-suspended-ball-chat'
 | **用户隔离** | 每个 `sessionId` 对应独立的目录 `/public/workspace/{sessionId}/`，用户间文件完全隔离 |
 | **自动初始化** | 新用户首次访问文件操作时自动创建用户目录 |
 | **数量限制** | 每个用户最多拥有 **100** 个文件 |
-| **存储配额** | 每个用户最多 **200MB** 存储空间 |
+| **存储配额** | 每个用户最多 **100MB** 存储空间 |
 | **安全限制** | 50MB 单文件大小限制，防止路径遍历攻击 |
 | **文件上传** | 支持通过 `/api/files/upload` 接口上传文件到 `uploadFile` 目录 |
 | **批量下载** | 支持打包多个文件为 ZIP 下载 |

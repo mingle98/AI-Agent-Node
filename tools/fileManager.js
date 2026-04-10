@@ -211,7 +211,7 @@ export async function getUserStorageStats(sessionId) {
       await calculateRecursive(userRoot);
     }
     
-    const MAX_STORAGE = 200 * 1024 * 1024; // 200MB
+    const MAX_STORAGE = 100 * 1024 * 1024; // 100MB
     
     return {
       success: true,
