@@ -388,7 +388,7 @@ export const TOOL_DEFINITIONS = [
       { name: "文件路径", type: "string", example: "output/data.json", description: "JSON文件输出路径" },
       { name: "数据", type: "string", example: '{"key":"value"}', description: "JSON格式的数据字符串" }
     ],
-    example: 'json_write("output/config.json", "{\\"port\\":3000}")',
+    example: 'json_write("output/config.json", "{\\"port\\":3600}")',
   },
   // ========== 图片工具 ==========
   {

@@ -662,12 +662,12 @@
 
         const App = {
           setup() {
-            const apiUrl = ref('http://localhost:3000/api/chat');
+            const apiUrl = ref('http://localhost:3600/api/chat');
             const appName = ref('ai-agent-node');
             const domainName = ref('debug_user');
             const enableStreaming = ref(true);
 
-            const resetApiUrl = ref('http://localhost:3000/api/session/reset');
+            const resetApiUrl = ref('http://localhost:3600/api/session/reset');
 
             const chatRef = ref(null);
 
@@ -786,7 +786,7 @@
               if (node.url && /^https?:\/\//i.test(node.url)) return node.url;
               const sessionId = getSessionId();
               const segs = (node.path || '').split('/').filter(Boolean).map(encodeURIComponent);
-              return `http://localhost:3000/workspace/${encodeURIComponent(sessionId)}/${segs.join('/')}`;
+              return `http://localhost:3600/workspace/${encodeURIComponent(sessionId)}/${segs.join('/')}`;
             };
 
             const filePanelCollapsed = ref(false);
@@ -801,7 +801,7 @@
             const fetchFileList = async () => {
               try {
                 const sessionId = getSessionId();
-                const resp = await fetch(`http://localhost:3000/api/tools/file_list`, {
+                const resp = await fetch(`http://localhost:3600/api/tools/file_list`, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
@@ -879,7 +879,7 @@
               preview.value = { loading: true, error: '', content: '', type: 'text', url: '' };
               try {
                 const sessionId = getSessionId();
-                const resp = await fetch(`http://localhost:3000/api/tools/file_read`, {
+                const resp = await fetch(`http://localhost:3600/api/tools/file_read`, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
@@ -945,7 +945,7 @@
                   });
                   xhr.addEventListener('error', () => reject(new Error('上传失败')));
                   xhr.addEventListener('abort', () => reject(new Error('上传被取消')));
-                  xhr.open('POST', 'http://localhost:3000/api/files/upload');
+                  xhr.open('POST', 'http://localhost:3600/api/files/upload');
                   xhr.send(formData);
                 });
 
@@ -974,7 +974,7 @@
               if (!confirm(`确定要删除 ${file.name} 吗?`)) return;
               try {
                 const sessionId = getSessionId();
-                const resp = await fetch(`http://localhost:3000/api/tools/file_delete`, {
+                const resp = await fetch(`http://localhost:3600/api/tools/file_delete`, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
@@ -1027,7 +1027,7 @@
             const fetchQuotaInfo = async () => {
               try {
                 const sessionId = getSessionId();
-                const resp = await fetch(`http://localhost:3000/api/files/quota`, {
+                const resp = await fetch(`http://localhost:3600/api/files/quota`, {
                   method: 'GET',
                   headers: {
                     'X-Session-Id': sessionId,
@@ -1058,7 +1058,7 @@
               }
               try {
                 const sessionId = getSessionId();
-                const resp = await fetch(`http://localhost:3000/api/files/download`, {
+                const resp = await fetch(`http://localhost:3600/api/files/download`, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',

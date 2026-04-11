@@ -131,7 +131,7 @@ DASHSCOPE_API_KEY=your_dashscope_api_key_here
 npm run dev
 ```
 
-服务启动后将在 `http://localhost:3000` 提供服务。
+服务启动后将在 `http://localhost:3600` 提供服务。
 
 ---
 
@@ -201,7 +201,7 @@ Content-Type: multipart/form-data
       "size": 1024567,
       "sizeFormatted": "1001.53 KB",
       "path": "uploadFile/1710881234567_document.pdf",
-      "url": "http://localhost:3000/workspace/user123/uploadFile/1710881234567_document.pdf"
+      "url": "http://localhost:3600/workspace/user123/uploadFile/1710881234567_document.pdf"
     }
   ]
 }
@@ -299,7 +299,7 @@ flowchart TD
     <SuspendedBallChat 
       app-name="app.test.com" 
       domain-name="juhkff" 
-      url="http://localhost:3000/api/chat"
+      url="http://localhost:3600/api/chat"
       :custom-request-config="{
         headers: {
           'X-Custom-Header': 'custom-value',

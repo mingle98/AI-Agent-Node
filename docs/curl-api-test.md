@@ -17,7 +17,7 @@
 ## 1) 健康检查
 
 ```bash
-curl http://127.0.0.1:3000/health
+curl http://127.0.0.1:3600/health
 ```
 
 预期: 返回 `ok` 或类似健康状态。
@@ -32,7 +32,7 @@ curl http://127.0.0.1:3000/health
 非流式（JSON，一次性返回）：
 
 ```bash
-curl -X POST 'http://127.0.0.1:3000/api/chat' \
+curl -X POST 'http://127.0.0.1:3600/api/chat' \
   -H 'Content-Type: application/json' \
   -d '{
     "query": "你好，介绍一下你能做什么？",
@@ -43,7 +43,7 @@ curl -X POST 'http://127.0.0.1:3000/api/chat' \
 流式（SSE，持续输出）：
 
 ```bash
-curl -N -X POST 'http://127.0.0.1:3000/api/chat' \
+curl -N -X POST 'http://127.0.0.1:3600/api/chat' \
   -H 'Content-Type: application/json' \
   -d '{
     "query": "你好，介绍一下你能做什么？",
@@ -64,7 +64,7 @@ curl -N -X POST 'http://127.0.0.1:3000/api/chat' \
 ### 2.1.1 触发 `daily_news`（今日热点）
 
 ```bash
-curl -X POST 'http://127.0.0.1:3000/api/chat' \
+curl -X POST 'http://127.0.0.1:3600/api/chat' \
   -H 'Content-Type: application/json' \
   -d '{
     "query": "今日热点有什么？",
@@ -75,7 +75,7 @@ curl -X POST 'http://127.0.0.1:3000/api/chat' \
 ### 2.1.2 触发 `analyze_chart`（图表分析：Mermaid/ECharts）
 
 ```bash
-curl -X POST 'http://127.0.0.1:3000/api/chat' \
+curl -X POST 'http://127.0.0.1:3600/api/chat' \
   -H 'Content-Type: application/json' \
   -d '{
     "query": "帮我分析这个 mermaid 图：graph TD\\nA-->B\\nB-->C，并总结关键路径",
@@ -91,7 +91,7 @@ curl -X POST 'http://127.0.0.1:3000/api/chat' \
 - `images`: 来自请求体的 `images`
 
 ```bash
-curl -N -X POST 'http://127.0.0.1:3000/api/chat' \
+curl -N -X POST 'http://127.0.0.1:3600/api/chat' \
   -H 'Content-Type: application/json' \
   -d '{
     "query": "这张图里有什么？",
@@ -112,7 +112,7 @@ curl -N -X POST 'http://127.0.0.1:3000/api/chat' \
 你可以传 base64（不含换行）。Agent 会按需补齐 `data:image/jpeg;base64,` 前缀。
 
 ```bash
-curl -N -X POST 'http://127.0.0.1:3000/api/chat' \
+curl -N -X POST 'http://127.0.0.1:3600/api/chat' \
   -H 'Content-Type: application/json' \
   -d '{
     "query": "识别图片内容",

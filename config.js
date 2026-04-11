@@ -1,7 +1,7 @@
 // ========== 配置 ==========
 
 // 服务器配置
-const PORT = Number(process.env.PORT || 3000);
+const PORT = Number(process.env.PORT || 3600);
 const HOST = process.env.HOST || 'localhost';
 
 export const CONFIG = {
