@@ -20,7 +20,7 @@ import { initScheduler } from './tools/scheduler.js';
 import multer from "multer";
 import archiver from "archiver";
 import fs from "fs/promises";
-import { createInfoCheckMiddleware } from "./private/infoCheck.js";
+import { createInfoCheckMiddleware, infoCheckHandle, normalizeInfoCheckError } from "./private/infoCheck.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,12 +35,17 @@ const allowedCorsOrigins = CORS_ORIGIN.split(",")
 let agentInitError = null;
 
 // 辅助函数：格式化文件大小
-function formatFileSize(bytes) {
-  if (bytes === 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  const k = 1024;
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + units[i];
+function cleanupUploadedFiles(files = []) {
+  return Promise.all(
+    files.map(async (file) => {
+      if (!file?.path) return;
+      try {
+        await fs.unlink(file.path);
+      } catch {
+        // ignore cleanup errors
+      }
+    })
+  );
 }
 
 async function initAgent() {
@@ -448,16 +453,32 @@ const storage = multer.diskStorage({
 const upload = multer({ 
   storage,
   limits: { 
-    fileSize: 10 * 1024 * 1024, // 10MB 单文件限制
+    fileSize: 5 * 1024 * 1024, // 5MB 单文件限制
     files: 10 // 最多同时上传 10 个文件
   }
 });
 
 // 文件上传接口
-app.post("/api/files/upload", upload.array("files", 10), apiInfoCheckMiddleware, async (req, res, next) => {
+app.post("/api/files/upload", upload.array("files", 10), async (req, res, next) => {
+  const files = Array.isArray(req.files) ? req.files : [];
+
   try {
+    let infoCheckResult;
+    try {
+      infoCheckResult = await infoCheckHandle(req);
+    } catch (error) {
+      await cleanupUploadedFiles(files);
+      res.status(200).json(normalizeInfoCheckError(error));
+      return;
+    }
+
+    if (infoCheckResult?.code !== 0) {
+      await cleanupUploadedFiles(files);
+      res.status(200).json(infoCheckResult);
+      return;
+    }
+
     const sessionId = req.body?.session_id || req.headers['x-session-id'] || 'default';
-    const files = req.files;
     
     if (!files || files.length === 0) {
       return res.status(400).json({ 
@@ -471,12 +492,7 @@ app.post("/api/files/upload", upload.array("files", 10), apiInfoCheckMiddleware,
     try {
       await checkUserStorageQuota(sessionId, totalSize);
     } catch (quotaError) {
-      // 删除已上传的文件
-      for (const file of files) {
-        try {
-          await fs.unlink(file.path);
-        } catch (e) {}
-      }
+      await cleanupUploadedFiles(files);
       return res.status(413).json({
         success: false,
         error: quotaError.message
@@ -500,6 +516,7 @@ app.post("/api/files/upload", upload.array("files", 10), apiInfoCheckMiddleware,
       files: uploadResults
     });
   } catch (error) {
+    await cleanupUploadedFiles(files);
     console.error('文件上传错误:', error);
     res.status(500).json({
       success: false,
