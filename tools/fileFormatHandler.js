@@ -14,7 +14,9 @@ import { CONFIG } from '../config.js';
 import { renderMarkdownOnPdf } from './pdfMarkdownRenderer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CHINESE_FONT_PATH = path.join(__dirname, '../assets/fonts/NotoSansSC.otf');
+const CHINESE_FONT_PATH = process.env.CHINESE_FONT_PATH
+  ? path.resolve(process.env.CHINESE_FONT_PATH)
+  : path.join(__dirname, '../assets/fonts/NotoSansSC.otf');
 
 async function isValidFontFile(fontPath) {
   try {
@@ -35,6 +37,13 @@ async function isValidFontFile(fontPath) {
 }
 const CHINESE_FONT_CANDIDATES = [
   CHINESE_FONT_PATH,
+  '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+  '/usr/share/fonts/opentype/noto/NotoSansCJKSC-Regular.otf',
+  '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+  '/usr/share/fonts/truetype/noto/NotoSansSC-Regular.otf',
+  '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
+  '/usr/share/fonts/truetype/arphic/ukai.ttc',
+  '/usr/share/fonts/truetype/arphic/uming.ttc',
   '/Library/Fonts/Arial Unicode.ttf',
   '/System/Library/Fonts/Supplemental/Arial Unicode.ttf',
   '/System/Library/Fonts/PingFang.ttc',
