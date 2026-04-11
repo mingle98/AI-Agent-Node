@@ -1341,19 +1341,6 @@ export async function saveRichText(sessionId, filePath, markdownContent, options
 }
 
 /**
- * 格式化文件大小
- * @param {number} bytes - 字节数
- * @returns {string}
- */
-function formatFileSize(bytes) {
-  if (bytes === 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const k = 1024;
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + units[i];
-}
-
-/**
  * 生成树形结构视图
  * @param {Array} items - 目录项数组
  * @param {string} rootPath - 根路径显示名称
