@@ -425,7 +425,7 @@ const storage = multer.diskStorage({
 const upload = multer({ 
   storage,
   limits: { 
-    fileSize: 50 * 1024 * 1024, // 50MB 单文件限制
+    fileSize: 10 * 1024 * 1024, // 10MB 单文件限制
     files: 10 // 最多同时上传 10 个文件
   }
 });
