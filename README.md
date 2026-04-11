@@ -40,7 +40,7 @@
 <div align="center">
   <img src="./imgs/ai-agent-node.png" alt="AI Agent Node 界面预览" width="92%" />
   <br />
-  <strong>在线体验：<a href="https://luckycola.com.cn/public/dist/aiAgent.html">https://luckycola.com.cn/public/dist/aiAgent.html</a></strong>
+  <strong>在线体验：<a href="https://luckycola.com.cn/public/dist/aiAgent.html">AI智能体工作台</a></strong>
 </div>
 
 ---
