@@ -214,7 +214,7 @@ export async function getUserStorageStats(sessionId) {
       await calculateRecursive(userRoot);
     }
     
-    const MAX_STORAGE = 100 * 1024 * 1024; // 100MB
+    const MAX_STORAGE = 50 * 1024 * 1024; // 50MB
     
     return {
       success: true,
@@ -246,7 +246,7 @@ export async function getUserStorageStats(sessionId) {
  * @throws {Error} 超过配额时抛出错误
  */
 export async function checkUserStorageQuota(sessionId, additionalBytes = 0) {
-  const MAX_STORAGE = 200 * 1024 * 1024; // 200MB
+  const MAX_STORAGE = 50 * 1024 * 1024; // 50MB
   
   const stats = await getUserStorageStats(sessionId);
   if (!stats.success) {
