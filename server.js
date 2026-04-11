@@ -1,5 +1,6 @@
 // ========== Express 服务：将 ProductionAgent 以接口形式提供给前端 ==========
 
+import "dotenv/config";
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -35,6 +36,24 @@ const allowedCorsOrigins = CORS_ORIGIN.split(",")
 let agentInitError = null;
 
 // 辅助函数：格式化文件大小
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes < 0) {
+    return '0 B';
+  }
+
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let size = bytes;
+  let unitIndex = 0;
+
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+
+  const decimals = unitIndex === 0 ? 0 : 2;
+  return `${size.toFixed(decimals)} ${units[unitIndex]}`;
+}
+
 function cleanupUploadedFiles(files = []) {
   return Promise.all(
     files.map(async (file) => {
@@ -506,7 +525,7 @@ app.post("/api/files/upload", upload.array("files", 10), async (req, res, next) 
       size: file.size,
       sizeFormatted: formatFileSize(file.size),
       path: `uploadFile/${file.filename}`,
-      url: `http://${HOST}:${PORT}/workspace/${sessionId}/uploadFile/${file.filename}`
+      url: `${CONFIG.baseUrl}/workspace/${sessionId}/uploadFile/${file.filename}`
     }));
     
     res.json({
