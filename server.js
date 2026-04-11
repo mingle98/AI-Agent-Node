@@ -20,6 +20,7 @@ import { initScheduler } from './tools/scheduler.js';
 import multer from "multer";
 import archiver from "archiver";
 import fs from "fs/promises";
+import { createInfoCheckMiddleware } from "./private/infoCheck.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -93,6 +94,8 @@ async function getAgent() {
 }
 
 const app = express();
+const apiInfoCheckMiddleware = createInfoCheckMiddleware();
+const chatInfoCheckMiddleware = createInfoCheckMiddleware({ useNoMemberLimit: true });
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
@@ -144,7 +147,7 @@ app.get("/health", async (req, res, next) => {
   }
 });
 
-app.post("/api/chat", async (req, res, next) => {
+app.post("/api/chat", chatInfoCheckMiddleware, async (req, res, next) => {
   try {
     const agent = await getAgent();
     const message = typeof req.body?.query === "string" ? req.body.query.trim() : "";
@@ -336,7 +339,7 @@ app.post("/api/chat", async (req, res, next) => {
   }
 });
 
-app.post("/api/session/reset", async (req, res, next) => {
+app.post("/api/session/reset", apiInfoCheckMiddleware, async (req, res, next) => {
   try {
     const agent = await getAgent();
     const sessionId =
@@ -354,7 +357,7 @@ app.post("/api/session/reset", async (req, res, next) => {
 // ========== Tools 直调接口（用于调试页调用 file_list/file_read 等） ==========
 const TOOL_MAP = new Map(TOOL_DEFINITIONS.map((t) => [t.name, t]));
 
-app.post("/api/tools/:toolName", async (req, res) => {
+app.post("/api/tools/:toolName", apiInfoCheckMiddleware, async (req, res) => {
   try {
     const toolName = req.params?.toolName;
     const tool = TOOL_MAP.get(toolName);
@@ -451,7 +454,7 @@ const upload = multer({
 });
 
 // 文件上传接口
-app.post("/api/files/upload", upload.array("files", 10), async (req, res, next) => {
+app.post("/api/files/upload", upload.array("files", 10), apiInfoCheckMiddleware, async (req, res, next) => {
   try {
     const sessionId = req.body?.session_id || req.headers['x-session-id'] || 'default';
     const files = req.files;
@@ -506,7 +509,7 @@ app.post("/api/files/upload", upload.array("files", 10), async (req, res, next) 
 });
 
 // 存储配额查询接口
-app.get("/api/files/quota", async (req, res, next) => {
+app.get("/api/files/quota", apiInfoCheckMiddleware, async (req, res, next) => {
   try {
     const sessionId = req.query?.session_id || req.headers['x-session-id'] || 'default';
     const stats = await getUserStorageStats(sessionId);
@@ -521,7 +524,7 @@ app.get("/api/files/quota", async (req, res, next) => {
 });
 
 // 批量下载/压缩接口
-app.post("/api/files/download", async (req, res, next) => {
+app.post("/api/files/download", apiInfoCheckMiddleware, async (req, res, next) => {
   try {
     const sessionId = req.body?.session_id || req.headers['x-session-id'] || 'default';
     const filePaths = req.body?.files || [];
