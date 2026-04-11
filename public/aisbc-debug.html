@@ -779,14 +779,13 @@
               return (customRequestConfig?.customParams?.session_id || 'default').trim() || 'default';
             };
 
-            /** 与下载按钮一致：优先 fullUrl，否则拼 workspace 静态地址 */
+            /** 下载/预览统一使用后端返回的签名地址，避免回退到未签名 workspace 路径 */
             const getWorkspaceFileUrl = (node) => {
               if (!node) return '';
               if (node.fullUrl) return node.fullUrl;
               if (node.url && /^https?:\/\//i.test(node.url)) return node.url;
-              const sessionId = getSessionId();
-              const segs = (node.path || '').split('/').filter(Boolean).map(encodeURIComponent);
-              return `http://localhost:3600/workspace/${encodeURIComponent(sessionId)}/${segs.join('/')}`;
+              if (node.url && node.url.includes('signature=')) return node.url;
+              return '';
             };
 
             const filePanelCollapsed = ref(false);

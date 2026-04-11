@@ -2,6 +2,7 @@
 
 import fs from 'fs/promises';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { markdownToHtml } from '../utils/markdownRenderer.js';
 import { CONFIG } from '../config.js';
@@ -29,6 +30,8 @@ const ALLOWED_EXTENSIONS = new Set([
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const MAX_FILES_IN_DIR = 1000; // 单个目录最大文件数
 const MAX_FILES_PER_USER = 100; // 每个用户最多文件数
+const FILE_URL_EXPIRES_SECONDS = Number(process.env.FILE_URL_EXPIRES_SECONDS || 3600);
+const FILE_URL_SECRET = process.env.FILE_URL_SECRET || 'dev-file-url-secret-change-me';
 const FILE_NAME_PATTERN = /^[a-zA-Z0-9_\-\.\u4e00-\u9fa5]+$/; // 支持中英文、数字、下划线、连字符、点
 
 // 有效的 session ID 格式（字母、数字、连字符、下划线）
@@ -298,6 +301,76 @@ function validateFileExtension(filename) {
   return ext;
 }
 
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes < 0) {
+    return '0 B';
+  }
+
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let size = bytes;
+  let unitIndex = 0;
+
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+
+  const decimals = unitIndex === 0 ? 0 : 2;
+  return `${size.toFixed(decimals)} ${units[unitIndex]}`;
+}
+
+function buildWorkspaceUrlPath(absolutePath, sessionId) {
+  const userRoot = getUserWorkspaceRoot(sessionId);
+  const resolvedPath = path.resolve(absolutePath);
+  const resolvedRoot = path.resolve(userRoot);
+
+  if (!resolvedPath.startsWith(resolvedRoot)) {
+    return null;
+  }
+
+  const relativePath = resolvedPath.slice(resolvedRoot.length).replace(/\\/g, '/');
+  return `/workspace/${sessionId}${relativePath}`;
+}
+
+function createWorkspaceUrlSignature(urlPath, expires) {
+  return crypto
+    .createHmac('sha256', FILE_URL_SECRET)
+    .update(`${urlPath}:${expires}`)
+    .digest('hex');
+}
+
+export function verifySignedWorkspaceUrl(urlPath, expires, signature) {
+  if (!urlPath || !expires || !signature) {
+    return false;
+  }
+
+  const expiresAt = Number(expires);
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+    return false;
+  }
+
+  const expectedSignature = createWorkspaceUrlSignature(urlPath, expiresAt);
+
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(signature, 'hex'),
+      Buffer.from(expectedSignature, 'hex')
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function buildSignedWorkspaceUrl(urlPath) {
+  if (!urlPath) {
+    return null;
+  }
+
+  const expires = Date.now() + FILE_URL_EXPIRES_SECONDS * 1000;
+  const signature = createWorkspaceUrlSignature(urlPath, expires);
+  return `${urlPath}?expires=${expires}&signature=${signature}`;
+}
+
 /**
  * 获取公共访问URL
  * @param {string} absolutePath - 绝对路径
@@ -305,16 +378,8 @@ function validateFileExtension(filename) {
  * @returns {string} - 可访问的URL路径
  */
 export function getPublicUrl(absolutePath, sessionId) {
-  const userRoot = getUserWorkspaceRoot(sessionId);
-  const resolvedPath = path.resolve(absolutePath);
-  const resolvedRoot = path.resolve(userRoot);
-  
-  if (!resolvedPath.startsWith(resolvedRoot)) {
-    return null;
-  }
-  
-  const relativePath = resolvedPath.slice(resolvedRoot.length).replace(/\\/g, '/');
-  return `/workspace/${sessionId}${relativePath}`;
+  const urlPath = buildWorkspaceUrlPath(absolutePath, sessionId);
+  return buildSignedWorkspaceUrl(urlPath);
 }
 
 /**
@@ -324,20 +389,17 @@ export function getPublicUrl(absolutePath, sessionId) {
  * @returns {Object} - 包含相对路径和完整URL的对象
  */
 function getPublicUrlInfo(absolutePath, sessionId) {
-  const userRoot = getUserWorkspaceRoot(sessionId);
-  const resolvedPath = path.resolve(absolutePath);
-  const resolvedRoot = path.resolve(userRoot);
-  
-  if (!resolvedPath.startsWith(resolvedRoot)) {
+  const urlPath = buildWorkspaceUrlPath(absolutePath, sessionId);
+
+  if (!urlPath) {
     return null;
   }
-  
-  const relativePath = resolvedPath.slice(resolvedRoot.length).replace(/\\/g, '/');
-  const urlPath = `/workspace/${sessionId}${relativePath}`;
-  
+
+  const signedPath = buildSignedWorkspaceUrl(urlPath);
+
   return {
-    path: urlPath,
-    fullUrl: `${CONFIG.baseUrl}${urlPath}`
+    path: signedPath,
+    fullUrl: `${CONFIG.baseUrl}${signedPath}`
   };
 }
 

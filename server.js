@@ -15,7 +15,7 @@ import {
 import { CONFIG } from "./config.js";
 import { resolveThinkingMode } from "./utils/thinkingMode.js";
 import { escapeHtml, wrapThinkingOpen, wrapThinkingClose } from "./utils/thinkingRenderer.js";
-import { initWorkspace, getUserWorkspaceRoot, getUserStorageStats, checkUserStorageQuota } from './tools/fileManager.js';
+import { initWorkspace, getUserWorkspaceRoot, getUserStorageStats, checkUserStorageQuota, verifySignedWorkspaceUrl } from './tools/fileManager.js';
 import { TOOL_DEFINITIONS } from './tools/index.js';
 import { initScheduler } from './tools/scheduler.js';
 import multer from "multer";
@@ -155,6 +155,17 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json({ limit: "5mb" }));
+app.use("/workspace", (req, res, next) => {
+  const requestPath = `/workspace${req.path}`;
+  const { expires, signature } = req.query || {};
+
+  if (!verifySignedWorkspaceUrl(requestPath, expires, signature)) {
+    res.status(403).json({ success: false, error: "文件链接无效或已过期" });
+    return;
+  }
+
+  next();
+});
 app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/health", async (req, res, next) => {
