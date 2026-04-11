@@ -36,7 +36,12 @@
 | 📧 **邮件发送** | 支持 SMTP 发送，内置多种精美模板（通知/告警/报告/感谢信/验证码/邀请函/营销） |
 | 🎨 **AISuspendedBallChat 兼容** | 完全符合 AISuspendedBallChat 组件接口规范 |
 
-![ai-agent-node.png](./imgs/ai-agent-node.png)
+
+<div align="center">
+  <img src="./imgs/ai-agent-node.png" alt="AI Agent Node 界面预览" width="92%" />
+  <br />
+  <strong>在线体验：<a href="https://luckycola.com.cn/public/dist/aiAgent.html">https://luckycola.com.cn/public/dist/aiAgent.html</a></strong>
+</div>
 
 ---
 

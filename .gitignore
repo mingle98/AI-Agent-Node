@@ -24,3 +24,5 @@ workspace/**
 
 data/scheduled_tasks.json
 .vscode
+
+private/
