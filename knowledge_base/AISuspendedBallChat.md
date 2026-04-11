@@ -320,7 +320,7 @@ const assistantConfig = {
 | `location` | `'left-top' \| 'left-center' \| 'left-bottom' \| 'right-top' \| 'right-center' \| 'right-bottom'` | `'right-center'` | 悬浮球位置 |
 | `custom-icon-url` | `string` | - | 自定义悬浮球图标URL |
 | `max-input-length` | `number` | `2000` | 用户输入最大字符数限制 |
-| `enable-streaming` | `boolean` | `true` | 是否启用流式响应 |
+| `enable-streaming` | `boolean` | `false` | 是否启用流式响应 |
 | `enable-context` | `boolean` | `true` | 是否启用上下文记忆 |
 | `allow-history-search` | `boolean` | `false` | 是否启用记录搜索功能 |
 | `enable-local-storage` | `boolean` | `true` | 是否启用本地存储 |
@@ -329,12 +329,13 @@ const assistantConfig = {
 | `context-history-count` | `number` | `10` | 作为上下文参与请求的历史消息条数（会自动向上取偶数；仅在 `enable-context=true` 时生效） |
 | `enable-image-upload` | `boolean` | `false` | 是否启用图片上传 |
 | `supported-custom-context` | `boolean` | `false` | 否启用页面内容(文件内容)选择引用功能 |
-| `enable-voice-input` | `boolean` | `true` | 是否启用语音输入 |
+| `enable-voice-input` | `boolean` | `false` | 是否启用语音输入 |
+| `show-avatar` | `boolean` | `true` | 是否显示聊天头像（移动端小屏幕会强制隐藏） |
 | `enable-auto-speech` | `boolean` | `false` | 是否启用AI助理完成输出后自动语音播报 |
 | `title` | `string` | `'AI助手'` | 聊天面板标题 |
 | `show-header` | `boolean` | `true` | 是否显示头部 |
 | `show-close-button` | `boolean` | `true` | 是否显示关闭按钮 |
-| `show-clear-button` | `boolean` | `true` | 是否显示清除按钮 |
+| `show-clear-button` | `boolean` | `false` | 是否显示清除按钮 |
 | `show-theme-toggle` | `boolean` | `false` | 是否显示白天/夜间模式切换按钮 |
 | `show-feedback-button` | `boolean` | `false` | 是否显示工单提交按钮 |
 | `welcome-config` | `WelcomeConfig` | - | 欢迎界面配置 |
@@ -355,7 +356,7 @@ const assistantConfig = {
 | `show-task-running-box` | `boolean` | `false` | 是否显示任务执行中提示框 |
 | `task-running-text` | `string` | `'任务执行正在进行中'` | 任务执行中提示文本 |
 | `max-input-length` | `number` | `2000` | 用户输入最大字符数限制 |
-| `enable-streaming` | `boolean` | `true` | 是否启用流式响应 |
+| `enable-streaming` | `boolean` | `false` | 是否启用流式响应 |
 | `enable-context` | `boolean` | `true` | 是否启用上下文记忆 |
 | `allow-history-search` | `boolean` | `false` | 是否启用记录搜索功能 |
 | `enable-local-storage` | `boolean` | `true` | 是否启用本地存储 |
@@ -364,12 +365,13 @@ const assistantConfig = {
 | `context-history-count` | `number` | `10` | 作为上下文参与请求的历史消息条数（会自动向上取偶数；仅在 `enable-context=true` 时生效） |
 | `enable-image-upload` | `boolean` | `false` | 是否启用图片上传 |
 | `supported-custom-context` | `boolean` | `false` | 否启用页面内容(文件内容)选择引用功能 |
-| `enable-voice-input` | `boolean` | `true` | 是否启用语音输入 |
+| `enable-voice-input` | `boolean` | `false` | 是否启用语音输入 |
+| `show-avatar` | `boolean` | `true` | 是否显示聊天头像（移动端小屏幕会强制隐藏） |
 | `enable-auto-speech` | `boolean` | `false` | 是否启用AI助理完成输出后自动语音播报 |
 | `title` | `string` | `'AI助手'` | 聊天面板标题 |
 | `show-header` | `boolean` | `true` | 是否显示头部 |
 | `show-close-button` | `boolean` | `true` | 是否显示关闭按钮 |
-| `show-clear-button` | `boolean` | `true` | 是否显示清除按钮 |
+| `show-clear-button` | `boolean` | `false` | 是否显示清除按钮 |
 | `show-theme-toggle` | `boolean` | `false` | 是否显示白天/夜间模式切换按钮 |
 | `show-feedback-button` | `boolean` | `false` | 是否显示工单提交按钮 |
 | `welcome-config` | `WelcomeConfig` | - | 欢迎界面配置 |
@@ -388,6 +390,8 @@ const assistantConfig = {
 
 #### SuspendedBallChat Methods
 
+> 你可以通过 `ref` 获取组件实例并调用以下方法（Vue 3 `script setup` / Options API 均可）。
+
 | 方法名 | 参数 | 返回值 | 说明 |
 |--------|------|--------|------|
 | `sendMessage` | `message: string` | - | 主动发起AI对话 |
@@ -398,6 +402,9 @@ const assistantConfig = {
 | `openPanel` | - | - | 打开聊天面板 |
 | `closePanel` | - | `boolean` | 关闭聊天面板 |
 | `isPanelVisible` | - | `boolean` | 检查面板是否可见 |
+| `getUiHistory` | - | `ChatMessage[]` | 获取当前 UI 历史列表（内存快照） |
+| `reloadUiHistory` | - | `Promise<ChatMessage[]>` | 从本地存储重载并返回最新 UI 历史列表 |
+| `setUiHistory` | `nextUiHistory: ChatMessage[]` | - | 主动设置 UI 历史列表（用于从后端注入历史，内部会进行必要校验；校验失败会提示且不会写入） |
 
 #### ChatPanel Methods
 
@@ -409,6 +416,9 @@ const assistantConfig = {
 | `stopRequest` | - | - | 停止当前请求 |
 | `isStreaming` | - | `boolean` | 检查是否正在流式响应 |
 | `scrollToBottom` | - | - | 滚动到底部 |
+| `getUiHistory` | - | `ChatMessage[]` | 获取当前 UI 历史列表（内存快照） |
+| `reloadUiHistory` | - | `Promise<ChatMessage[]>` | 从本地存储重载并返回最新 UI 历史列表 |
+| `setUiHistory` | `nextUiHistory: ChatMessage[]` | - | 主动设置 UI 历史列表（用于从后端注入历史，内部会进行必要校验；校验失败会提示且不会写入） |
 
 ## 🔌 自定义后端接口需要返回数据格式
 
@@ -451,15 +461,17 @@ Access-Control-Allow-Origin: *
 | 组件配置　　　 | SSE 单个 JSON 数据块 | `props: object`　　　　　　| 组件工厂消费的配置对象。`props.type` 决定渲染哪种组件。`props.data` 是不同组件需要的数据（其中 `data.id?` 可用于区分不同组件实例），具体参考下面案例说明。 |     |
 
 **内置组件类型（props.type）：**
-| props.type　　　　　| 组件　　　　　　　　　| data 关键字段　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 | 说明　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　|
-| ---------------------| -----------------------| ---------------------------------------------------------------------------------| -----------------------------------------------------------------------|
-| `card`　　　　　　　| DefaultCard　　　　　 | `id?`、`title`、 `description`、 `imageUrl` 、`jumpLink`　　　　　　　　　　　　 | 默认卡片组件（支持点击跳转）。　　　　　　　　　　　　　　　　　　　　|
-| `sl-card`　　　　　 | ShoelaceCard　　　　　| `id?`、`title`、 `description` 、`imageUrl` 、`jumpLink`、`buttonText?`、`buttonLink?` | 基于 Shoelace 的卡片组件（支持点击跳转，支持底部按钮独立跳转）　　　　|
-| `sl-gallery`　　　　| ShoelaceGallery　　　 | `id?`、`images: {src, alt?, jumpUrl?}[]`　　　　　　　　　　　　　　　　　　　 | 基于 Shoelace 的轮播组件（支持点击跳转）。　　　　　　　　　　　　　　|
-| `sl-qr-code`　　　　| ShoelaceQrCode　　　　| `id?`、`qrCodeUrl`、 `errorCorrection?` 、`size?`　　　　　　　　　　　　　　　 | 基于 Shoelace 的二维码组件。　　　　　　　　　　　　　　　　　　　　　|
-| `sl-image-comparer` | ShoelaceImageComparer | `id?`、`before: {src, alt?}`、`after: {src, alt?}`　　　　　　　　　　　　　　　 | 基于 Shoelace 的图片对比组件。　　　　　　　　　　　　　　　　　　　　|
-| `sl-card-group`　　 | ShoelaceCardGroup　　 | `id?`、`items: {imageUrl?, videoUrl?, title?, description?, jumpLink?}[]`　　　　| 基于 Shoelace 的横向媒体卡片组（图片/视频自适应宽度，支持点击跳转）。 |
-| 持续增加中...　　　 | 持续增加中..　　　　　| 持续增加中..　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　| 持续增加中...　　　　　　　　　　　　　　　　　　　　　　　　　　　　 |
+| props.type　　　　　| 组件　　　　　　　　　| data 关键字段　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　| 说明　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　|
+| ---------------------| -----------------------| ------------------------------------------------------------------------------------------------------| ---------------------------------------------------------------------------|
+| `card`　　　　　　　| DefaultCard　　　　　 | `id?`、`title`、 `description`、 `imageUrl` 、`jumpLink`　　　　　　　　　　　　　　　　　　　　　　 | 默认卡片组件（支持点击跳转）。　　　　　　　　　　　　　　　　　　　　　　|
+| `sl-card`　　　　　 | ShoelaceCard　　　　　| `id?`、`title`、 `description` 、`imageUrl` 、`jumpLink`、`buttonText?`、`buttonLink?`　　　　　　　 | 基于 Shoelace 的卡片组件（支持点击跳转，支持底部按钮独立跳转）　　　　　　|
+| `sl-gallery`　　　　| ShoelaceGallery　　　 | `id?`、`images: {src, alt?, jumpUrl?}[]`　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 | 基于 Shoelace 的轮播组件（支持点击跳转）。　　　　　　　　　　　　　　　　|
+| `sl-qr-code`　　　　| ShoelaceQrCode　　　　| `id?`、`qrCodeUrl`、 `errorCorrection?` 、`size?`　　　　　　　　　　　　　　　　　　　　　　　　　　| 基于 Shoelace 的二维码组件。　　　　　　　　　　　　　　　　　　　　　　　|
+| `sl-image-comparer` | ShoelaceImageComparer | `id?`、`before: {src, alt?}`、`after: {src, alt?}`　　　　　　　　　　　　　　　　　　　　　　　　　 | 基于 Shoelace 的图片对比组件。　　　　　　　　　　　　　　　　　　　　　　|
+| `sl-card-group`　　 | ShoelaceCardGroup　　 | `id?`、`items: {imageUrl?, videoUrl?, title?, description?, jumpLink?}[]`　　　　　　　　　　　　　　| 基于 Shoelace 的横向媒体卡片组（图片/视频自适应宽度，支持点击跳转）。　　 |
+| `select-list-card`　| SelectListCard　　　　| `id?`、`title?`、`multiple?`、`confirmText?`、`options: {label, value, disabled?}[]`　　　　　　　　 | 可选择列表项组件（支持单选/多选），点击确认后会派发全局事件供业务层消费。 |
+| `input-form-card`　 | InputFormCard　　　　 | `id?`、`title?`、`placeholder?`、`submitText?`、`required?`、`requiredMessage?`、`clearAfterSubmit?` | 输入表单组件，支持必填校验，提交后会派发全局事件供业务层消费。　　　　　　|
+| 持续增加中...　　　 | 持续增加中..　　　　　| 持续增加中..　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 | 持续增加中...　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 |
 
 **如果你不了解shoelace组件库的功能可以前往官网体验**: [shoelace组件官网:https://shoelace.style](https://shoelace.style/)
 
@@ -610,7 +622,73 @@ Access-Control-Allow-Origin: *
   }
 },
 
+// select-list-card 组件的数据块示例
+{
+  "code": 0,
+  "result": "[[~9]]", // 固定格式,其中的数字可以更改
+  "type": "custom-component",// 固定值,不可更改
+  "props": {
+    "type": "select-list-card",// 组件类型
+    "data": {
+      "id": "9",
+      "title": "可选择列表项（单选）",
+      "multiple": false, // 是否是多选
+      "confirmText": "确认选择",
+      "options": [
+        { "label": "选项 A", "value": "A" },
+        { "label": "选项 B", "value": "B" },
+        { "label": "选项 C（禁用）", "value": "C", "disabled": true },
+        { "label": "选项 D", "value": "D" }
+      ]
+    }
+  }
+},
+
+// input-form-card 组件的数据块示例
+{
+  "code": 0,
+  "result": "[[~11]]", // 固定格式,其中的数字可以更改
+  "type": "custom-component",// 固定值,不可更改
+  "props": {
+    "type": "input-form-card",// 组件类型
+    "data": {
+      "id": "11",
+      "title": "请输入你的姓名：",
+      "placeholder": "输入框",
+      "submitText": "提交按钮",
+      "required": true, // 是否是必须的
+      "requiredMessage": "姓名不能为空",
+      "clearAfterSubmit": false // 是否在提交后清空输入内容
+    }
+  }
+},
+
 ``` 
+
+#### 📣 业务层如何接收 SelectListCard / InputFormCard 的提交结果
+
+这类自定义组件是在 Markdown 渲染阶段动态挂载的（不是你模板里手写的组件标签）。因此**业务层建议通过全局事件接收交互结果**。
+
+**SelectListCard 确认选择事件：**
+- 事件名：`cc-select-list-confirm`
+- `detail` 结构：`{ id?: any; selected: any; data: any }`
+
+**InputFormCard 表单提交事件：**
+- 事件名：`cc-input-form-submit`
+- `detail` 结构：`{ id?: any; value: string; data: any }`
+
+```js
+// 业务层监听（示例）
+window.addEventListener('cc-select-list-confirm', (e) => {
+  const { id, selected, data } = e.detail || {}
+  console.log('[SelectListCard] 确认选择:', { id, selected, data })
+})
+
+window.addEventListener('cc-input-form-submit', (e) => {
+  const { id, value, data } = e.detail || {}
+  console.log('[InputFormCard] 表单提交:', { id, value, data })
+})
+```
 
 > 普通请求模式（非流式）同样支持自定义组件：后端在 JSON 响应中可选返回 `result.customComponents`（key 为编号 `n`），前端会自动写入消息并渲染 Markdown 中的 `[[~n]]`。
 
@@ -813,6 +891,55 @@ const welcomeConfig = {
 }
 ```
 
+### 获取/设置历史列表数据
+
+- `getUiHistory()`：获取当前内存中的 UI 历史列表快照
+- `reloadUiHistory()`：从本地存储重载后，返回最新 UI 历史列表
+- `setUiHistory(nextUiHistory)`：业务方从后端获取历史列表后，主动注入到组件中渲染（会做必要格式校验；校验失败会 `console.error` + `alert`，并拒绝写入）
+
+```ts
+import { ref } from 'vue'
+import type { SuspendedBallChatInstance, ChatMessage } from 'ai-suspended-ball-chat'
+
+const chatRef = ref<SuspendedBallChatInstance>()
+
+const onGet = () => {
+  const list = chatRef.value?.getUiHistory() || []
+  console.log('uiHistory:', list)
+}
+
+const onReload = async () => {
+  const list = (await chatRef.value?.reloadUiHistory()) || []
+  console.log('uiHistory (reloaded):', list)
+}
+
+// 从后端拿到历史后注入
+const onSetFromServer = (serverList: ChatMessage[]) => {
+  const serverUiHistory: any[] = [
+    {
+      id: 1,
+      role: 'assistant',
+      content: '（模拟后端历史）你好，我是服务端下发的第一条消息',
+      timestamp: Date.now() - 60_000
+    },
+    {
+      id: 2,
+      role: 'user',
+      content: '（模拟后端历史）收到，我来继续对话',
+      timestamp: Date.now() - 55_000
+    },
+    {
+      id: 3,
+      role: 'assistant',
+      content: '（模拟后端历史）已注入成功，你可以继续发送新消息',
+      timestamp: Date.now() - 50_000
+    },
+  ]
+  chatRef.value?.setUiHistory(serverUiHistory)
+}
+```
+
+
 ### 否启用页面内容(文件内容)选择引用功能
 
 ```javascript
@@ -872,7 +999,12 @@ const presetTasks = [
 // 示例：将AI回复插入到代码编辑器
 const callbacks = {
   clickAssistantMsgCallback: (message, index, messageObj) => {
-    console.log('AI回复消息:', message, index, messageObj);
+    console.log('插入内容:', { message, index, messageObj })
+    // 这里可以将消息内容插入到用户的编辑器或其他地方
+    console.log(`准备插入内容: ${message.substring(0, 100)}...`)
+    // 去掉思考过程和布局调用提示的内容
+    let filterContent = message.replace(/<details[\s\S]*?<\/details>/g, '').replace(/<div\s+data-tool[\s\S]*?<\/div>/g, '');
+    console.log(`准备插入内容(过滤版本): ${filterContent.substring(0, 100)}...`)
   }
 }
 ```
@@ -928,7 +1060,12 @@ const callbacks = {
   
   // 点击AI助理消息"插入含义"按钮时触发
   clickAssistantMsgCallback: (message, index, messageObj) => {
-    console.log('插入含义:', { message, index, messageObj })
+    console.log('插入内容:', { message, index, messageObj })
+    // 这里可以将消息内容插入到用户的编辑器或其他地方
+    console.log(`准备插入内容: ${message.substring(0, 100)}...`)
+    // 去掉思考过程和布局调用提示的内容
+    let filterContent = message.replace(/<details[\s\S]*?<\/details>/g, '').replace(/<div\s+data-tool[\s\S]*?<\/div>/g, '');
+    console.log(`准备插入内容(过滤版本): ${filterContent.substring(0, 100)}...`)
   },
   
   // 工单提交时触发
@@ -1371,19 +1508,42 @@ A: 目前语音输入默认使用中文简体（zh-CN）.
 
 A: 如果需要支持解析mermaid语法请提前在你的项目中引入资源:https://cdn.jsdelivr.net/npm/mermaid@11.10.1/dist/mermaid.min.js 或者 https://unpkg.com/mermaid@11.10.1/dist/mermaid.min.js
 
-### Q: 组件是否支持“深度思考模式”模式？
+### Q: 组件是否支持“深度思考模式”？
 
-A: beta版本已支持,如需使用请下载beta版本,主版本中将不支持“深度思考模式”模式。
+A: beta版本已支持“**显性(有按钮UI)的深度思考模式**”,如需使用请下载beta版本.主版本中将不支持“**显性(有按钮UI)的深度思考模式**”,但是你仍然可以通过后端流式响应的“思考过程内容”通过包裹`<details><summary >思考过程</summary>思考的内容</details>`这种方式间接实现“深度思考模式”的功能,下面附上实现的关键代码.
+
+```js
+export function escapeHtml(input) {
+  return String(input)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+export function wrapThinkingOpen(summaryText = "深度思考过程") {
+  return `<details open style="margin: 8px 0; padding: 0;"><summary style="cursor: pointer; color: #999; font-size: 13px;position: relative;left: -2px;font-weight: 500;padding-bottom: 3px;">${escapeHtml(summaryText)} 🌀 </summary><div style="border-left: 2px solid #d9d9d9; padding-left: 8px; color: #999; font-size: 12px; font-family: inherit;">`;
+}
+
+export function wrapThinkingClose() {
+  return `</div></details>\n\n---\n`;
+}
+
+```
+
+> 这种`<details><summary >`实现“深度思考功能”的方案已经在下面这个**开源Node Agent脚手架**项目中已经实现,可参考:  [https://github.com/mingle98/AI-Agent-Node](https://github.com/mingle98/AI-Agent-Node)
+
 
 ### Q: 不同版本功能上是否有差异?
 
 A: 是的,当前有三个版本: 正式版、beta版本、alpha版本。他们的差异如下:
 
-- **正式版**: 稳定版,功能最新且齐全,但是此版本不支持“深度思考模式”模式。
+- **正式版**: 稳定版,功能最新且齐全,但此版本不支持“**显性(有按钮UI)的深度思考模式**”,但是你可以通过后端将“思考内容”用`<details><summary >`包裹间接实现这个功能.
   
-- **beta版本**: 这是一个差异版本,对齐正式版90%的功能,支持“深度思考模式”模式,但是此版本不支持“渲染自定义组件”的功能。
+- **beta版本**: 这是一个差异版本,对齐正式版90%的功能,支持“**显性(有按钮UI)的深度思考模式**”,但是此版本不支持“渲染自定义组件”等功能。
   
-- **alpha版本**: 这是一个实验版本, 对齐正式版100%的功能, 唯一的差异是此版本已经将“对话列表虚拟化”了以提升性能,此版本和主版本一样不支持“深度思考模式”模式, 可能存在一些未知Bug,谨慎使用.
+- **alpha版本**: 这是一个实验版本, 对齐正式版100%的功能, 唯一的差异是此版本已经将“对话列表虚拟化”了以提升性能,此版本和主版本一样不支持“**显性(有按钮UI)的深度思考模式**”, 可能存在一些未知Bug,谨慎使用.
 
 **总结: 根据您的需求选择需要的版本, 无特殊需求建议使用正式版。**
 
