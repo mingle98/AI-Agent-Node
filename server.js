@@ -27,6 +27,9 @@ const __dirname = path.dirname(__filename);
 const PORT = Number(process.env.PORT || 3600);
 const HOST = process.env.HOST || "0.0.0.0";
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
+const allowedCorsOrigins = CORS_ORIGIN.split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 let agentInitError = null;
 
@@ -91,11 +94,23 @@ async function getAgent() {
 
 const app = express();
 
-app.use(express.json({ limit: "5mb" }));
-app.use(express.static(path.join(__dirname, "public")));
 app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", CORS_ORIGIN);
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  const origin = req.headers.origin;
+  const allowAnyOrigin = allowedCorsOrigins.includes("*");
+  const isAllowedOrigin =
+    typeof origin === "string" &&
+    (allowAnyOrigin || allowedCorsOrigins.includes(origin));
+
+  if (isAllowedOrigin) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  } else if (allowAnyOrigin) {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  }
+
+  res.setHeader("Vary", "Origin, Access-Control-Request-Headers");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+
   const requestedHeaders = req.headers["access-control-request-headers"];
   res.setHeader(
     "Access-Control-Allow-Headers",
@@ -103,12 +118,17 @@ app.use((req, res, next) => {
       ? requestedHeaders
       : "Content-Type,Authorization,X-Requested-With"
   );
+
   if (req.method === "OPTIONS") {
     res.status(204).end();
     return;
   }
+
   next();
 });
+
+app.use(express.json({ limit: "5mb" }));
+app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/health", async (req, res, next) => {
   try {
