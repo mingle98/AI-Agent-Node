@@ -11,7 +11,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ========== 配置 ==========
-const WORKSPACE_ROOT = path.join(__dirname, '..', 'public', 'workspace');
+const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT
+  ? path.resolve(process.env.WORKSPACE_ROOT)
+  : path.join(__dirname, '..', 'public', 'workspace');
 const ALLOWED_EXTENSIONS = new Set([
   // 文本文件
   'txt', 'md', 'json', 'js', 'ts', 'jsx', 'tsx', 'html', 'htm', 'css', 'scss', 'sass', 'less',
@@ -32,6 +34,9 @@ const MAX_FILES_IN_DIR = 1000; // 单个目录最大文件数
 const MAX_FILES_PER_USER = 100; // 每个用户最多文件数
 const FILE_URL_EXPIRES_SECONDS = Number(process.env.FILE_URL_EXPIRES_SECONDS || 3600);
 const FILE_URL_SECRET = process.env.FILE_URL_SECRET || 'dev-file-url-secret-change-me';
+const SIGNED_URL_CACHE = new Map();
+const SIGNED_URL_CACHE_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+let lastSignedUrlCacheCleanupAt = 0;
 const FILE_NAME_PATTERN = /^[a-zA-Z0-9_\-\.\u4e00-\u9fa5]+$/; // 支持中英文、数字、下划线、连字符、点
 
 // 有效的 session ID 格式（字母、数字、连字符、下划线）
@@ -339,6 +344,20 @@ function createWorkspaceUrlSignature(urlPath, expires) {
     .digest('hex');
 }
 
+function cleanupExpiredSignedUrlCache(now = Date.now()) {
+  if (now - lastSignedUrlCacheCleanupAt < SIGNED_URL_CACHE_CLEANUP_INTERVAL_MS) {
+    return;
+  }
+
+  lastSignedUrlCacheCleanupAt = now;
+
+  for (const [urlPath, cached] of SIGNED_URL_CACHE.entries()) {
+    if (!cached || cached.expires <= now) {
+      SIGNED_URL_CACHE.delete(urlPath);
+    }
+  }
+}
+
 export function verifySignedWorkspaceUrl(urlPath, expires, signature) {
   if (!urlPath || !expires || !signature) {
     return false;
@@ -366,29 +385,23 @@ export function buildSignedWorkspaceUrl(urlPath) {
     return null;
   }
 
-  const expires = Date.now() + FILE_URL_EXPIRES_SECONDS * 1000;
+  const now = Date.now();
+  cleanupExpiredSignedUrlCache(now);
+
+  const cached = SIGNED_URL_CACHE.get(urlPath);
+  if (cached && cached.expires > now) {
+    return cached.signedPath;
+  }
+
+  const expires = now + FILE_URL_EXPIRES_SECONDS * 1000;
   const signature = createWorkspaceUrlSignature(urlPath, expires);
-  return `${urlPath}?expires=${expires}&signature=${signature}`;
+  const signedPath = `${urlPath}?expires=${expires}&signature=${signature}`;
+
+  SIGNED_URL_CACHE.set(urlPath, { signedPath, expires });
+  return signedPath;
 }
 
-/**
- * 获取公共访问URL
- * @param {string} absolutePath - 绝对路径
- * @param {string} sessionId - 用户会话ID
- * @returns {string} - 可访问的URL路径
- */
-export function getPublicUrl(absolutePath, sessionId) {
-  const urlPath = buildWorkspaceUrlPath(absolutePath, sessionId);
-  return buildSignedWorkspaceUrl(urlPath);
-}
-
-/**
- * 获取公共访问URL（包含完整URL）
- * @param {string} absolutePath - 绝对路径
- * @param {string} sessionId - 用户会话ID
- * @returns {Object} - 包含相对路径和完整URL的对象
- */
-function getPublicUrlInfo(absolutePath, sessionId) {
+export function getPublicUrlInfo(absolutePath, sessionId) {
   const urlPath = buildWorkspaceUrlPath(absolutePath, sessionId);
 
   if (!urlPath) {
@@ -402,6 +415,17 @@ function getPublicUrlInfo(absolutePath, sessionId) {
     fullUrl: `${CONFIG.baseUrl}${signedPath}`
   };
 }
+
+/**
+ * 获取公共访问URL
+ * @param {string} absolutePath - 绝对路径
+ * @param {string} sessionId - 用户会话ID
+ * @returns {string} - 可访问的URL路径
+ */
+export function getPublicUrl(absolutePath, sessionId) {
+  return getPublicUrlInfo(absolutePath, sessionId)?.path || null;
+}
+
 
 // ========== 文件操作核心函数 ==========
 
@@ -444,7 +468,8 @@ export async function listDirectory(sessionId, dirPath = '', options = {}) {
     
     const result = {
       path: dirPath || '/',
-      url: urlInfo.path,
+      signedPath: urlInfo.path,
+      url: urlInfo.fullUrl,
       fullUrl: urlInfo.fullUrl,
       sessionId: sessionId,
       treeView: '',
@@ -469,7 +494,8 @@ export async function listDirectory(sessionId, dirPath = '', options = {}) {
         name: item.name,
         type: item.isDirectory() ? 'directory' : 'file',
         path: itemPath,
-        url: itemUrlInfo.path,
+        signedPath: itemUrlInfo.path,
+        url: itemUrlInfo.fullUrl,
         fullUrl: itemUrlInfo.fullUrl,
         size: itemStats.size,
         formattedSize: formatFileSize(itemStats.size),
@@ -586,12 +612,15 @@ export async function readFile(sessionId, filePath, options = {}) {
       }
     }
     
+    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+
     return {
       success: true,
       name: path.basename(filePath),
       path: filePath,
-      url: getPublicUrl(absolutePath, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`,
+      signedPath: urlInfo?.path || null,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
       absolutePath: absolutePath,
       type: ext,
       size: stats.size,
@@ -603,10 +632,10 @@ export async function readFile(sessionId, filePath, options = {}) {
       isBinary: isBinary || isImage,
       isImage: isImage,
       message: isImage 
-        ? `这是图片文件，可通过以下地址访问:\n${getPublicUrl(absolutePath, sessionId)}\n完整地址: ${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`
+        ? `这是图片文件，可通过以下地址访问:\n${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}`
         : isBinary 
-          ? `这是二进制文件，可通过以下地址下载:\n${getPublicUrl(absolutePath, sessionId)}\n完整地址: ${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`
-          : `文件内容已读取，访问地址: ${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`
+          ? `这是二进制文件，可通过以下地址下载:\n${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}`
+          : `文件内容已读取，访问地址: ${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}`
     };
   } catch (error) {
     return {
@@ -740,19 +769,22 @@ export async function writeFile(sessionId, filePath, content, options = {}) {
     
     const stats = await fs.stat(absolutePath);
     
+    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+
     const result = {
       success: true,
       operation: exists ? 'updated' : 'created',
       name: filename,
       path: finalPath,
-      url: getPublicUrl(absolutePath, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`,
+      signedPath: urlInfo?.path || null,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
       absolutePath: absolutePath,
       size: stats.size,
       formattedSize: formatFileSize(stats.size),
       modifiedAt: stats.mtime.toISOString(),
       createdAt: stats.birthtime.toISOString(),
-      message: `文件${exists ? '更新' : '创建'}成功: ${filename}\n访问地址: ${getPublicUrl(absolutePath, sessionId)}\n完整地址: ${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`
+      message: `文件${exists ? '更新' : '创建'}成功: ${filename}\n访问地址: ${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}`
     };
     
     // 如果进行了格式转换，添加提示信息
@@ -760,8 +792,9 @@ export async function writeFile(sessionId, filePath, content, options = {}) {
       result.originalPath = filePath;
       result.isConverted = true;
       result.convertedType = 'html';
-      result.fullUrl = `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`;
-      result.message = `富文本文件${exists ? '更新' : '创建'}成功: ${filename}\n检测到 Markdown 格式，已自动转换为 HTML\n访问地址: ${getPublicUrl(absolutePath, sessionId)}\n完整地址: ${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`;
+      result.signedPath = urlInfo?.path || null;
+      result.fullUrl = urlInfo?.fullUrl || null;
+      result.message = `富文本文件${exists ? '更新' : '创建'}成功: ${filename}\n检测到 Markdown 格式，已自动转换为 HTML\n访问地址: ${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}`;
     }
     
     return result;
@@ -868,18 +901,21 @@ export async function createDirectory(sessionId, dirPath, options = {}) {
     
     const stats = await fs.stat(absolutePath);
     
+    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+
     return {
       success: true,
       operation: 'created',
       type: 'directory',
       name: path.basename(dirPath),
       path: dirPath,
-      url: getPublicUrl(absolutePath, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`,
+      signedPath: urlInfo?.path || null,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
       absolutePath: absolutePath,
       modifiedAt: stats.mtime.toISOString(),
       createdAt: stats.birthtime.toISOString(),
-      message: `目录创建成功: ${dirPath}\n访问地址: ${getPublicUrl(absolutePath, sessionId)}/\n完整地址: ${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}/`
+      message: `目录创建成功: ${dirPath}\n访问地址: ${urlInfo?.fullUrl || '不可用'}/\n签名路径: ${urlInfo?.path || '不可用'}/`
     };
   } catch (error) {
     return {
@@ -935,6 +971,8 @@ export async function moveFile(sessionId, sourcePath, targetPath, options = {}) 
     
     const stats = await fs.stat(targetAbsolute);
     
+    const urlInfo = getPublicUrlInfo(targetAbsolute, sessionId);
+
     return {
       success: true,
       operation: 'moved',
@@ -942,14 +980,15 @@ export async function moveFile(sessionId, sourcePath, targetPath, options = {}) 
       name: targetName,
       sourcePath: sourcePath,
       targetPath: targetPath,
-      url: getPublicUrl(targetAbsolute, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(targetAbsolute, sessionId)}`,
+      signedPath: urlInfo?.path || null,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
       absolutePath: targetAbsolute,
       size: stats.size,
       formattedSize: formatFileSize(stats.size),
       modifiedAt: stats.mtime.toISOString(),
       createdAt: stats.birthtime.toISOString(),
-      message: `${sourceStats.isDirectory() ? '目录' : '文件'}移动成功: ${sourcePath} -> ${targetPath}\n访问地址: ${getPublicUrl(targetAbsolute, sessionId)}\n完整地址: ${CONFIG.baseUrl}${getPublicUrl(targetAbsolute, sessionId)}`
+      message: `${sourceStats.isDirectory() ? '目录' : '文件'}移动成功: ${sourcePath} -> ${targetPath}\n访问地址: ${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}`
     };
   } catch (error) {
     return {
@@ -1013,6 +1052,8 @@ export async function copyFile(sessionId, sourcePath, targetPath, options = {}) 
     
     const stats = await fs.stat(targetAbsolute);
     
+    const urlInfo = getPublicUrlInfo(targetAbsolute, sessionId);
+
     return {
       success: true,
       operation: 'copied',
@@ -1020,14 +1061,15 @@ export async function copyFile(sessionId, sourcePath, targetPath, options = {}) 
       name: targetName,
       sourcePath: sourcePath,
       targetPath: targetPath,
-      url: getPublicUrl(targetAbsolute, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(targetAbsolute, sessionId)}`,
+      signedPath: urlInfo?.path || null,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
       absolutePath: targetAbsolute,
       size: stats.size,
       formattedSize: formatFileSize(stats.size),
       modifiedAt: stats.mtime.toISOString(),
       createdAt: stats.birthtime.toISOString(),
-      message: `${isDirectory ? '目录' : '文件'}复制成功: ${sourcePath} -> ${targetPath}\n访问地址: ${getPublicUrl(targetAbsolute, sessionId)}\n完整地址: ${CONFIG.baseUrl}${getPublicUrl(targetAbsolute, sessionId)}`
+      message: `${isDirectory ? '目录' : '文件'}复制成功: ${sourcePath} -> ${targetPath}\n访问地址: ${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}`
     };
   } catch (error) {
     return {
@@ -1068,13 +1110,16 @@ export async function getFileInfo(sessionId, targetPath) {
     const isDirectory = stats.isDirectory();
     const ext = isDirectory ? null : path.extname(targetPath).toLowerCase().slice(1);
     
+    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+
     const result = {
       success: true,
       name: path.basename(targetPath),
       path: targetPath,
       absolutePath: absolutePath,
-      url: getPublicUrl(absolutePath, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`,
+      signedPath: urlInfo?.path || null,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
       type: isDirectory ? 'directory' : (ext || 'file'),
       isDirectory: isDirectory,
       size: stats.size,
@@ -1151,11 +1196,13 @@ export async function searchFiles(sessionId, keyword, dirPath = '', options = {}
         // 检查文件名是否匹配
         if (item.name.toLowerCase().includes(keyword.toLowerCase())) {
           const itemStats = await fs.stat(itemAbsolute);
+          const itemUrlInfo = getPublicUrlInfo(itemAbsolute, sessionId);
           results.push({
             name: item.name,
             path: itemPath,
-            url: getPublicUrl(itemAbsolute, sessionId),
-            fullUrl: `${CONFIG.baseUrl}${getPublicUrl(itemAbsolute, sessionId)}`,
+            signedPath: itemUrlInfo?.path || null,
+            url: itemUrlInfo?.fullUrl || null,
+            fullUrl: itemUrlInfo?.fullUrl || null,
             type: item.isDirectory() ? 'directory' : 'file',
             size: itemStats.size,
             formattedSize: formatFileSize(itemStats.size),
@@ -1314,13 +1361,16 @@ export async function saveRichText(sessionId, filePath, markdownContent, options
     
     const stats = await fs.stat(absolutePath);
     
+    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+
     return {
       success: true,
       operation: exists ? 'updated' : 'created',
       name: filename,
       originalPath: filePath,
       path: htmlPath,
-      url: getPublicUrl(absolutePath, sessionId),
+      signedPath: urlInfo?.path || null,
+      url: urlInfo?.fullUrl || null,
       absolutePath: absolutePath,
       size: stats.size,
       formattedSize: formatFileSize(stats.size),
@@ -1328,8 +1378,8 @@ export async function saveRichText(sessionId, filePath, markdownContent, options
       theme: theme,
       modifiedAt: stats.mtime.toISOString(),
       createdAt: stats.birthtime.toISOString(),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`,
-      message: `富文本文件${exists ? '更新' : '创建'}成功: ${filename}\n访问地址: ${getPublicUrl(absolutePath, sessionId)}\n完整地址: ${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}\n文件将以格式化样式展示，支持打印`
+      fullUrl: urlInfo?.fullUrl || null,
+      message: `富文本文件${exists ? '更新' : '创建'}成功: ${filename}\n访问地址: ${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}\n文件将以格式化样式展示，支持打印`
     };
   } catch (error) {
     return {

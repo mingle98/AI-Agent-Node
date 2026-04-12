@@ -2,12 +2,7 @@ import archiver from 'archiver';
 import unzipper from 'unzipper';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import { getPublicUrl } from './fileManager.js';
-import { CONFIG } from '../config.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { getPublicUrlInfo, resolveWorkspacePath } from './fileManager.js';
 
 /**
  * 压缩文件或目录
@@ -20,18 +15,8 @@ const __dirname = path.dirname(__filename);
 export async function compressFiles(sessionId, sourcePaths, outputPath, options = {}) {
   try {
     const { overwrite = false, compressionLevel = 5 } = options;
-    
-    // 解析 workspace 根路径
-    const rootPath = process.env.WORKSPACE_ROOT || path.resolve(__dirname, '../public/workspace');
-    const workspacePath = path.join(rootPath, sessionId);
-    
-    // 确保 workspace 存在
-    if (!fs.existsSync(workspacePath)) {
-      fs.mkdirSync(workspacePath, { recursive: true });
-    }
-    
-    // 构建完整输出路径
-    const fullOutputPath = path.resolve(workspacePath, outputPath);
+
+    const fullOutputPath = resolveWorkspacePath(outputPath, sessionId);
     
     // 检查是否覆盖
     if (fs.existsSync(fullOutputPath) && !overwrite) {
@@ -63,13 +48,13 @@ export async function compressFiles(sessionId, sourcePaths, outputPath, options 
     
     // 添加文件/目录到压缩包
     for (const source of sources) {
-      const fullSourcePath = path.resolve(workspacePath, source);
-      
-      // 安全检查：确保在 workspace 内
-      if (!fullSourcePath.startsWith(workspacePath)) {
+      let fullSourcePath;
+      try {
+        fullSourcePath = resolveWorkspacePath(source, sessionId);
+      } catch (e) {
         return {
           success: false,
-          error: `路径 ${source} 超出 workspace 范围`
+          error: e.message || `路径 ${source} 超出 workspace 范围`
         };
       }
       
@@ -108,13 +93,15 @@ export async function compressFiles(sessionId, sourcePaths, outputPath, options 
     
     // 获取文件信息
     const stats = fs.statSync(fullOutputPath);
+    const urlInfo = getPublicUrlInfo(fullOutputPath, sessionId);
     
     return {
       success: true,
       outputPath,
       fullPath: fullOutputPath,
-      url: getPublicUrl(fullOutputPath, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(fullOutputPath, sessionId)}`,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
+      signedPath: urlInfo?.path || null,
       size: stats.size,
       sizeFormatted: formatFileSize(stats.size),
       compressedCount: sources.length
@@ -137,20 +124,15 @@ export async function compressFiles(sessionId, sourcePaths, outputPath, options 
  */
 export async function extractArchive(sessionId, zipPath, extractPath, options = {}) {
   try {
-    const { overwrite = true } = options;
-    
-    // 解析 workspace 根路径
-    const rootPath = process.env.WORKSPACE_ROOT || path.resolve(__dirname, '../public/workspace');
-    const workspacePath = path.join(rootPath, sessionId);
-    
-    // 构建完整路径
-    const fullZipPath = path.resolve(workspacePath, zipPath);
-    
-    // 安全检查：确保在 workspace 内
-    if (!fullZipPath.startsWith(workspacePath)) {
+    const { overwrite = false } = options;
+
+    let fullZipPath;
+    try {
+      fullZipPath = resolveWorkspacePath(zipPath, sessionId);
+    } catch (e) {
       return {
         success: false,
-        error: `路径 ${zipPath} 超出 workspace 范围`
+        error: e.message || `路径 ${zipPath} 超出 workspace 范围`
       };
     }
     
@@ -164,19 +146,17 @@ export async function extractArchive(sessionId, zipPath, extractPath, options = 
     
     // 确定解压目录
     let fullExtractPath;
-    if (extractPath) {
-      fullExtractPath = path.resolve(workspacePath, extractPath);
-    } else {
-      // 默认使用 zip 文件名（去掉扩展名）
-      const zipName = path.basename(zipPath, '.zip');
-      fullExtractPath = path.join(workspacePath, zipName);
-    }
-    
-    // 安全检查：确保解压目录在 workspace 内
-    if (!fullExtractPath.startsWith(workspacePath)) {
+    try {
+      if (extractPath) {
+        fullExtractPath = resolveWorkspacePath(extractPath, sessionId);
+      } else {
+        const zipName = path.basename(zipPath, '.zip');
+        fullExtractPath = resolveWorkspacePath(zipName, sessionId);
+      }
+    } catch (e) {
       return {
         success: false,
-        error: `解压路径超出 workspace 范围`
+        error: e.message || `解压路径超出 workspace 范围`
       };
     }
     
@@ -242,18 +222,13 @@ export async function extractArchive(sessionId, zipPath, extractPath, options = 
  */
 export async function getArchiveInfo(sessionId, zipPath) {
   try {
-    // 解析 workspace 根路径
-    const rootPath = process.env.WORKSPACE_ROOT || path.resolve(__dirname, '../public/workspace');
-    const workspacePath = path.join(rootPath, sessionId);
-    
-    // 构建完整路径
-    const fullZipPath = path.resolve(workspacePath, zipPath);
-    
-    // 安全检查：确保在 workspace 内
-    if (!fullZipPath.startsWith(workspacePath)) {
+    let fullZipPath;
+    try {
+      fullZipPath = resolveWorkspacePath(zipPath, sessionId);
+    } catch (e) {
       return {
         success: false,
-        error: `路径 ${zipPath} 超出 workspace 范围`
+        error: e.message || `路径 ${zipPath} 超出 workspace 范围`
       };
     }
     
@@ -308,12 +283,14 @@ export async function getArchiveInfo(sessionId, zipPath) {
     const compressionRatio = totalUncompressedSize > 0 
       ? ((1 - stats.size / totalUncompressedSize) * 100).toFixed(2) + '%'
       : '0%';
+    const urlInfo = getPublicUrlInfo(fullZipPath, sessionId);
     
     return {
       success: true,
       path: zipPath,
-      url: getPublicUrl(fullZipPath, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(fullZipPath, sessionId)}`,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
+      signedPath: urlInfo?.path || null,
       size: stats.size,
       sizeFormatted: formatFileSize(stats.size),
       totalUncompressedSize,
@@ -343,18 +320,13 @@ export async function listArchiveContents(sessionId, zipPath, options = {}) {
   try {
     const { maxFiles = 200 } = options;
     
-    // 解析 workspace 根路径
-    const rootPath = process.env.WORKSPACE_ROOT || path.resolve(__dirname, '../public/workspace');
-    const workspacePath = path.join(rootPath, sessionId);
-    
-    // 构建完整路径
-    const fullZipPath = path.resolve(workspacePath, zipPath);
-    
-    // 安全检查
-    if (!fullZipPath.startsWith(workspacePath)) {
+    let fullZipPath;
+    try {
+      fullZipPath = resolveWorkspacePath(zipPath, sessionId);
+    } catch (e) {
       return {
         success: false,
-        error: `路径 ${zipPath} 超出 workspace 范围`
+        error: e.message || `路径 ${zipPath} 超出 workspace 范围`
       };
     }
     

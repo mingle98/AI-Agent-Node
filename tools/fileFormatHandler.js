@@ -8,9 +8,8 @@ import PDFKit from 'pdfkit';
 import { PDFDocument } from 'pdf-lib';
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import mammoth from 'mammoth';
-import { Document, Paragraph, TextRun, Packer, PageOrientation, SectionType } from 'docx';
-import { resolveWorkspacePath, getPublicUrl, FILE_MANAGER_CONFIG } from './fileManager.js';
-import { CONFIG } from '../config.js';
+import { Document, Paragraph, TextRun, Packer } from 'docx';
+import { resolveWorkspacePath, getPublicUrlInfo } from './fileManager.js';
 import { renderMarkdownOnPdf } from './pdfMarkdownRenderer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -107,11 +106,14 @@ export async function readExcel(filePath, sessionId, options = {}) {
       });
     });
     
+    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+
     return {
       success: true,
       filePath: filePath,
-      url: getPublicUrl(absolutePath, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
+      signedPath: urlInfo?.path || null,
       sheets: workbook.worksheets.map(sheet => ({
         name: sheet.name,
         rowCount: sheet.rowCount,
@@ -209,16 +211,19 @@ export async function writeExcel(filePath, sessionId, data, options = {}) {
     
     const stats = await fs.stat(absolutePath);
     
+    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+
     return {
       success: true,
       filePath: filePath,
-      url: getPublicUrl(absolutePath, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
+      signedPath: urlInfo?.path || null,
       sheetName: sheetName,
       rowCount: data.length,
       size: stats.size,
       formattedSize: formatFileSize(stats.size),
-      message: `Excel 文件创建成功: ${filePath}\n访问地址: ${getPublicUrl(absolutePath, sessionId)}\n完整地址: ${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`
+      message: `Excel 文件创建成功: ${filePath}\n访问地址: ${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}`
     };
   } catch (error) {
     return {
@@ -279,15 +284,18 @@ export async function appendToExcel(filePath, sessionId, data, options = {}) {
     
     await workbook.xlsx.writeFile(absolutePath);
     
+    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+
     return {
       success: true,
       filePath: filePath,
-      url: getPublicUrl(absolutePath, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
+      signedPath: urlInfo?.path || null,
       sheetName: worksheet.name,
       appendedRows: data.length,
       totalRows: worksheet.rowCount,
-      message: `成功向 Excel 文件追加 ${data.length} 行数据，当前共 ${worksheet.rowCount} 行\n访问地址: ${getPublicUrl(absolutePath, sessionId)}\n完整地址: ${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`
+      message: `成功向 Excel 文件追加 ${data.length} 行数据，当前共 ${worksheet.rowCount} 行\n访问地址: ${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}`
     };
   } catch (error) {
     return {
@@ -316,11 +324,14 @@ export async function readWord(filePath, sessionId) {
     
     const result = await mammoth.extractRawText({ path: absolutePath });
     
+    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+
     return {
       success: true,
       filePath: filePath,
-      url: getPublicUrl(absolutePath, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
+      signedPath: urlInfo?.path || null,
       content: result.value,
       messages: result.messages,
       message: `成功读取 Word 文件，共 ${result.value.length} 字符`
@@ -350,11 +361,14 @@ export async function readWordAsHtml(filePath, sessionId) {
     
     const result = await mammoth.convertToHtml({ path: absolutePath });
     
+    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+
     return {
       success: true,
       filePath: filePath,
-      url: getPublicUrl(absolutePath, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
+      signedPath: urlInfo?.path || null,
       html: result.value,
       messages: result.messages,
       message: `成功将 Word 文件转换为 HTML`
@@ -421,15 +435,18 @@ ${htmlContent}
     
     const stats = await fs.stat(absolutePath);
     
+    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+
     return {
       success: true,
       filePath: filePath,
-      url: getPublicUrl(absolutePath, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
+      signedPath: urlInfo?.path || null,
       size: stats.size,
       formattedSize: formatFileSize(stats.size),
       note: '已保存为 HTML 格式（Word 兼容），建议使用专业库生成 .docx 文件',
-      message: `文档创建成功: ${filePath}\n访问地址: ${getPublicUrl(absolutePath, sessionId)}\n完整地址: ${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`
+      message: `文档创建成功: ${filePath}\n访问地址: ${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}`
     };
   } catch (error) {
     return {
@@ -561,16 +578,19 @@ export async function writeDocx(filePath, sessionId, paragraphs, options = {}) {
     
     const stats = await fs.stat(absolutePath);
     
+    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+
     return {
       success: true,
       filePath: filePath,
-      url: getPublicUrl(absolutePath, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
+      signedPath: urlInfo?.path || null,
       size: stats.size,
       formattedSize: formatFileSize(stats.size),
       pageSize: 'A4 (210mm x 297mm)',
       paragraphCount: docParagraphs.length,
-      message: `Word 文档创建成功: ${filePath}（A4 纸张）\n访问地址: ${getPublicUrl(absolutePath, sessionId)}\n完整地址: ${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`
+      message: `Word 文档创建成功: ${filePath}（A4 纸张）\n访问地址: ${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}`
     };
   } catch (error) {
     return {
@@ -600,11 +620,14 @@ export async function readPdf(filePath, sessionId) {
     const dataBuffer = await fs.readFile(absolutePath);
     const pdfData = await pdfParse(dataBuffer);
     
+    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+
     return {
       success: true,
       filePath: filePath,
-      url: getPublicUrl(absolutePath, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
+      signedPath: urlInfo?.path || null,
       pageCount: pdfData.numpages,
       info: pdfData.info,
       content: pdfData.text.slice(0, 50000), // 限制返回内容长度
@@ -752,17 +775,20 @@ export async function writePdf(filePath, sessionId, pages, options = {}) {
     
     const stats = await fs.stat(absolutePath);
     
+    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+
     return {
       success: true,
       filePath: filePath,
-      url: getPublicUrl(absolutePath, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
+      signedPath: urlInfo?.path || null,
       pageCount: pageCount || 1,
       size: stats.size,
       formattedSize: formatFileSize(stats.size),
       textLength: totalTextLength,
       hasChineseFont,
-      message: `PDF 文件创建成功: ${filePath}（${pageCount || 1}页，${totalTextLength}字符${hasChineseFont ? '，含中文支持' : '，无中文字体'}）\n访问地址: ${getPublicUrl(absolutePath, sessionId)}`
+      message: `PDF 文件创建成功: ${filePath}（${pageCount || 1}页，${totalTextLength}字符${hasChineseFont ? '，含中文支持' : '，无中文字体'}）\n访问地址: ${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}`
     };
   } catch (error) {
     return {
@@ -814,17 +840,19 @@ export async function mergePdfs(filePaths, outputPath, sessionId, options = {}) 
     await fs.writeFile(outputAbsolute, mergedPdfBytes);
     
     const stats = await fs.stat(outputAbsolute);
+    const urlInfo = getPublicUrlInfo(outputAbsolute, sessionId);
     
     return {
       success: true,
       inputFiles: filePaths,
       outputPath: outputPath,
-      url: getPublicUrl(outputAbsolute, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(outputAbsolute, sessionId)}`,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
+      signedPath: urlInfo?.path || null,
       pageCount: mergedPdf.getPageCount(),
       size: stats.size,
       formattedSize: formatFileSize(stats.size),
-      message: `成功合并 ${filePaths.length} 个 PDF 文件，共 ${mergedPdf.getPageCount()} 页\n访问地址: ${getPublicUrl(outputAbsolute, sessionId)}\n完整地址: ${CONFIG.baseUrl}${getPublicUrl(outputAbsolute, sessionId)}`
+      message: `成功合并 ${filePaths.length} 个 PDF 文件，共 ${mergedPdf.getPageCount()} 页\n访问地址: ${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}`
     };
   } catch (error) {
     return {
@@ -883,11 +911,14 @@ export async function getImageInfo(filePath, sessionId) {
       height = buffer.readUInt32LE(22);
     }
     
+    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+
     return {
       success: true,
       filePath: filePath,
-      url: getPublicUrl(absolutePath, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
+      signedPath: urlInfo?.path || null,
       type: ext,
       size: stats.size,
       formattedSize: formatFileSize(stats.size),
@@ -943,15 +974,18 @@ export async function writeSvg(filePath, sessionId, svgContent, options = {}) {
     
     const stats = await fs.stat(absolutePath);
     
+    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+
     return {
       success: true,
       filePath: filePath,
-      url: getPublicUrl(absolutePath, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
+      signedPath: urlInfo?.path || null,
       type: 'svg',
       size: stats.size,
       formattedSize: formatFileSize(stats.size),
-      message: `SVG 文件创建成功: ${filePath}\n访问地址: ${getPublicUrl(absolutePath, sessionId)}\n完整地址: ${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`
+      message: `SVG 文件创建成功: ${filePath}\n访问地址: ${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}`
     };
   } catch (error) {
     return {
@@ -1049,11 +1083,14 @@ export async function readCsv(filePath, sessionId, options = {}) {
     
     const { headers, data } = parseCSV(content, options);
     
+    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+
     return {
       success: true,
       filePath: filePath,
-      url: getPublicUrl(absolutePath, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
+      signedPath: urlInfo?.path || null,
       headers: headers,
       data: data.slice(0, 1000), // 限制返回行数
       totalRows: data.length,
@@ -1100,15 +1137,18 @@ export async function writeCsv(filePath, sessionId, data, options = {}) {
     
     const stats = await fs.stat(absolutePath);
     
+    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+
     return {
       success: true,
       filePath: filePath,
-      url: getPublicUrl(absolutePath, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
+      signedPath: urlInfo?.path || null,
       rowCount: data.length,
       size: stats.size,
       formattedSize: formatFileSize(stats.size),
-      message: `CSV 文件创建成功: ${filePath}\n访问地址: ${getPublicUrl(absolutePath, sessionId)}\n完整地址: ${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`
+      message: `CSV 文件创建成功: ${filePath}\n访问地址: ${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}`
     };
   } catch (error) {
     return {
@@ -1137,11 +1177,14 @@ export async function readJson(filePath, sessionId) {
     const content = await fs.readFile(absolutePath, 'utf-8');
     const data = JSON.parse(content);
     
+    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+
     return {
       success: true,
       filePath: filePath,
-      url: getPublicUrl(absolutePath, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
+      signedPath: urlInfo?.path || null,
       data: data,
       message: `成功读取 JSON 文件`
     };
@@ -1186,14 +1229,17 @@ export async function writeJson(filePath, sessionId, data, options = {}) {
     
     const stats = await fs.stat(absolutePath);
     
+    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+
     return {
       success: true,
       filePath: filePath,
-      url: getPublicUrl(absolutePath, sessionId),
-      fullUrl: `${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
+      signedPath: urlInfo?.path || null,
       size: stats.size,
       formattedSize: formatFileSize(stats.size),
-      message: `JSON 文件创建成功: ${filePath}\n访问地址: ${getPublicUrl(absolutePath, sessionId)}\n完整地址: ${CONFIG.baseUrl}${getPublicUrl(absolutePath, sessionId)}`
+      message: `JSON 文件创建成功: ${filePath}\n访问地址: ${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}`
     };
   } catch (error) {
     return {

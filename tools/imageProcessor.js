@@ -2,8 +2,7 @@
 import sharp from 'sharp';
 import fs from 'fs/promises';
 import path from 'path';
-import { resolveWorkspacePath, getPublicUrl } from './fileManager.js';
-import { CONFIG } from '../config.js';
+import { resolveWorkspacePath, getPublicUrlInfo } from './fileManager.js';
 
 const SUPPORTED_INPUT_FORMATS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'tiff', 'bmp'];
 const SUPPORTED_OUTPUT_FORMATS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif'];
@@ -122,12 +121,13 @@ export async function compressImage(sessionId, inputPath, outputPath, options = 
     const savedBytes = inputStats.size - outputStats.size;
     const savedPercent = ((savedBytes / inputStats.size) * 100).toFixed(1);
 
-    const publicUrl = getPublicUrl(absOutput, sessionId);
+    const urlInfo = getPublicUrlInfo(absOutput, sessionId);
     return {
       success: true,
       filePath: finalOutputPath,
-      url: publicUrl,
-      fullUrl: `${CONFIG.baseUrl}${publicUrl}`,
+      url: urlInfo?.fullUrl || null,
+      fullUrl: urlInfo?.fullUrl || null,
+      signedPath: urlInfo?.path || null,
       size: outputStats.size,
       formattedSize: formatFileSize(outputStats.size),
       inputPath,
@@ -139,8 +139,8 @@ export async function compressImage(sessionId, inputPath, outputPath, options = 
       quality,
       format: outputExt,
       message: savedBytes > 0
-        ? `图片压缩成功: ${finalOutputPath}（${formatFileSize(inputStats.size)} → ${formatFileSize(outputStats.size)}，节省 ${savedPercent}%）\n访问地址: ${publicUrl}`
-        : `图片转换成功: ${finalOutputPath}（${formatFileSize(outputStats.size)}）\n访问地址: ${publicUrl}`,
+        ? `图片压缩成功: ${finalOutputPath}（${formatFileSize(inputStats.size)} → ${formatFileSize(outputStats.size)}，节省 ${savedPercent}%）\n访问地址: ${urlInfo?.fullUrl || urlInfo?.path || '不可用'}`
+        : `图片转换成功: ${finalOutputPath}（${formatFileSize(outputStats.size)}）\n访问地址: ${urlInfo?.fullUrl || urlInfo?.path || '不可用'}`,
     };
   } catch (error) {
     return { success: false, error: error.message, filePath: outputPath || inputPath || null };

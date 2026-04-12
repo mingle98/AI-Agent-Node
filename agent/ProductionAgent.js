@@ -70,6 +70,28 @@ function extractReasoningContent(chunk) {
   return typeof delta?.reasoning_content === "string" ? delta?.reasoning_content : "";
 }
 
+function formatToolResultForModel(result) {
+  if (typeof result === "string") {
+    return result;
+  }
+
+  if (!result || typeof result !== "object") {
+    return JSON.stringify(result, null, 2);
+  }
+
+  const modelResult = { ...result };
+  const preferredUrl = modelResult.fullUrl || modelResult.url || null;
+
+  if (preferredUrl) {
+    modelResult.linkUsage = {
+      preferredUrl,
+      instruction: "如果需要向用户展示可点击下载/访问链接，必须直接使用 fullUrl；若无 fullUrl 再使用 url。禁止根据 outputPath、path、sessionId 或 /workspace/... 手工拼接链接。"
+    };
+  }
+
+  return JSON.stringify(modelResult, null, 2);
+}
+
 function extractMemoryBlock(systemPrompt = "") {
   if (typeof systemPrompt !== "string" || !systemPrompt) {
     return "";
@@ -867,7 +889,7 @@ export class ProductionAgent {
             toolExcResults.push(toolExcResult);
             emitToolEvent(chunkCallback, toolExcResult);
             console.log(`【TOOL】执行 ${toolCall.name}结果:${JSON.stringify(result)}`)
-            const content = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+            const content = formatToolResultForModel(result);
             if (streamEnabled) {
               emitStreamEvent(chunkCallback, {
                 type: "status",

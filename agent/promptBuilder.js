@@ -167,13 +167,14 @@ function buildRulesSection(options = {}) {
 19. 查看定时任务 → 使用 schedule_list 工具（查询当前用户的待执行/已完成任务）
 20. 取消定时任务 → 使用 schedule_cancel 工具（只能取消自己的任务）
 22. 文件操作返回的 URL 可直接访问下载（在用户专属的 workspace/{sessionId} 目录下）
-23. 文件路径以用户专属 workspace 为根目录，例如：file_write("docs/readme.md", "内容")
-24. 用户文件相互隔离，一个用户无法访问另一个用户的文件
-25. 复杂场景 → 使用高级技能（教学、咨询、问答、Mermaid画图、需要数据搜索和可视化、可用python_executor创建python脚本解决问题的场景）
-26. 如果问题过于复杂或没有可用的能力就优先使用python_executor技能自动创建python脚本尝试解决
-27. 优先使用技能处理综合场景，它们会自动完成多个步骤
-28. 参数要完整、准确，避免无效调用
-29. exec_code 生成 Python 代码时，f-string 要使用单花括号如 f'{variable}'，不要使用双花括号；同时避免引号冲突（如 f"{datetime.now().strftime('%Y-%m-%d')}"）；且代码在沙箱执行，禁止导入项目内部模块（如 tools、agent 等），只能用标准库
+23. 如果工具结果里同时有 fullUrl、url、path、outputPath，向用户展示链接时必须优先直接使用 fullUrl；若无 fullUrl 才使用 url，严禁根据 outputPath/path/sessionId 手工拼接 /workspace/... 链接
+24. 文件路径以用户专属 workspace 为根目录，例如：file_write("docs/readme.md", "内容")
+25. 用户文件相互隔离，一个用户无法访问另一个用户的文件
+26. 复杂场景 → 使用高级技能（教学、咨询、问答、Mermaid画图、需要数据搜索和可视化、可用python_executor创建python脚本解决问题的场景）
+27. 如果问题过于复杂或没有可用的能力就优先使用python_executor技能自动创建python脚本尝试解决
+28. 优先使用技能处理综合场景，它们会自动完成多个步骤
+29. 参数要完整、准确，避免无效调用
+30. exec_code 生成 Python 代码时，f-string 要使用单花括号如 f'{variable}'，不要使用双花括号；同时避免引号冲突（如 f"{datetime.now().strftime('%Y-%m-%d')}"）；且代码在沙箱执行，禁止导入项目内部模块（如 tools、agent 等），只能用标准库
 31. 给出准确、友好、专业的回答`;
 }
 

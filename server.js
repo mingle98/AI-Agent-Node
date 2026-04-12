@@ -15,7 +15,7 @@ import {
 import { CONFIG } from "./config.js";
 import { resolveThinkingMode } from "./utils/thinkingMode.js";
 import { escapeHtml, wrapThinkingOpen, wrapThinkingClose } from "./utils/thinkingRenderer.js";
-import { initWorkspace, getUserWorkspaceRoot, getUserStorageStats, checkUserStorageQuota, verifySignedWorkspaceUrl } from './tools/fileManager.js';
+import { initWorkspace, getUserWorkspaceRoot, getUserStorageStats, checkUserStorageQuota, verifySignedWorkspaceUrl, getPublicUrlInfo } from './tools/fileManager.js';
 import { TOOL_DEFINITIONS } from './tools/index.js';
 import { initScheduler } from './tools/scheduler.js';
 import multer from "multer";
@@ -530,14 +530,22 @@ app.post("/api/files/upload", upload.array("files", 10), async (req, res, next) 
     }
     
     // 构建上传结果
-    const uploadResults = files.map(file => ({
-      originalName: file.originalname,
-      savedName: file.filename,
-      size: file.size,
-      sizeFormatted: formatFileSize(file.size),
-      path: `uploadFile/${file.filename}`,
-      url: `${CONFIG.baseUrl}/workspace/${sessionId}/uploadFile/${file.filename}`
-    }));
+    const uploadResults = files.map(file => {
+      const relativePath = `uploadFile/${file.filename}`;
+      const absolutePath = path.join(getUserWorkspaceRoot(sessionId), relativePath);
+      const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+
+      return {
+        originalName: file.originalname,
+        savedName: file.filename,
+        size: file.size,
+        sizeFormatted: formatFileSize(file.size),
+        path: relativePath,
+        signedPath: urlInfo?.path || null,
+        url: urlInfo?.fullUrl || null,
+        fullUrl: urlInfo?.fullUrl || null
+      };
+    });
     
     res.json({
       success: true,
