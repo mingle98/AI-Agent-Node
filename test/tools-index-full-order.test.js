@@ -28,6 +28,17 @@ test('file_* 工具参数顺序正确', async () => {
   assert.equal(readLinesRes.success, true, 'file_read_lines 应该成功');
   assert.equal(readLinesRes.content, '1|Hello World 测试内容', 'file_read_lines 内容应该匹配');
 
+  const editLinesRes = await TOOLS.file_edit_lines(TEST_SESSION, filePath, 1, 1, 'Updated 内容');
+  assert.equal(editLinesRes.success, true, 'file_edit_lines 应该成功');
+  assert.equal(editLinesRes.content, '1|Updated 内容', 'file_edit_lines 返回内容应该匹配');
+
+  const replaceTextRes = await TOOLS.file_replace_text(TEST_SESSION, filePath, 'Updated', 'Replaced', 1, 1024 * 1024);
+  assert.equal(replaceTextRes.success, true, 'file_replace_text 应该成功');
+  assert.equal(replaceTextRes.replacementCount, 1, 'file_replace_text 替换次数应该匹配');
+
+  const editedReadRes = await TOOLS.file_read(TEST_SESSION, filePath);
+  assert.equal(editedReadRes.content, 'Replaced 内容', 'file_replace_text 写回内容应该匹配');
+
   // file_info - 注意返回的是 path 不是 filePath
   const infoRes = await TOOLS.file_info(TEST_SESSION, filePath);
   assert.equal(infoRes.success, true, 'file_info 应该成功');
@@ -59,7 +70,7 @@ test('file_* 工具参数顺序正确', async () => {
   assert.ok(Array.isArray(searchRes.results), 'file_search 应该返回results数组');
 
   // file_content_search
-  const contentSearchRes = await TOOLS.file_content_search(TEST_SESSION, 'Hello World', TEST_DIR, 10, 1024 * 1024);
+  const contentSearchRes = await TOOLS.file_content_search(TEST_SESSION, 'Replaced 内容', TEST_DIR, 10, 1024 * 1024);
   assert.equal(contentSearchRes.success, true, 'file_content_search 应该成功');
   assert.ok(Array.isArray(contentSearchRes.results), 'file_content_search 应该返回results数组');
   assert.ok(contentSearchRes.results.some(item => item.path === filePath), 'file_content_search 应该找到目标文件');

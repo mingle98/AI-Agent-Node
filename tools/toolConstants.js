@@ -15,6 +15,8 @@ export const TOOLS_NEEDING_SESSION_ID = [
   'file_quota',
   'file_read',
   'file_read_lines',
+  'file_edit_lines',
+  'file_replace_text',
   'file_write',
   'file_delete',
   'file_mkdir',

@@ -8,7 +8,7 @@ import { getDailyNews } from './dailyNews.js';
 import { execCode } from './execCode.js';
 import { generatePythonScript, analyzeScriptResult, setScriptGeneratorLLM, checkScriptSafety } from './scriptGenerator.js';
 import {
-  listDirectory, readFile, readFileLines, writeFile, deleteFile, createDirectory,
+  listDirectory, readFile, readFileLines, editFileLines, replaceFileText, writeFile, deleteFile, createDirectory,
   moveFile, copyFile, getFileInfo, searchFiles, searchFileContents, batchFileOperations, initWorkspace, getUserStorageStats, resolveWorkspacePath
 } from './fileManager.js';
 import {
@@ -148,6 +148,32 @@ export const TOOL_DEFINITIONS = [
       { name: "最大读取字节数", type: "number", example: 1048576, required: false }
     ],
     example: 'file_read_lines("logs/app.log", 120, 160, 1048576)',
+  },
+  {
+    name: "file_edit_lines",
+    func: (sessionId, filePath, startLine, endLine, newContent, maxSize) => editFileLines(sessionId, filePath, startLine, endLine, newContent, { maxSize }),
+    description: "按行号范围编辑用户 workspace 中文本文件的部分内容，适合精确替换大文件中的局部片段，单次最多 200 行",
+    params: [
+      { name: "文件路径", type: "string", example: "src/app.js" },
+      { name: "起始行号", type: "number", example: 120 },
+      { name: "结束行号", type: "number", example: 125 },
+      { name: "新内容", type: "string", example: "const result = true;\nreturn result;" },
+      { name: "最大读取字节数", type: "number", example: 1048576, required: false }
+    ],
+    example: 'file_edit_lines("src/app.js", 120, 125, "const result = true;\\nreturn result;", 1048576)',
+  },
+  {
+    name: "file_replace_text",
+    func: (sessionId, filePath, oldText, newText, maxReplacements, maxSize) => replaceFileText(sessionId, filePath, oldText, newText, { maxReplacements, maxSize }),
+    description: "按目标文本替换用户 workspace 中文本文件的内容，适合删除指定片段或批量替换字符串；默认只替换 1 处，maxReplacements=0 表示全部替换",
+    params: [
+      { name: "文件路径", type: "string", example: "src/app.js" },
+      { name: "旧文本", type: "string", example: "TODO remove" },
+      { name: "新文本", type: "string", example: "" },
+      { name: "最大替换次数", type: "number", example: 1, required: false },
+      { name: "最大读取字节数", type: "number", example: 1048576, required: false }
+    ],
+    example: 'file_replace_text("src/app.js", "TODO remove", "", 1, 1048576)',
   },
   {
     name: "file_write",

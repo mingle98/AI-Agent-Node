@@ -148,6 +148,8 @@ function buildRulesSection(options = {}) {
    - 查看目录: file_list(path, recursive)
    - 读取文件: file_read(path, maxSize)
    - 按行读取文件片段: file_read_lines(path, startLine, endLine, maxSize)（适合大文件、日志、代码上下文查看，单次最多 200 行）
+   - 按行编辑文件片段: file_edit_lines(path, startLine, endLine, newContent, maxSize)（适合精确替换局部内容，单次最多 200 行；若读取被截断则禁止编辑，避免误写回）
+   - 按文本替换文件内容: file_replace_text(path, oldText, newText, maxReplacements, maxSize)（适合删除指定片段或批量替换字符串；默认只替换 1 处，maxReplacements=0 表示全部替换；若读取被截断则禁止替换）
    - 创建/写入: file_write(path, content, overwrite) - 自动检测 Markdown 并转为 HTML 展示格式
    - 删除: file_delete(path, recursive)
    - 创建目录: file_mkdir(path)
@@ -207,6 +209,8 @@ function buildExamplesSection(skillDefinitions, options = {}) {
     '- "这是上周数据：访问=50000, 加购=3500, 下单=800, 支付=210。帮我计算每步转化率，并找出最大流失环节" → 用 python_executor 技能自动生成脚本执行分析',
     '- "列出workspace里的文件" → 用 file_list 工具查看目录',
     '- "读取src/app.js第120到160行" → 用 file_read_lines 工具按行读取文件片段',
+    '- "把src/app.js第120到125行替换成新逻辑" → 用 file_edit_lines 工具按行编辑文件片段',
+    '- "删除文件里的 TODO remove 文本" → 用 file_replace_text 工具按文本替换，newText 传空字符串即可删除',
     '- "按文件名找 report 相关文件" → 用 file_search 工具搜索文件名或目录名',
     '- "在项目文件内容里搜索 TODO / 某段文本" → 用 file_content_search 工具搜索文件内容',
     '- "我还剩多少存储空间?" → 用 file_quota 工具查询',

@@ -78,6 +78,14 @@ test("TOOLS: should include file_read_lines function", () => {
   assert.equal(typeof TOOLS.file_read_lines, "function");
 });
 
+test("TOOLS: should include file_edit_lines function", () => {
+  assert.equal(typeof TOOLS.file_edit_lines, "function");
+});
+
+test("TOOLS: should include file_replace_text function", () => {
+  assert.equal(typeof TOOLS.file_replace_text, "function");
+});
+
 test("file_read_lines tool: should be defined with correct params", () => {
   const tool = TOOL_DEFINITIONS.find(t => t.name === "file_read_lines");
   assert.ok(tool);
@@ -87,6 +95,30 @@ test("file_read_lines tool: should be defined with correct params", () => {
   assert.ok(tool.params.find(p => p.name === "结束行号"));
   assert.ok(tool.params.find(p => p.name === "最大读取字节数"));
   assert.match(tool.description, /最多 200 行/);
+});
+
+test("file_edit_lines tool: should be defined with correct params", () => {
+  const tool = TOOL_DEFINITIONS.find(t => t.name === "file_edit_lines");
+  assert.ok(tool);
+  assert.equal(tool.params.length, 5);
+  assert.ok(tool.params.find(p => p.name === "文件路径"));
+  assert.ok(tool.params.find(p => p.name === "起始行号"));
+  assert.ok(tool.params.find(p => p.name === "结束行号"));
+  assert.ok(tool.params.find(p => p.name === "新内容"));
+  assert.ok(tool.params.find(p => p.name === "最大读取字节数"));
+  assert.match(tool.description, /最多 200 行/);
+});
+
+test("file_replace_text tool: should be defined with correct params", () => {
+  const tool = TOOL_DEFINITIONS.find(t => t.name === "file_replace_text");
+  assert.ok(tool);
+  assert.equal(tool.params.length, 5);
+  assert.ok(tool.params.find(p => p.name === "文件路径"));
+  assert.ok(tool.params.find(p => p.name === "旧文本"));
+  assert.ok(tool.params.find(p => p.name === "新文本"));
+  assert.ok(tool.params.find(p => p.name === "最大替换次数"));
+  assert.ok(tool.params.find(p => p.name === "最大读取字节数"));
+  assert.match(tool.description, /默认只替换 1 处/);
 });
 
 test("file_content_search tool: should be defined with correct params", () => {
@@ -110,6 +142,16 @@ test("toolNeedsSessionId: should include file_content_search", async () => {
 test("toolNeedsSessionId: should include file_read_lines", async () => {
   const { toolNeedsSessionId } = await import("../tools/toolConstants.js");
   assert.equal(toolNeedsSessionId("file_read_lines"), true);
+});
+
+test("toolNeedsSessionId: should include file_edit_lines", async () => {
+  const { toolNeedsSessionId } = await import("../tools/toolConstants.js");
+  assert.equal(toolNeedsSessionId("file_edit_lines"), true);
+});
+
+test("toolNeedsSessionId: should include file_replace_text", async () => {
+  const { toolNeedsSessionId } = await import("../tools/toolConstants.js");
+  assert.equal(toolNeedsSessionId("file_replace_text"), true);
 });
 
 test("email_send tool: should be defined with correct params", () => {

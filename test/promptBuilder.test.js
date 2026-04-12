@@ -34,6 +34,10 @@ test("buildSystemPrompt: should document file name and content search tools", ()
   const prompt = buildSystemPrompt([], [], {});
   assert.match(prompt, /按文件名搜索: file_search/);
   assert.match(prompt, /按行读取文件片段: file_read_lines/);
+  assert.match(prompt, /按行编辑文件片段: file_edit_lines/);
+  assert.match(prompt, /按文本替换文件内容: file_replace_text/);
+  assert.match(prompt, /maxReplacements=0 表示全部替换/);
+  assert.match(prompt, /若读取被截断则禁止编辑/);
   assert.match(prompt, /单次最多 200 行/);
   assert.match(prompt, /按文件内容搜索: file_content_search/);
   assert.match(prompt, /默认最多返回 3 条/);

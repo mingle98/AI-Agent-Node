@@ -776,6 +776,220 @@ export async function readFileLines(sessionId, filePath, startLine, endLine, opt
 }
 
 /**
+ * 按行范围编辑文件内容
+ * @param {string} sessionId - 用户会话ID
+ * @param {string} filePath - 文件路径（相对用户workspace）
+ * @param {number} startLine - 起始行号（从1开始）
+ * @param {number} endLine - 结束行号（包含）
+ * @param {string} newContent - 替换内容
+ * @param {Object} options - 选项
+ * @param {string} options.encoding - 编码（默认utf-8）
+ * @param {number} options.maxSize - 最大读取字节数
+ * @returns {Promise<Object>}
+ */
+export async function editFileLines(sessionId, filePath, startLine, endLine, newContent, options = {}) {
+  try {
+    if (!sessionId) {
+      throw new Error('需要提供 sessionId 来访问文件系统');
+    }
+
+    const parsedStartLine = Number(startLine);
+    const parsedEndLine = Number(endLine);
+    if (!Number.isInteger(parsedStartLine) || !Number.isInteger(parsedEndLine) || parsedStartLine < 1 || parsedEndLine < 1) {
+      throw new Error('需要提供有效的起始和结束行号');
+    }
+    if (parsedStartLine > parsedEndLine) {
+      throw new Error('起始行号不能大于结束行号');
+    }
+    if (parsedEndLine - parsedStartLine + 1 > 200) {
+      throw new Error('单次最多编辑 200 行内容');
+    }
+    if (typeof newContent !== 'string') {
+      throw new Error('newContent 必须是字符串');
+    }
+
+    const readResult = await readFile(sessionId, filePath, options);
+    if (!readResult.success) {
+      return readResult;
+    }
+    if (readResult.isBinary) {
+      return {
+        success: false,
+        error: '二进制文件或图片不支持按行编辑',
+        path: filePath,
+      };
+    }
+    if (readResult.isTruncated) {
+      return {
+        success: false,
+        error: '文件读取已截断，请提高 maxSize 后再编辑，避免写回不完整内容',
+        path: filePath,
+      };
+    }
+
+    const originalContent = typeof readResult.content === 'string' ? readResult.content : '';
+    const endsWithTrailingNewline = /\r?\n$/.test(originalContent);
+    const normalizedOriginalContent = originalContent.replace(/\r\n/g, '\n');
+    const lines = normalizedOriginalContent.split('\n');
+    const totalLines = lines.length;
+
+    if (parsedStartLine > totalLines) {
+      throw new Error(`起始行号超出文件总行数: ${totalLines}`);
+    }
+
+    const actualEndLine = Math.min(parsedEndLine, totalLines);
+    const replacementLines = String(newContent).replace(/\r\n/g, '\n').split('\n');
+    const nextLines = [
+      ...lines.slice(0, parsedStartLine - 1),
+      ...replacementLines,
+      ...lines.slice(actualEndLine),
+    ];
+
+    let nextContent = nextLines.join('\n');
+    if (endsWithTrailingNewline && !nextContent.endsWith('\n')) {
+      nextContent += '\n';
+    }
+
+    const writeResult = await writeFile(sessionId, filePath, nextContent, {
+      overwrite: true,
+      encoding: options.encoding || 'utf-8',
+      autoFormat: false,
+    });
+
+    if (!writeResult.success) {
+      return writeResult;
+    }
+
+    return {
+      ...writeResult,
+      startLine: parsedStartLine,
+      endLine: parsedEndLine,
+      actualStartLine: parsedStartLine,
+      actualEndLine,
+      replacedLineCount: actualEndLine - parsedStartLine + 1,
+      insertedLineCount: replacementLines.length,
+      content: replacementLines
+        .map((line, index) => `${parsedStartLine + index}|${line}`)
+        .join('\n'),
+      message: `已编辑 ${filePath} 第 ${parsedStartLine}-${actualEndLine} 行，替换为 ${replacementLines.length} 行新内容`,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+      path: filePath,
+    };
+  }
+}
+
+/**
+ * 按文本内容替换文件内容
+ * @param {string} sessionId - 用户会话ID
+ * @param {string} filePath - 文件路径（相对用户workspace）
+ * @param {string} oldText - 目标旧文本
+ * @param {string} newText - 新文本
+ * @param {Object} options - 选项
+ * @param {string} options.encoding - 编码（默认utf-8）
+ * @param {number} options.maxSize - 最大读取字节数
+ * @param {number} options.maxReplacements - 最大替换次数，默认 1，0 表示全部替换
+ * @returns {Promise<Object>}
+ */
+export async function replaceFileText(sessionId, filePath, oldText, newText, options = {}) {
+  try {
+    if (!sessionId) {
+      throw new Error('需要提供 sessionId 来访问文件系统');
+    }
+    if (typeof oldText !== 'string' || oldText.length === 0) {
+      throw new Error('oldText 必须是非空字符串');
+    }
+    if (typeof newText !== 'string') {
+      throw new Error('newText 必须是字符串');
+    }
+
+    const parsedMaxReplacements = options.maxReplacements == null ? 1 : Number(options.maxReplacements);
+    if (!Number.isInteger(parsedMaxReplacements) || parsedMaxReplacements < 0) {
+      throw new Error('maxReplacements 必须是大于等于 0 的整数');
+    }
+
+    const readResult = await readFile(sessionId, filePath, options);
+    if (!readResult.success) {
+      return readResult;
+    }
+    if (readResult.isBinary) {
+      return {
+        success: false,
+        error: '二进制文件或图片不支持按文本替换',
+        path: filePath,
+      };
+    }
+    if (readResult.isTruncated) {
+      return {
+        success: false,
+        error: '文件读取已截断，请提高 maxSize 后再替换，避免写回不完整内容',
+        path: filePath,
+      };
+    }
+
+    const originalContent = typeof readResult.content === 'string' ? readResult.content : '';
+    let replacementCount = 0;
+    let nextContent = originalContent;
+
+    if (parsedMaxReplacements === 0) {
+      replacementCount = originalContent.split(oldText).length - 1;
+      nextContent = originalContent.split(oldText).join(newText);
+    } else {
+      let remaining = originalContent;
+      const chunks = [];
+      let replacementsLeft = parsedMaxReplacements;
+      while (replacementsLeft > 0) {
+        const matchIndex = remaining.indexOf(oldText);
+        if (matchIndex === -1) break;
+        chunks.push(remaining.slice(0, matchIndex), newText);
+        remaining = remaining.slice(matchIndex + oldText.length);
+        replacementCount += 1;
+        replacementsLeft -= 1;
+      }
+      chunks.push(remaining);
+      nextContent = chunks.join('');
+    }
+
+    if (replacementCount === 0) {
+      return {
+        success: false,
+        error: '未找到目标文本，未执行替换',
+        path: filePath,
+        replacementCount: 0,
+      };
+    }
+
+    const writeResult = await writeFile(sessionId, filePath, nextContent, {
+      overwrite: true,
+      encoding: options.encoding || 'utf-8',
+      autoFormat: false,
+    });
+
+    if (!writeResult.success) {
+      return writeResult;
+    }
+
+    return {
+      ...writeResult,
+      oldText,
+      newText,
+      replacementCount,
+      maxReplacements: parsedMaxReplacements,
+      message: `已在 ${filePath} 中替换 ${replacementCount} 处文本`,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+      path: filePath,
+    };
+  }
+}
+
+/**
  * 检测内容是否为 Markdown 格式
  * @param {string} content - 内容
  * @returns {boolean}
