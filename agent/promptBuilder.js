@@ -147,6 +147,7 @@ function buildRulesSection(options = {}) {
    【重要】每个用户拥有独立的文件空间，基于 sessionId 隔离，无法访问其他用户的文件
    - 查看目录: file_list(path, recursive)
    - 读取文件: file_read(path, maxSize)
+   - 按行读取文件片段: file_read_lines(path, startLine, endLine, maxSize)（适合大文件、日志、代码上下文查看，单次最多 200 行）
    - 创建/写入: file_write(path, content, overwrite) - 自动检测 Markdown 并转为 HTML 展示格式
    - 删除: file_delete(path, recursive)
    - 创建目录: file_mkdir(path)
@@ -205,6 +206,7 @@ function buildExamplesSection(skillDefinitions, options = {}) {
     '- "执行这段js代码看看结果" → 用 exec_code 工具沙箱执行',
     '- "这是上周数据：访问=50000, 加购=3500, 下单=800, 支付=210。帮我计算每步转化率，并找出最大流失环节" → 用 python_executor 技能自动生成脚本执行分析',
     '- "列出workspace里的文件" → 用 file_list 工具查看目录',
+    '- "读取src/app.js第120到160行" → 用 file_read_lines 工具按行读取文件片段',
     '- "按文件名找 report 相关文件" → 用 file_search 工具搜索文件名或目录名',
     '- "在项目文件内容里搜索 TODO / 某段文本" → 用 file_content_search 工具搜索文件内容',
     '- "我还剩多少存储空间?" → 用 file_quota 工具查询',

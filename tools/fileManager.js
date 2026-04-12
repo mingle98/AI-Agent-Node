@@ -612,6 +612,10 @@ export async function readFile(sessionId, filePath, options = {}) {
     }
     
     const { encoding = 'utf-8', maxSize = 10 * 1024 * 1024 } = options;
+    const safeMaxSize = Number(maxSize);
+    if (!Number.isFinite(safeMaxSize) || safeMaxSize <= 0) {
+      throw new Error('maxSize 必须是大于 0 的有效数字');
+    }
     
     // 首先确保用户目录存在（自动初始化）
     const userRoot = getUserWorkspaceRoot(sessionId);
@@ -649,13 +653,13 @@ export async function readFile(sessionId, filePath, options = {}) {
       content = null;
     } else {
       // 限制读取大小
-      const readSize = Math.min(stats.size, maxSize);
+      const readSize = Math.min(stats.size, safeMaxSize);
       const buffer = await fs.readFile(absolutePath);
       content = buffer.slice(0, readSize).toString(encoding);
       
       // 如果截断了，添加提示
-      if (stats.size > maxSize) {
-        content += `\n\n[文件内容已截断，仅显示前 ${formatFileSize(maxSize)}，完整文件大小: ${formatFileSize(stats.size)}]`;
+      if (stats.size > safeMaxSize) {
+        content += `\n\n[文件内容已截断，仅显示前 ${formatFileSize(safeMaxSize)}，完整文件大小: ${formatFileSize(stats.size)}]`;
       }
     }
     
@@ -675,7 +679,7 @@ export async function readFile(sessionId, filePath, options = {}) {
       modifiedAt: stats.mtime.toISOString(),
       createdAt: stats.birthtime.toISOString(),
       content: content,
-      isTruncated: stats.size > maxSize,
+      isTruncated: stats.size > safeMaxSize,
       isBinary: isBinary || isImage,
       isImage: isImage,
       message: isImage 
@@ -689,6 +693,84 @@ export async function readFile(sessionId, filePath, options = {}) {
       success: false,
       error: error.message,
       path: filePath
+    };
+  }
+}
+
+/**
+ * 按行范围读取文件内容
+ * @param {string} sessionId - 用户会话ID
+ * @param {string} filePath - 文件路径（相对用户workspace）
+ * @param {number} startLine - 起始行号（从1开始）
+ * @param {number} endLine - 结束行号（包含）
+ * @param {Object} options - 选项
+ * @param {string} options.encoding - 编码（默认utf-8）
+ * @param {number} options.maxSize - 最大读取字节数
+ * @returns {Promise<Object>}
+ */
+export async function readFileLines(sessionId, filePath, startLine, endLine, options = {}) {
+  try {
+    if (!sessionId) {
+      throw new Error('需要提供 sessionId 来访问文件系统');
+    }
+
+    const parsedStartLine = Number(startLine);
+    const parsedEndLine = Number(endLine);
+    if (!Number.isInteger(parsedStartLine) || !Number.isInteger(parsedEndLine) || parsedStartLine < 1 || parsedEndLine < 1) {
+      throw new Error('需要提供有效的起始和结束行号');
+    }
+    if (parsedStartLine > parsedEndLine) {
+      throw new Error('起始行号不能大于结束行号');
+    }
+    if (parsedEndLine - parsedStartLine + 1 > 200) {
+      throw new Error('单次最多读取 200 行内容');
+    }
+
+    const readResult = await readFile(sessionId, filePath, options);
+    if (!readResult.success) {
+      return readResult;
+    }
+    if (readResult.isBinary) {
+      return {
+        success: false,
+        error: '二进制文件或图片不支持按行读取',
+        path: filePath,
+      };
+    }
+
+    const fullContent = typeof readResult.content === 'string' ? readResult.content : '';
+    const truncationMarkerIndex = fullContent.lastIndexOf('\n\n[文件内容已截断，仅显示前 ');
+    const contentWithoutMarker = truncationMarkerIndex >= 0
+      ? fullContent.slice(0, truncationMarkerIndex)
+      : fullContent;
+    const lines = contentWithoutMarker.split(/\r?\n/);
+    const totalLines = lines.length;
+    if (parsedStartLine > totalLines) {
+      throw new Error(`起始行号超出文件总行数: ${totalLines}`);
+    }
+    const actualEndLine = Math.min(parsedEndLine, totalLines);
+    const slicedLines = lines.slice(parsedStartLine - 1, actualEndLine);
+    const content = slicedLines
+      .map((line, index) => `${parsedStartLine + index}|${line}`)
+      .join('\n');
+
+    return {
+      ...readResult,
+      startLine: parsedStartLine,
+      endLine: parsedEndLine,
+      actualStartLine: parsedStartLine,
+      actualEndLine,
+      totalLines,
+      content,
+      lineCount: slicedLines.length,
+      isTruncatedByLine: actualEndLine < parsedEndLine,
+      message: `已读取 ${filePath} 第 ${parsedStartLine}-${actualEndLine} 行，共 ${slicedLines.length} 行`,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+      path: filePath,
     };
   }
 }

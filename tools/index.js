@@ -8,7 +8,7 @@ import { getDailyNews } from './dailyNews.js';
 import { execCode } from './execCode.js';
 import { generatePythonScript, analyzeScriptResult, setScriptGeneratorLLM, checkScriptSafety } from './scriptGenerator.js';
 import {
-  listDirectory, readFile, writeFile, deleteFile, createDirectory,
+  listDirectory, readFile, readFileLines, writeFile, deleteFile, createDirectory,
   moveFile, copyFile, getFileInfo, searchFiles, searchFileContents, batchFileOperations, initWorkspace, getUserStorageStats, resolveWorkspacePath
 } from './fileManager.js';
 import {
@@ -136,6 +136,18 @@ export const TOOL_DEFINITIONS = [
       { name: "最大读取字节数", type: "number", example: "1048576", required: false }
     ],
     example: 'file_read("docs/readme.md")',
+  },
+  {
+    name: "file_read_lines",
+    func: (sessionId, filePath, startLine, endLine, maxSize) => readFileLines(sessionId, filePath, startLine, endLine, { maxSize }),
+    description: "按行号范围读取用户 workspace 中文本文件的部分内容，适合大文件、日志和代码上下文查看，单次最多 200 行",
+    params: [
+      { name: "文件路径", type: "string", example: "logs/app.log" },
+      { name: "起始行号", type: "number", example: 120 },
+      { name: "结束行号", type: "number", example: 160 },
+      { name: "最大读取字节数", type: "number", example: 1048576, required: false }
+    ],
+    example: 'file_read_lines("logs/app.log", 120, 160, 1048576)',
   },
   {
     name: "file_write",

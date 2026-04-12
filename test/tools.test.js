@@ -74,6 +74,21 @@ test("TOOLS: should include file content search function", () => {
   assert.equal(typeof TOOLS.file_content_search, "function");
 });
 
+test("TOOLS: should include file_read_lines function", () => {
+  assert.equal(typeof TOOLS.file_read_lines, "function");
+});
+
+test("file_read_lines tool: should be defined with correct params", () => {
+  const tool = TOOL_DEFINITIONS.find(t => t.name === "file_read_lines");
+  assert.ok(tool);
+  assert.equal(tool.params.length, 4);
+  assert.ok(tool.params.find(p => p.name === "文件路径"));
+  assert.ok(tool.params.find(p => p.name === "起始行号"));
+  assert.ok(tool.params.find(p => p.name === "结束行号"));
+  assert.ok(tool.params.find(p => p.name === "最大读取字节数"));
+  assert.match(tool.description, /最多 200 行/);
+});
+
 test("file_content_search tool: should be defined with correct params", () => {
   const tool = TOOL_DEFINITIONS.find(t => t.name === "file_content_search");
   assert.ok(tool);
@@ -90,6 +105,11 @@ test("file_content_search tool: should be defined with correct params", () => {
 test("toolNeedsSessionId: should include file_content_search", async () => {
   const { toolNeedsSessionId } = await import("../tools/toolConstants.js");
   assert.equal(toolNeedsSessionId("file_content_search"), true);
+});
+
+test("toolNeedsSessionId: should include file_read_lines", async () => {
+  const { toolNeedsSessionId } = await import("../tools/toolConstants.js");
+  assert.equal(toolNeedsSessionId("file_read_lines"), true);
 });
 
 test("email_send tool: should be defined with correct params", () => {

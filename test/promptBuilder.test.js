@@ -33,6 +33,8 @@ test("buildSystemPrompt: should include tools, skills and rules", () => {
 test("buildSystemPrompt: should document file name and content search tools", () => {
   const prompt = buildSystemPrompt([], [], {});
   assert.match(prompt, /按文件名搜索: file_search/);
+  assert.match(prompt, /按行读取文件片段: file_read_lines/);
+  assert.match(prompt, /单次最多 200 行/);
   assert.match(prompt, /按文件内容搜索: file_content_search/);
   assert.match(prompt, /默认最多返回 3 条/);
   assert.match(prompt, /最多扫描 30 个文本文件/);

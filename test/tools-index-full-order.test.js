@@ -24,6 +24,10 @@ test('file_* 工具参数顺序正确', async () => {
   assert.equal(readRes.success, true, 'file_read 应该成功');
   assert.equal(readRes.content, content, 'file_read 内容应该匹配');
 
+  const readLinesRes = await TOOLS.file_read_lines(TEST_SESSION, filePath, 1, 1);
+  assert.equal(readLinesRes.success, true, 'file_read_lines 应该成功');
+  assert.equal(readLinesRes.content, '1|Hello World 测试内容', 'file_read_lines 内容应该匹配');
+
   // file_info - 注意返回的是 path 不是 filePath
   const infoRes = await TOOLS.file_info(TEST_SESSION, filePath);
   assert.equal(infoRes.success, true, 'file_info 应该成功');
