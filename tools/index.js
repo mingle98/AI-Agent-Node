@@ -438,11 +438,11 @@ export const TOOL_DEFINITIONS = [
   {
     name: "zip_compress",
     func: (sessionId, sourcePaths, outputPath, options = "{}") => compressFiles(sessionId, sourcePaths, outputPath, JSON.parse(options)),
-    description: "将文件或目录压缩为 zip 文件",
+    description: "将文件或目录压缩为 zip 文件，默认会限制待压缩总大小、文件数、执行时间和并发数，避免大目录压缩长期卡住轻量服务器服务",
     params: [
       { name: "源路径", type: "string|array", example: "docs/reports", description: "要压缩的文件或目录路径，支持单个或多个" },
       { name: "输出路径", type: "string", example: "backup.zip", description: "压缩包输出路径" },
-      { name: "选项", type: "object", example: '{"overwrite":false,"compressionLevel":5}', description: "可选：overwrite是否覆盖, compressionLevel压缩级别(0-9)", required: false }
+      { name: "选项", type: "object", example: '{"overwrite":false,"compressionLevel":1,"maxInputBytes":10485760,"maxFileCount":50,"timeoutMs":30000}', description: "可选：overwrite是否覆盖, compressionLevel压缩级别(0-9), maxInputBytes最大输入字节数, maxFileCount最大文件数, timeoutMs超时时间", required: false }
     ],
     example: 'zip_compress("documents", "docs.zip")',
   },
