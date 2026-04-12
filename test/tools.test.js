@@ -70,7 +70,28 @@ test("daily_news tool: should be defined", () => {
   assert.equal(tool.params.length, 2);
 });
 
-// ========== 邮件工具测试 ==========
+test("TOOLS: should include file content search function", () => {
+  assert.equal(typeof TOOLS.file_content_search, "function");
+});
+
+test("file_content_search tool: should be defined with correct params", () => {
+  const tool = TOOL_DEFINITIONS.find(t => t.name === "file_content_search");
+  assert.ok(tool);
+  assert.equal(tool.params.length, 4);
+  assert.ok(tool.params.find(p => p.name === "内容关键词或目标文本"));
+  assert.ok(tool.params.find(p => p.name === "搜索目录"));
+  assert.ok(tool.params.find(p => p.name === "最大返回结果数"));
+  assert.ok(tool.params.find(p => p.name === "单文件最大读取字节数"));
+  assert.match(tool.description, /30 个文本文件/);
+  assert.match(tool.description, /256KB/);
+  assert.match(tool.description, /2MB/);
+});
+
+test("toolNeedsSessionId: should include file_content_search", async () => {
+  const { toolNeedsSessionId } = await import("../tools/toolConstants.js");
+  assert.equal(toolNeedsSessionId("file_content_search"), true);
+});
+
 test("email_send tool: should be defined with correct params", () => {
   const tool = TOOL_DEFINITIONS.find(t => t.name === "email_send");
   assert.ok(tool, "email_send tool should exist");

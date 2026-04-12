@@ -32,6 +32,15 @@ const ALLOWED_EXTENSIONS = new Set([
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const MAX_FILES_IN_DIR = 1000; // 单个目录最大文件数
 const MAX_FILES_PER_USER = 100; // 每个用户最多文件数
+const FILE_CONTENT_SEARCHABLE_EXTENSIONS = new Set([
+  'txt', 'md', 'json', 'js', 'ts', 'jsx', 'tsx', 'html', 'htm', 'css', 'scss', 'sass', 'less',
+  'py', 'java', 'c', 'cpp', 'h', 'hpp', 'cs', 'go', 'rs', 'rb', 'php', 'swift', 'kt',
+  'csv', 'xml', 'yaml', 'yml', 'log', 'sql'
+]);
+const FILE_CONTENT_SEARCH_DEFAULT_MAX_RESULTS = 3;
+const FILE_CONTENT_SEARCH_DEFAULT_MAX_FILE_SIZE = 256 * 1024;
+const FILE_CONTENT_SEARCH_DEFAULT_MAX_SCANNED_FILES = 30;
+const FILE_CONTENT_SEARCH_DEFAULT_MAX_TOTAL_BYTES = 2 * 1024 * 1024;
 const FILE_URL_EXPIRES_SECONDS = Number(process.env.FILE_URL_EXPIRES_SECONDS || 3600);
 const FILE_URL_SECRET = process.env.FILE_URL_SECRET || 'dev-file-url-secret-change-me';
 const FILE_URL_DEBUG = process.env.FILE_URL_DEBUG === 'true';
@@ -1269,6 +1278,204 @@ export async function searchFiles(sessionId, keyword, dirPath = '', options = {}
       success: false,
       error: error.message,
       keyword: keyword
+    };
+  }
+}
+
+/**
+ * 搜索文件内容
+ * @param {string} sessionId - 用户会话ID
+ * @param {string} keyword - 要搜索的关键词或目标文本
+ * @param {string} dirPath - 搜索目录
+ * @param {Object} options - 选项
+ * @param {boolean} options.recursive - 是否递归搜索
+ * @param {string} options.extension - 按扩展名过滤
+ * @param {number} options.maxResults - 最大返回结果数
+ * @param {number} options.maxFileSize - 单个文件最大读取字节数
+ * @param {number} options.maxScannedFiles - 最大扫描文件数
+ * @param {number} options.maxTotalBytes - 单次搜索最大读取总字节数
+ * @param {number} options.contextLines - 匹配上下文行数
+ * @returns {Promise<Object>}
+ */
+export async function searchFileContents(sessionId, keyword, dirPath = '', options = {}) {
+  try {
+    if (!sessionId) {
+      throw new Error('需要提供 sessionId 来访问文件系统');
+    }
+    if (!keyword || typeof keyword !== 'string' || !keyword.trim()) {
+      throw new Error('需要提供要搜索的关键词或目标文本');
+    }
+
+    const {
+      recursive = true,
+      extension = null,
+      maxResults = FILE_CONTENT_SEARCH_DEFAULT_MAX_RESULTS,
+      maxFileSize = FILE_CONTENT_SEARCH_DEFAULT_MAX_FILE_SIZE,
+      maxScannedFiles = FILE_CONTENT_SEARCH_DEFAULT_MAX_SCANNED_FILES,
+      maxTotalBytes = FILE_CONTENT_SEARCH_DEFAULT_MAX_TOTAL_BYTES,
+      contextLines = 1,
+    } = options;
+
+    const userRoot = getUserWorkspaceRoot(sessionId);
+    const userRootStats = await fs.stat(userRoot).catch(() => null);
+    if (!userRootStats) {
+      await initUserWorkspace(sessionId);
+    }
+
+    const absolutePath = resolveWorkspacePath(dirPath, sessionId);
+    const stats = await fs.stat(absolutePath).catch(() => null);
+    if (!stats || !stats.isDirectory()) {
+      throw new Error(`目录不存在: ${dirPath || '根目录'}`);
+    }
+
+    const normalizedKeyword = keyword.toLowerCase();
+    const normalizedExtension = extension ? String(extension).toLowerCase().replace(/^\./, '') : null;
+    const safeMaxResults = Math.max(1, Number(maxResults) || FILE_CONTENT_SEARCH_DEFAULT_MAX_RESULTS);
+    const safeMaxFileSize = Math.max(1, Number(maxFileSize) || FILE_CONTENT_SEARCH_DEFAULT_MAX_FILE_SIZE);
+    const safeMaxScannedFiles = Math.max(1, Number(maxScannedFiles) || FILE_CONTENT_SEARCH_DEFAULT_MAX_SCANNED_FILES);
+    const safeMaxTotalBytes = Math.max(1, Number(maxTotalBytes) || FILE_CONTENT_SEARCH_DEFAULT_MAX_TOTAL_BYTES);
+    const safeContextLines = Math.max(0, Number(contextLines) || 1);
+    const results = [];
+    let scannedFiles = 0;
+    let scannedBytes = 0;
+    let skippedBinaryFiles = 0;
+    let skippedLargeFiles = 0;
+    let skippedUnreadableFiles = 0;
+    let stoppedByScanLimit = false;
+    let stoppedByByteLimit = false;
+
+    async function search(currentPath, currentAbsolute) {
+      if (results.length >= safeMaxResults || scannedFiles >= safeMaxScannedFiles || scannedBytes >= safeMaxTotalBytes) {
+        return;
+      }
+
+      const items = await fs.readdir(currentAbsolute, { withFileTypes: true });
+
+      for (const item of items) {
+        if (results.length >= safeMaxResults) return;
+        if (scannedFiles >= safeMaxScannedFiles) {
+          stoppedByScanLimit = true;
+          return;
+        }
+        if (scannedBytes >= safeMaxTotalBytes) {
+          stoppedByByteLimit = true;
+          return;
+        }
+        if (item.name.startsWith('.')) continue;
+
+        const itemPath = path.join(currentPath, item.name);
+        const itemAbsolute = path.join(currentAbsolute, item.name);
+
+        if (item.isDirectory()) {
+          if (recursive) {
+            await search(itemPath, itemAbsolute);
+          }
+          continue;
+        }
+
+        const ext = path.extname(item.name).toLowerCase().slice(1);
+        if (normalizedExtension && ext !== normalizedExtension) {
+          continue;
+        }
+        if (!FILE_CONTENT_SEARCHABLE_EXTENSIONS.has(ext)) {
+          skippedBinaryFiles++;
+          continue;
+        }
+
+        const itemStats = await fs.stat(itemAbsolute);
+        if (itemStats.size > safeMaxFileSize) {
+          skippedLargeFiles++;
+          continue;
+        }
+        if (scannedBytes + itemStats.size > safeMaxTotalBytes) {
+          stoppedByByteLimit = true;
+          return;
+        }
+
+        scannedFiles++;
+        scannedBytes += itemStats.size;
+
+        let content;
+        try {
+          content = await fs.readFile(itemAbsolute, 'utf-8');
+        } catch {
+          skippedUnreadableFiles++;
+          continue;
+        }
+
+        const lowerContent = content.toLowerCase();
+        const matchIndex = lowerContent.indexOf(normalizedKeyword);
+        if (matchIndex === -1) {
+          continue;
+        }
+
+        const lines = content.split(/\r?\n/);
+        let lineNumber = 1;
+        let columnNumber = matchIndex + 1;
+        let matchedLineIndex = 0;
+        let offset = 0;
+
+        for (let i = 0; i < lines.length; i++) {
+          const lineLength = lines[i].length + 1;
+          if (matchIndex < offset + lineLength) {
+            lineNumber = i + 1;
+            columnNumber = matchIndex - offset + 1;
+            matchedLineIndex = i;
+            break;
+          }
+          offset += lineLength;
+        }
+
+        const startLine = Math.max(0, matchedLineIndex - safeContextLines);
+        const endLine = Math.min(lines.length - 1, matchedLineIndex + safeContextLines);
+        const preview = lines.slice(startLine, endLine + 1).join('\n');
+        const itemUrlInfo = getPublicUrlInfo(itemAbsolute, sessionId);
+
+        results.push({
+          name: item.name,
+          path: itemPath,
+          signedPath: itemUrlInfo?.path || null,
+          url: itemUrlInfo?.fullUrl || null,
+          fullUrl: itemUrlInfo?.fullUrl || null,
+          type: ext || 'file',
+          size: itemStats.size,
+          formattedSize: formatFileSize(itemStats.size),
+          modifiedAt: itemStats.mtime.toISOString(),
+          match: {
+            keyword,
+            line: lineNumber,
+            column: columnNumber,
+            preview,
+          }
+        });
+      }
+    }
+
+    await search(dirPath, absolutePath);
+
+    return {
+      success: true,
+      keyword,
+      searchPath: dirPath || '/',
+      count: results.length,
+      maxResults: safeMaxResults,
+      maxFileSize: safeMaxFileSize,
+      maxScannedFiles: safeMaxScannedFiles,
+      maxTotalBytes: safeMaxTotalBytes,
+      scannedFiles,
+      scannedBytes,
+      skippedBinaryFiles,
+      skippedLargeFiles,
+      skippedUnreadableFiles,
+      stoppedByScanLimit,
+      stoppedByByteLimit,
+      results,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+      keyword,
     };
   }
 }

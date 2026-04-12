@@ -91,8 +91,8 @@ const DOMAIN_PATTERNS = [
     skills: ["email_sender", "email_writer"],
   },
   {
-    test: /(文件|目录|文件夹|workspace|读取文件|读文件|写入文件|写文件|重命名|删除文件|复制文件|移动文件|列目录|路径|file\s*list|file\s*read|ls|cat)/i,
-    tools: ["file_list", "file_read", "file_write", "file_delete", "file_mkdir", "file_move", "file_copy", "file_info", "file_search", "file_quota"],
+    test: /(文件|目录|文件夹|workspace|读取文件|读文件|写入文件|写文件|重命名|删除文件|复制文件|移动文件|列目录|路径|搜索文件内容|内容搜索|全文搜索|关键词搜索|查找文本|搜索文本|file\s*list|file\s*read|ls|cat)/i,
+    tools: ["file_list", "file_read", "file_write", "file_delete", "file_mkdir", "file_move", "file_copy", "file_info", "file_search", "file_content_search", "file_quota"],
     skills: [],
   },
   {

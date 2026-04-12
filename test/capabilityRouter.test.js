@@ -114,6 +114,24 @@ test("selectActiveCapabilities: should match broader excel terms like pivot tabl
   assert.ok(result.skillNames.includes("excel_helper"));
 });
 
+test("selectActiveCapabilities: should activate file content search for content-search queries", () => {
+  const toolDefinitions = [
+    tool("search_knowledge", "知识查询"),
+    tool("file_content_search", "按文件内容搜索关键词或目标文本"),
+    tool("file_search", "按文件名搜索"),
+  ];
+
+  const result = selectActiveCapabilities({
+    userInput: "帮我在项目文件内容里搜索 TODO 和某段文本",
+    toolDefinitions,
+    skillDefinitions: [],
+    alwaysOnTools: ["search_knowledge"],
+    alwaysOnSkills: [],
+  });
+
+  assert.ok(result.toolNames.includes("file_content_search"));
+});
+
 test("selectActiveCapabilities: should respect max limits", () => {
   const toolDefinitions = [tool("t1", "测试"), tool("t2", "测试"), tool("t3", "测试")];
   const skillDefinitions = [skill("s1", "测试"), skill("s2", "测试")];

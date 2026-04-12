@@ -21,6 +21,7 @@ export const TOOLS_NEEDING_SESSION_ID = [
   'file_copy',
   'file_info',
   'file_search',
+  'file_content_search',
   
   // ========== Excel 工具 ==========
   'excel_read',

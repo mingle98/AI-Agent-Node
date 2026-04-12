@@ -153,7 +153,8 @@ function buildRulesSection(options = {}) {
    - 移动/重命名: file_move(source, target, overwrite)
    - 复制: file_copy(source, target, overwrite)
    - 文件信息: file_info(path)
-   - 搜索文件: file_search(keyword, dirPath)
+   - 按文件名搜索: file_search(keyword, dirPath)
+   - 按文件内容搜索: file_content_search(keyword, dirPath, maxResults, maxFileSize)（默认最多返回 3 条；最多扫描 30 个文本文件；单文件最大读取 256KB；单次搜索总读取上限 2MB；maxFileSize 用于进一步缩小单文件扫描上限）
    - 存储配额: file_quota()
 10. Excel操作 → 使用 excel_read/excel_write/excel_append 工具
 11. Word操作 → 使用 word_read/word_read_html 工具
@@ -204,6 +205,8 @@ function buildExamplesSection(skillDefinitions, options = {}) {
     '- "执行这段js代码看看结果" → 用 exec_code 工具沙箱执行',
     '- "这是上周数据：访问=50000, 加购=3500, 下单=800, 支付=210。帮我计算每步转化率，并找出最大流失环节" → 用 python_executor 技能自动生成脚本执行分析',
     '- "列出workspace里的文件" → 用 file_list 工具查看目录',
+    '- "按文件名找 report 相关文件" → 用 file_search 工具搜索文件名或目录名',
+    '- "在项目文件内容里搜索 TODO / 某段文本" → 用 file_content_search 工具搜索文件内容',
     '- "我还剩多少存储空间?" → 用 file_quota 工具查询',
     '- "帮我创建一个叫report.txt的文件，内容是XXX" → 用 file_write 工具创建',
     '- "读取data/report.xlsx的内容" → 用 excel_read 工具读取',

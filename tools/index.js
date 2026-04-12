@@ -9,7 +9,7 @@ import { execCode } from './execCode.js';
 import { generatePythonScript, analyzeScriptResult, setScriptGeneratorLLM, checkScriptSafety } from './scriptGenerator.js';
 import {
   listDirectory, readFile, writeFile, deleteFile, createDirectory,
-  moveFile, copyFile, getFileInfo, searchFiles, batchFileOperations, initWorkspace, getUserStorageStats, resolveWorkspacePath
+  moveFile, copyFile, getFileInfo, searchFiles, searchFileContents, batchFileOperations, initWorkspace, getUserStorageStats, resolveWorkspacePath
 } from './fileManager.js';
 import {
   readExcel, writeExcel, appendToExcel, readWord, writeWord,
@@ -201,12 +201,25 @@ export const TOOL_DEFINITIONS = [
   {
     name: "file_search",
     func: (sessionId, keyword, dirPath) => searchFiles(sessionId, keyword, dirPath || ''),
-    description: "在用户 workspace 中搜索文件",
+    description: "在用户 workspace 中按文件名或目录名关键词搜索，不搜索文件内容",
     params: [
-      { name: "搜索关键词", type: "string", example: "report" },
+      { name: "文件名关键词", type: "string", example: "report" },
       { name: "搜索目录", type: "string", example: "docs", required: false }
     ],
     example: 'file_search("report", "docs")',
+  },
+  {
+    name: "file_content_search",
+    func: (sessionId, keyword, dirPath, maxResults, maxFileSize) =>
+      searchFileContents(sessionId, keyword, dirPath || '', { maxResults, maxFileSize }),
+    description: "在用户 workspace 中从文件内容里搜索关键词或目标文本，默认最多扫 30 个文本文件、单文件最多 256KB、总读取最多 2MB，返回命中文件及匹配片段，不搜索文件名",
+    params: [
+      { name: "内容关键词或目标文本", type: "string", example: "TODO" },
+      { name: "搜索目录", type: "string", example: "src", required: false },
+      { name: "最大返回结果数", type: "number", example: 5, required: false },
+      { name: "单文件最大读取字节数", type: "number", example: 1048576, required: false }
+    ],
+    example: 'file_content_search("TODO", "src", 5, 1048576)',
   },
   // ========== Excel 文件工具 ==========
   {
@@ -608,7 +621,7 @@ export {
   checkScriptSafety,
   // 文件管理
   listDirectory, readFile, writeFile, deleteFile, createDirectory,
-  moveFile, copyFile, getFileInfo, searchFiles, batchFileOperations, initWorkspace,
+  moveFile, copyFile, getFileInfo, searchFiles, searchFileContents, batchFileOperations, initWorkspace,
   // 文件格式处理
   readExcel, writeExcel, appendToExcel, readWord, writeWord,
   readWordAsHtml, readPdf, writePdf, mergePdfs, getImageInfo, writeSvg,

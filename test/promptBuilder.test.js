@@ -30,6 +30,15 @@ test("buildSystemPrompt: should include tools, skills and rules", () => {
   assert.match(prompt, /支持用户隔离|只执行一次/);
 });
 
+test("buildSystemPrompt: should document file name and content search tools", () => {
+  const prompt = buildSystemPrompt([], [], {});
+  assert.match(prompt, /按文件名搜索: file_search/);
+  assert.match(prompt, /按文件内容搜索: file_content_search/);
+  assert.match(prompt, /默认最多返回 3 条/);
+  assert.match(prompt, /最多扫描 30 个文本文件/);
+  assert.match(prompt, /搜索 TODO \/ 某段文本/);
+});
+
 test("buildSystemPrompt: compact mode should trim examples and detail fields", () => {
   const toolDefs = [
     {

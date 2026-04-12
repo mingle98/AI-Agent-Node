@@ -54,6 +54,12 @@ test('file_* 工具参数顺序正确', async () => {
   assert.equal(searchRes.success, true, 'file_search 应该成功');
   assert.ok(Array.isArray(searchRes.results), 'file_search 应该返回results数组');
 
+  // file_content_search
+  const contentSearchRes = await TOOLS.file_content_search(TEST_SESSION, 'Hello World', TEST_DIR, 10, 1024 * 1024);
+  assert.equal(contentSearchRes.success, true, 'file_content_search 应该成功');
+  assert.ok(Array.isArray(contentSearchRes.results), 'file_content_search 应该返回results数组');
+  assert.ok(contentSearchRes.results.some(item => item.path === filePath), 'file_content_search 应该找到目标文件');
+
   // file_delete
   const deleteRes = await TOOLS.file_delete(TEST_SESSION, `${TEST_DIR}/subdir`, true);
   assert.equal(deleteRes.success, true, 'file_delete 递归删除应该成功');
