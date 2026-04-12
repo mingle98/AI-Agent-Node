@@ -34,9 +34,7 @@ const MAX_FILES_IN_DIR = 1000; // 单个目录最大文件数
 const MAX_FILES_PER_USER = 100; // 每个用户最多文件数
 const FILE_URL_EXPIRES_SECONDS = Number(process.env.FILE_URL_EXPIRES_SECONDS || 3600);
 const FILE_URL_SECRET = process.env.FILE_URL_SECRET || 'dev-file-url-secret-change-me';
-const SIGNED_URL_CACHE = new Map();
-const SIGNED_URL_CACHE_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
-let lastSignedUrlCacheCleanupAt = 0;
+const FILE_URL_DEBUG = process.env.FILE_URL_DEBUG === 'true';
 const FILE_NAME_PATTERN = /^[a-zA-Z0-9_\-\.\u4e00-\u9fa5]+$/; // 支持中英文、数字、下划线、连字符、点
 
 // 有效的 session ID 格式（字母、数字、连字符、下划线）
@@ -337,45 +335,84 @@ function buildWorkspaceUrlPath(absolutePath, sessionId) {
   return `/workspace/${sessionId}${relativePath}`;
 }
 
-function createWorkspaceUrlSignature(urlPath, expires) {
-  return crypto
-    .createHmac('sha256', FILE_URL_SECRET)
-    .update(`${urlPath}:${expires}`)
-    .digest('hex');
-}
-
-function cleanupExpiredSignedUrlCache(now = Date.now()) {
-  if (now - lastSignedUrlCacheCleanupAt < SIGNED_URL_CACHE_CLEANUP_INTERVAL_MS) {
+function logSignedUrlDebug(event, details = {}) {
+  if (!FILE_URL_DEBUG) {
     return;
   }
 
-  lastSignedUrlCacheCleanupAt = now;
+  console.log(`[file-url] ${event}`, {
+    ...details,
+    now: new Date().toISOString()
+  });
+}
 
-  for (const [urlPath, cached] of SIGNED_URL_CACHE.entries()) {
-    if (!cached || cached.expires <= now) {
-      SIGNED_URL_CACHE.delete(urlPath);
-    }
+function normalizeWorkspaceUrlPath(urlPath) {
+  if (!urlPath) {
+    return urlPath;
   }
+
+  try {
+    return encodeURI(decodeURI(urlPath));
+  } catch {
+    return encodeURI(urlPath);
+  }
+}
+
+function createWorkspaceUrlSignature(urlPath, expires) {
+  const normalizedUrlPath = normalizeWorkspaceUrlPath(urlPath);
+
+  return crypto
+    .createHmac('sha256', FILE_URL_SECRET)
+    .update(`${normalizedUrlPath}:${expires}`)
+    .digest('hex');
 }
 
 export function verifySignedWorkspaceUrl(urlPath, expires, signature) {
   if (!urlPath || !expires || !signature) {
+    logSignedUrlDebug('verify.missing_params', {
+      urlPath,
+      hasExpires: Boolean(expires),
+      hasSignature: Boolean(signature)
+    });
     return false;
   }
 
   const expiresAt = Number(expires);
   if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+    logSignedUrlDebug('verify.expired_or_invalid', {
+      urlPath,
+      expires,
+      expiresAt,
+      remainingMs: Number.isFinite(expiresAt) ? expiresAt - Date.now() : null
+    });
     return false;
   }
 
-  const expectedSignature = createWorkspaceUrlSignature(urlPath, expiresAt);
+  const normalizedUrlPath = normalizeWorkspaceUrlPath(urlPath);
+  const expectedSignature = createWorkspaceUrlSignature(normalizedUrlPath, expiresAt);
 
   try {
-    return crypto.timingSafeEqual(
+    const isValid = crypto.timingSafeEqual(
       Buffer.from(signature, 'hex'),
       Buffer.from(expectedSignature, 'hex')
     );
-  } catch {
+
+    logSignedUrlDebug(isValid ? 'verify.success' : 'verify.signature_mismatch', {
+      urlPath,
+      normalizedUrlPath,
+      expiresAt,
+      providedSignaturePrefix: signature.slice(0, 12),
+      expectedSignaturePrefix: expectedSignature.slice(0, 12),
+      remainingMs: expiresAt - Date.now()
+    });
+
+    return isValid;
+  } catch (error) {
+    logSignedUrlDebug('verify.exception', {
+      urlPath,
+      expiresAt,
+      error: error.message
+    });
     return false;
   }
 }
@@ -385,19 +422,20 @@ export function buildSignedWorkspaceUrl(urlPath) {
     return null;
   }
 
+  const normalizedUrlPath = normalizeWorkspaceUrlPath(urlPath);
   const now = Date.now();
-  cleanupExpiredSignedUrlCache(now);
-
-  const cached = SIGNED_URL_CACHE.get(urlPath);
-  if (cached && cached.expires > now) {
-    return cached.signedPath;
-  }
-
   const expires = now + FILE_URL_EXPIRES_SECONDS * 1000;
-  const signature = createWorkspaceUrlSignature(urlPath, expires);
-  const signedPath = `${urlPath}?expires=${expires}&signature=${signature}`;
+  const signature = createWorkspaceUrlSignature(normalizedUrlPath, expires);
+  const signedPath = `${normalizedUrlPath}?expires=${expires}&signature=${signature}`;
 
-  SIGNED_URL_CACHE.set(urlPath, { signedPath, expires });
+  logSignedUrlDebug('sign.generated', {
+    urlPath,
+    normalizedUrlPath,
+    expires,
+    expiresInSeconds: FILE_URL_EXPIRES_SECONDS,
+    signaturePrefix: signature.slice(0, 12)
+  });
+
   return signedPath;
 }
 

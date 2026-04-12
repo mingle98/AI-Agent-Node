@@ -156,10 +156,17 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: "5mb" }));
 app.use("/workspace", (req, res, next) => {
-  const requestPath = `/workspace${req.path}`;
+  const requestPath = req.originalUrl ? req.originalUrl.split('?')[0] : `/workspace${req.path}`;
   const { expires, signature } = req.query || {};
 
   if (!verifySignedWorkspaceUrl(requestPath, expires, signature)) {
+    console.warn('[file-url] workspace_access_denied', {
+      requestPath,
+      expires,
+      signaturePrefix: typeof signature === 'string' ? signature.slice(0, 12) : null,
+      ip: req.ip,
+      userAgent: req.get('user-agent') || ''
+    });
     res.status(403).json({ success: false, error: "文件链接无效或已过期" });
     return;
   }
