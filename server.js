@@ -207,6 +207,11 @@ app.post("/api/chat", async (req, res, next) => {
       return;
     }
 
+    let requestState = null;
+    if (stream) {
+      requestState = agent.createRequestState(sessionId);
+    }
+
     res.status(200);
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -218,8 +223,9 @@ app.post("/api/chat", async (req, res, next) => {
       if (clientAborted) return;
       clientAborted = true;
       console.log("⛓️‍💥 SSE 客户端断开:", reason);
-      // 通知 agent 中止该 session 的处理流程
-      agent.abortSession(sessionId);
+      if (requestState) {
+        agent.abortRequest(agent.getOrCreateSession(sessionId), requestState.id, reason);
+      }
     };
     // fetch AbortController / network abort usually triggers 'aborted'
     req.on("aborted", () => onDisconnect("req.aborted"));
@@ -310,7 +316,7 @@ app.post("/api/chat", async (req, res, next) => {
           // console.log('🆑流结束===》', toolExcResult);
         },
         sessionId,
-        { streamEnabled: stream, enableThinking }
+        { streamEnabled: stream, enableThinking, requestState }
       );
 
       await pending;
