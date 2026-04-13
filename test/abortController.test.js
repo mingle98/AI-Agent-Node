@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test, { before, after } from "node:test";
 
-import { AIMessage, HumanMessage } from "@langchain/core/messages";
+import { AIMessage } from "@langchain/core/messages";
 import { ProductionAgent, AbortError } from "../agent/ProductionAgent.js";
 
 const __ORIGINAL_CONSOLE__ = {
@@ -31,6 +31,7 @@ class MockLLM {
     this.script = [...script];
     this.callCount = 0;
     this._delay = 0;
+    this._onStreamStart = null;
   }
 
   setDelay(ms) {
@@ -38,21 +39,41 @@ class MockLLM {
     return this;
   }
 
+  onStreamStart(handler) {
+    this._onStreamStart = handler;
+    return this;
+  }
+
   bindTools() {
     const script = this.script;
     const self = this;
     return {
-      stream: async function* () {
-        if (self._delay > 0) {
-          await new Promise(r => setTimeout(r, self._delay));
-        }
+      stream: async function* (_messages, options = {}) {
+        self._onStreamStart?.(options);
         self.callCount++;
         const next = script.shift() || {};
+        if (self._delay > 0) {
+          await new Promise((resolve, reject) => {
+            const timer = setTimeout(resolve, self._delay);
+            const abortHandler = () => {
+              clearTimeout(timer);
+              reject(options?.signal?.reason || new Error("aborted"));
+            };
+            if (options?.signal?.aborted) {
+              abortHandler();
+              return;
+            }
+            options?.signal?.addEventListener?.("abort", abortHandler, { once: true });
+          });
+        }
         if (next.error) {
           throw next.error;
         }
         if (Array.isArray(next.chunks)) {
           for (const c of next.chunks) {
+            if (options?.signal?.aborted) {
+              throw options.signal.reason || new Error("aborted");
+            }
             yield c;
           }
           return;
@@ -63,12 +84,23 @@ class MockLLM {
         }
         yield new AIMessage({ content: "" });
       },
-      invoke: async function() {
-        if (self._delay > 0) {
-          await new Promise(r => setTimeout(r, self._delay));
-        }
+      invoke: async function(_messages, options = {}) {
         self.callCount++;
         const next = script.shift() || {};
+        if (self._delay > 0) {
+          await new Promise((resolve, reject) => {
+            const timer = setTimeout(resolve, self._delay);
+            const abortHandler = () => {
+              clearTimeout(timer);
+              reject(options?.signal?.reason || new Error("aborted"));
+            };
+            if (options?.signal?.aborted) {
+              abortHandler();
+              return;
+            }
+            options?.signal?.addEventListener?.("abort", abortHandler, { once: true });
+          });
+        }
         if (next.error) {
           throw next.error;
         }
@@ -330,6 +362,88 @@ test("ProductionAgent: should still update longTermMemory after abort handling",
 });
 
 // ========== Server.js abortSession 调用链路测试 ==========
+
+test("ProductionAgent.chat: should queue same-session requests without cancelling earlier one", async () => {
+  let firstStarted = false;
+  let secondStarted = false;
+
+  class OrderedMockLLM {
+    constructor() {
+      this.calls = 0;
+      this.script = [];
+    }
+
+    bindTools() {
+      const self = this;
+      return {
+        stream: async function* () {
+          self.calls += 1;
+          if (self.calls === 1) {
+            firstStarted = true;
+            await new Promise((resolve) => setTimeout(resolve, 120));
+            yield new AIMessage({ content: "first" });
+            return;
+          }
+          secondStarted = true;
+          yield new AIMessage({ content: "second" });
+        },
+      };
+    }
+  }
+
+  const agent = createAgentWithMockLLM(new OrderedMockLLM(), { streamEnabled: true, llmTimeoutMs: 2000 });
+  const firstPromise = agent.chat("msg1", null, null, "same-session-queue", { streamEnabled: true });
+
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(firstStarted, true);
+  assert.equal(secondStarted, false);
+
+  const secondPromise = agent.chat("msg2", null, null, "same-session-queue", { streamEnabled: true });
+
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  assert.equal(secondStarted, false, "second request should still be waiting on session lock");
+
+  const firstResult = await firstPromise;
+  const secondResult = await secondPromise;
+
+  assert.equal(firstResult, "first");
+  assert.equal(secondResult, "second");
+});
+
+test("ProductionAgent.chat: should allow next request after aborting in-flight stream", async () => {
+  const llm = new MockLLM([
+    { chunks: [new AIMessage({ content: "first" })] },
+    { chunks: [new AIMessage({ content: "second" })] }
+  ]).setDelay(200);
+  const agent = createAgentWithMockLLM(llm, { streamEnabled: true, llmTimeoutMs: 2000 });
+
+  const session = agent.getOrCreateSession("stream-abort-next");
+  const requestState1 = agent.createRequestState("stream-abort-next");
+  let firstSignal = null;
+  llm.onStreamStart((options) => {
+    firstSignal = options?.signal || null;
+  });
+
+  const firstPromise = agent.chat("msg1", null, null, "stream-abort-next", {
+    streamEnabled: true,
+    requestState: requestState1,
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(firstSignal?.aborted, false);
+
+  const aborted = agent.abortRequest(session, requestState1.id, "test.abort");
+  assert.equal(aborted, true);
+
+  const firstResult = await firstPromise;
+  assert.equal(firstResult, "请求已被中止");
+  assert.equal(firstSignal?.aborted, true);
+
+  const secondResult = await agent.chat("msg2", null, null, "stream-abort-next", {
+    streamEnabled: true,
+  });
+  assert.equal(secondResult, "second");
+});
 
 test("ProductionAgent: abortSession should be safe to call from SSE disconnect handler", () => {
   const llm = new MockLLM([]);

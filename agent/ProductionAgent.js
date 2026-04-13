@@ -3,7 +3,7 @@
 import { SystemMessage, HumanMessage, AIMessage, ToolMessage } from "@langchain/core/messages";
 import { concat } from "@langchain/core/utils/stream";
 import { CONFIG } from "../config.js";
-import { TOOLS, TOOL_DEFINITIONS, setScriptGeneratorLLM, TOOLS_NEEDING_SESSION_ID, toolNeedsSessionId } from "../tools/index.js";
+import { TOOLS, TOOL_DEFINITIONS, setScriptGeneratorLLM, toolNeedsSessionId } from "../tools/index.js";
 import { searchKnowledgeBase } from "../tools/knowledge.js";
 import { SKILLS, SKILL_DEFINITIONS } from "../skills/index.js";
 import { buildSystemPrompt } from "./promptBuilder.js";
@@ -339,6 +339,8 @@ export class ProductionAgent {
       activeCapabilityNames: null,
       activeSystemPrompt: this.baseSystemPrompt,
       aborted: false,
+      requestSeq: 0,
+      requestStates: new Map(),
     };
     this.sessions.set(sessionId, session);
     return session;
@@ -379,8 +381,89 @@ export class ProductionAgent {
       return false;
     }
     session.aborted = true;
+    const requestIds = session.requestStates ? [...session.requestStates.keys()] : [];
+    for (const requestId of requestIds) {
+      this.abortRequest(session, requestId, "session.abort");
+    }
     console.log(`🛑 [${sessionId}] Session 已标记为中止`);
     return true;
+  }
+
+  abortRequest(session, requestId, reason = "request.abort") {
+    if (!session || !requestId) {
+      return false;
+    }
+    const requestState = session.requestStates?.get(requestId);
+    if (!requestState || requestState.aborted) {
+      return false;
+    }
+    requestState.aborted = true;
+    requestState.abortReason = reason;
+    requestState.abortController?.abort?.(new AbortError(`[${session.id}] Request 已中止: ${reason}`));
+    return true;
+  }
+
+  beginRequest(session) {
+    if (!session.requestStates) {
+      session.requestStates = new Map();
+    }
+    session.requestSeq = (session.requestSeq || 0) + 1;
+    const requestId = `${session.id}#${session.requestSeq}`;
+    const requestState = {
+      id: requestId,
+      aborted: false,
+      abortReason: null,
+      abortController: typeof AbortController === "function" ? new AbortController() : null,
+    };
+    session.requestStates.set(requestId, requestState);
+    session.aborted = false;
+    return requestState;
+  }
+
+  activateRequest(session, requestState) {
+    if (!session || !requestState) {
+      return requestState;
+    }
+    if (!session.requestStates?.has(requestState.id)) {
+      session.requestStates?.set?.(requestState.id, requestState);
+    }
+    session.activeRequestId = requestState.id;
+    session.aborted = false;
+    return requestState;
+  }
+
+  endRequest(session, requestId) {
+    if (!session || !requestId) {
+      return;
+    }
+    if (session.requestStates) {
+      session.requestStates.delete(requestId);
+    }
+    if (session.activeRequestId === requestId) {
+      session.activeRequestId = null;
+    }
+    if (!session.requestStates || session.requestStates.size === 0) {
+      session.aborted = false;
+    }
+  }
+
+  isRequestAborted(session, requestState) {
+    if (!session || !requestState) {
+      return false;
+    }
+    if (requestState.aborted) {
+      return true;
+    }
+    const signal = requestState.abortController?.signal;
+    return signal?.aborted === true;
+  }
+
+  ensureRequestActive(session, requestState, sessionId = session?.id) {
+    if (!this.isRequestAborted(session, requestState)) {
+      return;
+    }
+    const reason = requestState?.abortReason || "request aborted";
+    throw new AbortError(`[${sessionId}] Session 已中止 (${reason})`);
   }
 
   isSessionAborted(sessionId) {
@@ -448,14 +531,17 @@ export class ProductionAgent {
     return skill(...args, sessionId);
   }
 
-  async executeCallableWithResilience(session, name, argsObject) {
+  async executeCallableWithResilience(session, name, argsObject, requestState = null) {
     const callable = this.callableDefinitions.get(name);
     if (!callable) {
       return `错误：未找到可调用能力 ${name}`;
     }
 
+    this.ensureRequestActive(session, requestState, session.id);
+
     const args = this.orderedArgsFromObject(argsObject, callable.orderedParamKeys);
     const run = async () => {
+      this.ensureRequestActive(session, requestState, session.id);
       if (callable.kind === "skill") {
         return this.runSkillCall(name, args, session.id);
       }
@@ -483,7 +569,7 @@ export class ProductionAgent {
   }
 
   async invokeLLMWithResilience(session, messages, options = {}) {
-    const { onChunk = null, streamEnabled = true, enableThinking, capabilityNames = null } = options || {};
+    const { onChunk = null, streamEnabled = true, enableThinking, capabilityNames = null, requestState = null } = options || {};
     const tools = this.getStructuredTools(capabilityNames || session?.activeCapabilityNames);
 
     if (this.options.debug) {
@@ -500,9 +586,9 @@ export class ProductionAgent {
           : this.llm;
       const model = baseLlm.bindTools(tools, { tool_choice: "auto" });
       if (streamEnabled) {
-        return withTimeout(this.collectFromStream(model, messages, onChunk), this.resilience.llmTimeoutMs, "LLM stream");
+        return withTimeout(this.collectFromStream(model, messages, onChunk, session, requestState), this.resilience.llmTimeoutMs, "LLM stream");
       }
-      return withTimeout(this.collectFromInvoke(model, messages), this.resilience.llmTimeoutMs, "LLM invoke");
+      return withTimeout(this.collectFromInvoke(model, messages, session, requestState), this.resilience.llmTimeoutMs, "LLM invoke");
     };
 
     const invokeFallback = async () => {
@@ -515,13 +601,13 @@ export class ProductionAgent {
       const fallbackModel = this.fallbackLlm.bindTools(tools, { tool_choice: "auto" });
       if (streamEnabled) {
         return withTimeout(
-          this.collectFromStream(fallbackModel, messages, onChunk),
+          this.collectFromStream(fallbackModel, messages, onChunk, session, requestState),
           this.resilience.llmTimeoutMs,
           "Fallback LLM stream"
         );
       }
       return withTimeout(
-        this.collectFromInvoke(fallbackModel, messages),
+        this.collectFromInvoke(fallbackModel, messages, session, requestState),
         this.resilience.llmTimeoutMs,
         "Fallback LLM invoke"
       );
@@ -545,31 +631,52 @@ export class ProductionAgent {
     }
   }
 
-  async collectFromStream(model, messages, onChunk) {
-    const stream = await model.stream(messages);
+  async collectFromStream(model, messages, onChunk, session = null, requestState = null) {
+    this.ensureRequestActive(session, requestState, session?.id);
+    const signal = requestState?.abortController?.signal;
+    const stream = signal
+      ? await model.stream(messages, { signal })
+      : await model.stream(messages);
     let full = null;
     let streamedText = false;
 
-    for await (const chunk of stream) {
-      full = full ? concat(full, chunk) : chunk;
-      const textPart = normalizeTextContent(chunk.content);
-      const reasoningPart = extractReasoningContent(chunk);
-      if (onChunk && (textPart || reasoningPart)) {
-        if (textPart) {
-          streamedText = true;
+    try {
+      for await (const chunk of stream) {
+        this.ensureRequestActive(session, requestState, session?.id);
+        full = full ? concat(full, chunk) : chunk;
+        const textPart = normalizeTextContent(chunk.content);
+        const reasoningPart = extractReasoningContent(chunk);
+        if (onChunk && (textPart || reasoningPart)) {
+          if (textPart) {
+            streamedText = true;
+          }
+          onChunk({ content: textPart, reasoning: reasoningPart });
         }
-        onChunk({ content: textPart, reasoning: reasoningPart });
+      }
+    } finally {
+      if (this.isRequestAborted(session, requestState) && typeof stream?.return === "function") {
+        try {
+          await stream.return();
+        } catch {
+          // ignore stream cleanup errors
+        }
       }
     }
 
+    this.ensureRequestActive(session, requestState, session?.id);
     return {
       message: full || new AIMessage(""),
       streamedText,
     };
   }
 
-  async collectFromInvoke(model, messages) {
-    const message = await model.invoke(messages);
+  async collectFromInvoke(model, messages, session = null, requestState = null) {
+    this.ensureRequestActive(session, requestState, session?.id);
+    const signal = requestState?.abortController?.signal;
+    const message = signal
+      ? await model.invoke(messages, { signal })
+      : await model.invoke(messages);
+    this.ensureRequestActive(session, requestState, session?.id);
     console.log('🏷️ 模型非流式调用====》', message);
     return {
       message: message || new AIMessage(""),
@@ -662,6 +769,11 @@ export class ProductionAgent {
     return withSessionLock(session, fn);
   }
 
+  createRequestState(sessionId = this.defaultSessionId) {
+    const session = this.getOrCreateSession(sessionId);
+    return this.beginRequest(session);
+  }
+
   // ========== 任务入口 ==========
   async chat(
     userInput,
@@ -672,10 +784,11 @@ export class ProductionAgent {
   ) {
     // ========== 模式选择（异步智能决策） ==========
     const session = this.getOrCreateSession(sessionId);
+    const requestState = requestOptions?.requestState || this.beginRequest(session);
+    const nextRequestOptions = { ...(requestOptions || {}), requestState };
     const sessionHistory = session.messages;
 
-    // 重置 abort 标志，允许新请求开始
-    session.aborted = false;
+    this.ensureRequestActive(session, requestState, sessionId);
 
     // ========== 长期记忆注入（首次对话或有记忆文件时） ==========
     if (this.longTermMemory) {
@@ -705,7 +818,7 @@ export class ProductionAgent {
         chunkCallback,
         fullResponseCallback,
         sessionId,
-        requestOptions
+        nextRequestOptions
       );
     }
 
@@ -715,7 +828,7 @@ export class ProductionAgent {
       chunkCallback,
       fullResponseCallback,
       sessionId,
-      requestOptions
+      nextRequestOptions
     );
   }
 
@@ -730,6 +843,8 @@ export class ProductionAgent {
     requestOptions = {}
   ) {
     const session = this.getOrCreateSession(sessionId);
+    const requestState = requestOptions?.requestState || this.beginRequest(session);
+    this.activateRequest(session, requestState);
     this.messages = session.messages;
     const streamEnabled = requestOptions?.streamEnabled ?? CONFIG.streamEnabled;
     const enableThinking = streamEnabled ? requestOptions?.enableThinking : undefined;
@@ -747,10 +862,7 @@ export class ProductionAgent {
 
     return withSessionLock(session, async () => {
       try {
-        // 检查 session 是否已被标记为中止
-        if (session.aborted) {
-          throw new AbortError(`[${sessionId}] Session 已中止`);
-        }
+        this.ensureRequestActive(session, requestState, sessionId);
 
         this.touchSession(session);
         const toolExcResults = [];
@@ -770,10 +882,7 @@ export class ProductionAgent {
           iterations += 1;
           console.log(`🤖 [${sessionId}] 助手:`);
 
-          // 每次迭代前检查 abort 标志
-          if (session.aborted) {
-            throw new AbortError(`[${sessionId}] Session 已中止`);
-          }
+          this.ensureRequestActive(session, requestState, sessionId);
 
           const { message: aiResponse, streamedText } = await this.invokeLLMWithResilience(
             session,
@@ -783,7 +892,7 @@ export class ProductionAgent {
               enableThinking,
               onChunk: streamEnabled
                 ? (chunk) => {
-                  if (session.aborted) return; // 检查 abort 后忽略后续 chunk
+                  if (this.isRequestAborted(session, requestState)) return;
                   if (chunk?.reasoning) {
                     emitStreamEvent(chunkCallback, { type: "reasoning", content: chunk.reasoning });
                   }
@@ -792,13 +901,11 @@ export class ProductionAgent {
                   }
                 }
                 : null,
+              requestState,
             }
           );
 
-          // LLM 调用后检查 abort
-          if (session.aborted) {
-            throw new AbortError(`[${sessionId}] Session 已中止`);
-          }
+          this.ensureRequestActive(session, requestState, sessionId);
 
           const toolCalls = aiResponse.tool_calls || [];
 
@@ -846,9 +953,7 @@ export class ProductionAgent {
           }
 
           // 工具调用前检查 abort
-          if (session.aborted) {
-            throw new AbortError(`[${sessionId}] Session 已中止`);
-          }
+          this.ensureRequestActive(session, requestState, sessionId);
 
           session.messages.push(aiResponse);
 
@@ -857,9 +962,7 @@ export class ProductionAgent {
           }
 
           for (const toolCall of toolCalls) {
-            if (session.aborted) {
-              throw new AbortError(`[${sessionId}] Session 已中止`);
-            }
+            this.ensureRequestActive(session, requestState, sessionId);
 
             if (streamEnabled) {
               emitStreamEvent(chunkCallback, {
@@ -872,7 +975,8 @@ export class ProductionAgent {
             const result = await this.executeCallableWithResilience(
               session,
               toolCall.name,
-              toolCall.args || {}
+              toolCall.args || {},
+              requestState
             );
             const endAt = Date.now();
             const toolExcResult = {
@@ -938,6 +1042,8 @@ export class ProductionAgent {
 
         fullResponseCallback?.(fallbackText, []);
         return fallbackText;
+      } finally {
+        this.endRequest(session, requestState.id);
       }
     });
   }
