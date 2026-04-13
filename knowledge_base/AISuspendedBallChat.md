@@ -1,6 +1,6 @@
-# AI Suspended Ball Chat
+# AISuspendedBallChat
 
-一个功能强大的AI聊天组件，支持流式响应、图片上传、语音播报、历史记录管理等功能。可以作为悬浮球或独立面板使用。
+一个功能强大的AI聊天Vue3组件，支持流式响应、图片上传、语音播报、历史记录管理等功能。可以作为悬浮球或独立面板使用。
 ![Snipaste_2025-08-31_19-48-18.png](https://luckycola.com.cn/public/imgs/luckycola_Imghub_forever_8sbgSs4M17686524429047868.jpeg)
 
 **《组件落地场景体验1-AI简历助手》**: [https://luckycola.com.cn/public/resume/#/resume](https://luckycola.com.cn/public/resume/?t=123456789#/resume)
@@ -12,7 +12,7 @@
 ## ✨ 特性
 
 - 🤖 **AI对话**: 支持与AI进行自然语言对话
-- 📡 **双模式请求**: 支持普通请求和流式响应两种模式
+- 📡 **双模式请求**: 支持普通请求和流式(SSE)响应、WebSocket三种模式
 - 🖼️ **图片上传**: 支持图片上传和AI图像识别
 - 🎤 **语音输入**: 支持语音转文字输入，便捷的语音交互
 - 🔊 **语音播报**: 支持AI回复内容的语音播报
@@ -780,6 +780,58 @@ mockDataArr.forEach((data, index) => {
   }
 })
 ```
+
+### WebSocket 流式响应兼容格式
+
+组件当前会自动识别 `ws://` / `wss://`，并兼容以下两类 WebSocket 分片格式：
+
+#### 1. 兼容原有流式格式
+
+```json
+{"code": 0, "result": "# Vue.js特点介绍\n\n", "is_end": false}
+{"code": 0, "result": "以上就是Vue.js的主要特点。", "is_end": false}
+{"code": 0, "result": "", "is_end": true}
+```
+
+说明：这类格式与原有 SSE/流式分片定义保持一致，`result` 为字符串分片，`is_end` 为结束标识。
+
+#### 2. 更常见的业务型 WebSocket 协议
+
+```json
+{"code": 0, "type": "token", "data": {"content": "# Vue.js特点介绍\n\n"}, "is_end": false}
+{"code": 0, "type": "token", "data": {"content": "以上就是Vue.js的主要特点。"}, "is_end": false}
+{"code": 0, "type": "finish", "data": {"content": "# Vue.js特点介绍\n\n以上就是Vue.js的主要特点。"}, "is_end": true}
+```
+
+说明：对于 `type: "token" / "finish"` 这类消息，前端会优先读取 `data.content`；同时也兼容 `data.text`、`data.delta`、`result.answer`、`result` 等字段。
+
+#### 3. WebSocket 自定义组件片段
+
+如果需要在 WebSocket 流式返回中插入自定义组件，也兼容以下形式：
+
+```json
+{
+  "code": 0,
+  "type": "finish",
+  "data": {
+    "content": "这里是正文... [[~1]]",
+    "customComponents": {
+      "1": {
+        "type": "card",
+        "data": {
+          "id": "1",
+          "title": "自定义-卡片组件",
+          "description": "这是一个模拟的自定义组件数据块，用于测试前端的组件渲染能力。",
+          "jumpLink": "https://www.example.com",
+          "imageUrl": "https://picsum.photos/id/1016/800/520"
+        }
+      }
+    }
+  },
+  "is_end": true
+}
+```
+
 ==**温馨提示**:==
 > 如果你不知道如何实现一个后端AI Agent的接口,可以使用下面这个现成的Node版本“**Agent脚手架**”: [https://github.com/mingle98/AI-Agent-Node](https://github.com/mingle98/AI-Agent-Node)
 
