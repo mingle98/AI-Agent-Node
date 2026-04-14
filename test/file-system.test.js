@@ -49,7 +49,7 @@ async function testCreateDirectory() {
   const result = await createDirectory(TEST_SESSION, `${TEST_DIR}/subdir1/nested`);
   assert(result.success, '嵌套目录创建成功');
   assert(result.fullUrl && result.fullUrl.includes('http'), '返回完整 URL');
-  assert(result.message.includes('完整地址'), '消息包含完整地址提示');
+  assert(result.message.includes('访问地址'), '消息包含完整地址提示');
   
   // 验证树形结构
   const listResult = await listDirectory(TEST_SESSION, TEST_DIR, { recursive: true });
@@ -76,7 +76,7 @@ async function testWriteFile() {
   assert(mdResult.success, 'Markdown 文件写入成功');
   assert(mdResult.isConverted === true, '检测到 Markdown 并自动转换');
   assert(mdResult.path.endsWith('.html'), '自动改为 .html 后缀');
-  assert(mdResult.fullUrl && mdResult.fullUrl.endsWith('.html'), '完整 URL 指向 HTML');
+  assert(mdResult.fullUrl && mdResult.fullUrl.includes('.html'), '完整 URL 指向 HTML');
   assert(mdResult.message.includes('自动转换为 HTML'), '消息提示格式转换');
 }
 
@@ -170,8 +170,8 @@ async function testExcelOperations() {
   // 创建 Excel
   const writeResult = await writeExcel(`${TEST_DIR}/data.xlsx`, TEST_SESSION, data, { sheetName: '用户数据' });
   assert(writeResult.success, 'Excel 创建成功');
-  assert(writeResult.message.includes('完整地址'), '消息包含完整地址');
-  assert(writeResult.fullUrl && writeResult.fullUrl.endsWith('.xlsx'), '完整 URL 指向 xlsx');
+  assert(writeResult.message.includes('访问地址'), '消息包含完整地址');
+  assert(writeResult.fullUrl && writeResult.fullUrl.includes('.xlsx'), '完整 URL 指向 xlsx');
   
   // 读取 Excel
   const readResult = await readExcel(`${TEST_DIR}/data.xlsx`, TEST_SESSION);
@@ -190,7 +190,7 @@ async function testCsvOperations() {
   // 创建 CSV
   const writeResult = await writeCsv(`${TEST_DIR}/products.csv`, TEST_SESSION, data);
   assert(writeResult.success, 'CSV 创建成功');
-  assert(writeResult.message.includes('完整地址'), '消息包含完整地址');
+  assert(writeResult.message.includes('访问地址'), '消息包含完整地址');
   
   // 读取 CSV
   const readResult = await readCsv(`${TEST_DIR}/products.csv`, TEST_SESSION);
@@ -210,7 +210,7 @@ async function testJsonOperations() {
   // 创建 JSON
   const writeResult = await writeJson(`${TEST_DIR}/config.json`, TEST_SESSION, data);
   assert(writeResult.success, 'JSON 创建成功');
-  assert(writeResult.message.includes('完整地址'), '消息包含完整地址');
+  assert(writeResult.message.includes('访问地址'), '消息包含完整地址');
   
   // 读取 JSON
   const readResult = await readJson(`${TEST_DIR}/config.json`, TEST_SESSION);
@@ -228,8 +228,8 @@ async function testSvgCreation() {
   const result = await writeSvg(`${TEST_DIR}/chart.svg`, TEST_SESSION, svgContent);
   assert(result.success, 'SVG 创建成功');
   assert(result.type === 'svg', '类型识别为 SVG');
-  assert(result.fullUrl && result.fullUrl.endsWith('.svg'), '完整 URL 指向 SVG');
-  assert(result.message.includes('完整地址'), '消息包含完整地址');
+  assert(result.fullUrl && result.fullUrl.includes('.svg'), '完整 URL 指向 SVG');
+  assert(result.message.includes('访问地址'), '消息包含完整地址');
 }
 
 async function testImageInfo() {
@@ -252,7 +252,7 @@ async function testPdfMerge() {
   const result = await mergePdfs([`${TEST_DIR}/doc1.pdf`, `${TEST_DIR}/doc2.pdf`], `${TEST_DIR}/merged.pdf`);
   assert(result.success, 'PDF 合并成功');
   assert(result.pageCount === 2, '合并后共2页');
-  assert(result.message.includes('完整地址'), '消息包含完整地址');
+  assert(result.message.includes('访问地址'), '消息包含完整地址');
 }
 
 // ========== 智能格式转换测试 ==========

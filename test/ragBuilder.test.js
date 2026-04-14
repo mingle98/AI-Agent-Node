@@ -99,17 +99,15 @@ test("loadOrBuildVectorStore: should handle checkVectorDBExists returning true p
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "test-vectordb-"));
   
   try {
-    // Create fake faiss.index and docstore.json files
-    fs.writeFileSync(path.join(tmpDir, "faiss.index"), "fake index");
-    fs.writeFileSync(path.join(tmpDir, "docstore.json"), "{}");
+    // Create fake vector-store file
+    fs.writeFileSync(
+      path.join(tmpDir, "vector-store.json"),
+      JSON.stringify({ version: 1, count: 0, items: [] })
+    );
     
     // Verify checkVectorDBExists returns true
     assert.equal(checkVectorDBExists(tmpDir), true);
-    
-    // Clean up
-    fs.unlinkSync(path.join(tmpDir, "faiss.index"));
-    fs.unlinkSync(path.join(tmpDir, "docstore.json"));
   } finally {
-    fs.rmdirSync(tmpDir);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });

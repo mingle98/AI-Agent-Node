@@ -97,8 +97,8 @@ test('excel_* 工具参数顺序正确', async () => {
   assert.ok(Array.isArray(readRes.data), 'excel_read 应该返回数据数组');
 
   // excel_append
-  const appendData = JSON.stringify([['王五', 95]]);
-  const appendRes = await TOOLS.excel_append(TEST_SESSION, excelPath, appendData);
+  const appendData = JSON.stringify({ rows: [['王五', 95]] });
+  const appendRes = await TOOLS.excel_append(TEST_SESSION, excelPath, appendData, JSON.stringify({ sheetName }));
   assert.equal(appendRes.success, true, 'excel_append 应该成功');
 });
 

@@ -16,6 +16,8 @@ import {
   readWordAsHtml, readPdf, writePdf, mergePdfs, getImageInfo, writeSvg,
   readCsv, writeCsv, readJson, writeJson, writeDocx
 } from './fileFormatHandler.js';
+import { parseExcelInput } from './officeExcel.js';
+import { parseWordInput } from './officeWord.js';
 import { compressFiles, extractArchive, getArchiveInfo, listArchiveContents } from './compress.js';
 import { sendEmail, sendTemplateEmail, verifySmtpConfig } from './email.js';
 import { scheduleTask, getTasks, cancelTask, getTaskById, cleanupTasks } from './scheduler.js';
@@ -263,7 +265,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "excel_read",
     func: (sessionId, filePath, sheetName) => readExcel(filePath, sessionId, { sheetName }),
-    description: "读取用户 workspace 中的 Excel 文件，返回工作表列表和单元格数据",
+    description: "读取用户 workspace 中的 Excel 文件，返回工作表列表、列信息、合并区域和单元格数据/样式",
     params: [
       { name: "文件路径", type: "string", example: "data/report.xlsx" },
       { name: "工作表名", type: "string", example: "Sheet1", required: false }
@@ -272,24 +274,34 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "excel_write",
-    func: (sessionId, filePath, data, sheetName) => writeExcel(filePath, sessionId, JSON.parse(data), { sheetName }),
-    description: "在用户 workspace 中创建 Excel 文件，支持写入二维数组数据",
+    func: (sessionId, filePath, data, sheetName, options = "{}") => {
+      const parsedData = parseExcelInput(data);
+      const parsedOptions = typeof options === 'string' ? JSON.parse(options || '{}') : (options || {});
+      return writeExcel(filePath, sessionId, parsedData, { sheetName, ...parsedOptions });
+    },
+    description: "在用户 workspace 中创建 Excel 文件，支持写入二维数组、Markdown 表格/分隔文本表格，或传 rows/headers/columns/merges 的结构化配置，并支持单元格样式",
     params: [
       { name: "文件路径", type: "string", example: "output/report.xlsx" },
-      { name: "数据", type: "string", example: '[["姓名","年龄"],["张三",25]]' },
-      { name: "工作表名", type: "string", example: "数据", required: false }
+      { name: "数据", type: "string", example: '{"headers":["姓名","成绩"],"rows":[[{"value":"张三","font":{"bold":true}},{"value":90,"numFmt":"0"}]],"columns":[{"width":16},{"width":12}],"merges":["A1:B1"]}', description: "二维数组、Markdown 表格、tab/comma/pipe 分隔文本表格，或结构化对象：headers/rows/columns/merges/views/autoWidth。单元格支持 value、formula、result、font、fill、alignment、border、numFmt 等" },
+      { name: "工作表名", type: "string", example: "数据", required: false },
+      { name: "选项", type: "object", example: '{"autoWidth":true}', description: "可选：autoWidth、headers、columns、merges、views、overwrite 等；与数据对象合并使用", required: false }
     ],
-    example: 'excel_write("report.xlsx", "[[\"姓名\",\"分数\"],[\"张三\",90]]", "成绩")',
+    example: 'excel_write("report.xlsx", "{\"headers\":[\"姓名\",\"分数\"],\"rows\":[[{\"value\":\"张三\",\"font\":{\"bold\":true}},{\"value\":90,\"numFmt\":\"0\"}]],\"columns\":[{\"width\":18},{\"width\":12}]}", "成绩")',
   },
   {
     name: "excel_append",
-    func: (sessionId, filePath, data) => appendToExcel(filePath, sessionId, JSON.parse(data)),
-    description: "向用户 workspace 中的 Excel 文件追加数据行",
+    func: (sessionId, filePath, data, options = "{}") => {
+      const parsedData = parseExcelInput(data);
+      const parsedOptions = typeof options === 'string' ? JSON.parse(options || '{}') : (options || {});
+      return appendToExcel(filePath, sessionId, parsedData, parsedOptions);
+    },
+    description: "向用户 workspace 中的 Excel 文件追加数据行，支持结构化 rows、Markdown 表格/分隔文本表格和单元格样式",
     params: [
       { name: "文件路径", type: "string", example: "data/log.xlsx" },
-      { name: "追加数据", type: "string", example: '[["2024-01-01","操作记录"]]' }
+      { name: "追加数据", type: "string", example: '{"rows":[[{"value":"2024-01-01"},{"value":"操作记录","alignment":{"wrapText":true}}]]}', description: "二维数组、Markdown 表格、tab/comma/pipe 分隔文本表格或 {rows:[...]}；单元格支持 value、formula、font、fill、alignment、border、numFmt 等" },
+      { name: "选项", type: "object", example: '{"sheetName":"Sheet1"}', description: "可选：sheetName、views 等", required: false }
     ],
-    example: 'excel_append("data/log.xlsx", "[[\"2024-01-15\",\"新记录\"]]")',
+    example: 'excel_append("data/log.xlsx", "{\"rows\":[[{\"value\":\"2024-01-15\"},{\"value\":\"新记录\"}]]}")',
   },
   // ========== Word 文件工具 ==========
   {
@@ -313,35 +325,17 @@ export const TOOL_DEFINITIONS = [
   {
     name: "word_write_docx",
     func: (sessionId, filePath, content, options = "{}") => {
-      let paragraphs;
-      if (typeof content === 'string') {
-        const trimmed = content.trim();
-        // 检测是否为 JSON 数组或对象
-        if ((trimmed.startsWith('[') && trimmed.endsWith(']')) || 
-            (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
-          try {
-            const parsed = JSON.parse(trimmed);
-            paragraphs = Array.isArray(parsed) ? parsed : [parsed];
-          } catch {
-            // JSON 解析失败，按行分割
-            paragraphs = content.split('\n').filter(line => line.trim()).map(line => ({ text: line }));
-          }
-        } else {
-          // 普通文本，按行分割
-          paragraphs = content.split('\n').filter(line => line.trim()).map(line => ({ text: line }));
-        }
-      } else {
-        paragraphs = Array.isArray(content) ? content : [content];
-      }
-      return writeDocx(filePath, sessionId, paragraphs, { overwrite: true, ...JSON.parse(options) });
+      const blocks = parseWordInput(content);
+      const parsedOptions = typeof options === 'string' ? JSON.parse(options || '{}') : (options || {});
+      return writeDocx(filePath, sessionId, blocks, { overwrite: true, ...parsedOptions });
     },
-    description: "创建真正的 Word 文档（.docx 格式），使用 A4 纸张尺寸（210mm x 297mm）",
+    description: "创建真正的 Word 文档（.docx 格式），支持标题、段落、空行、无序/有序列表、基础表格，并支持从 Markdown 自动解析这些结构，使用 A4 纸张尺寸（210mm x 297mm）",
     params: [
       { name: "文件路径", type: "string", example: "output/document.docx", description: "输出 .docx 文件路径" },
-      { name: "内容", type: "string|array", example: "[{\"text\":\"标题\",\"heading\":\"Heading1\"},{\"text\":\"正文内容\"}]", description: "段落数组或纯文本（自动按行分割）。支持属性：text, heading(Heading1-6), bold, italic, fontSize, alignment(left/center/right/justified)" },
-      { name: "选项", type: "object", example: '{"title":"文档标题"}', description: "可选参数：title文档标题", required: false }
+      { name: "内容", type: "string|array", example: "# AI 工程实践入门指南\n\n1. 统一数据管理\n2. 模型生命周期管理\n\n| 阶段 | 说明 |\n| --- | --- |\n| 开发 | Prompt 设计 |", description: "块数组、普通文本或 Markdown。支持普通段落属性：text、runs、heading、bold、italic、underline、fontSize、alignment、spacing；支持 type=blank 空段落；type=orderedList/unorderedList/bulletList 列表；type=table 基础表格" },
+      { name: "选项", type: "object", example: '{"title":"文档标题"}', description: "可选参数：title 文档标题", required: false }
     ],
-    example: 'word_write_docx("output/report.docx", "[{\"text\":\"第一章\",\"heading\":\"Heading1\"},{\"text\":\"这是正文内容\"}]")',
+    example: 'word_write_docx("output/report.docx", "# AI 工程实践入门指南\n\n1. 统一数据管理\n2. 模型生命周期管理\n\n| 阶段 | 关键活动 |\n| --- | --- |\n| 开发 | Prompt 设计 |")',
   },
   // ========== PDF 文件工具 ==========
   {

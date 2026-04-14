@@ -3,14 +3,16 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import ExcelJS from 'exceljs';
 import PDFKit from 'pdfkit';
 import { PDFDocument } from 'pdf-lib';
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import mammoth from 'mammoth';
-import { Document, Paragraph, TextRun, Packer } from 'docx';
 import { resolveWorkspacePath, getPublicUrlInfo } from './fileManager.js';
+import { readExcel as readExcelImpl, writeExcel as writeExcelImpl, appendToExcel as appendToExcelImpl } from './officeExcel.js';
+import { writeDocx as writeDocxImpl } from './officeWord.js';
+import { formatFileSize } from './officeFormatUtils.js';
 import { renderMarkdownOnPdf } from './pdfMarkdownRenderer.js';
+
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CHINESE_FONT_PATH = process.env.CHINESE_FONT_PATH
@@ -63,77 +65,7 @@ const CHINESE_FONT_CANDIDATES = [
  * @returns {Promise<Object>}
  */
 export async function readExcel(filePath, sessionId, options = {}) {
-  try {
-    if (!sessionId) {
-      throw new Error('需要提供 sessionId 来访问文件系统');
-    }
-    
-    const { sheetIndex = 0, sheetName = null } = options;
-    const absolutePath = resolveWorkspacePath(filePath, sessionId);
-    
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.readFile(absolutePath);
-    
-    // 获取工作表
-    let worksheet;
-    if (sheetName) {
-      worksheet = workbook.getWorksheet(sheetName);
-      if (!worksheet) {
-        throw new Error(`工作表 "${sheetName}" 不存在`);
-      }
-    } else {
-      worksheet = workbook.worksheets[sheetIndex];
-      if (!worksheet) {
-        throw new Error(`工作表索引 ${sheetIndex} 超出范围`);
-      }
-    }
-    
-    // 提取数据
-    const data = [];
-    worksheet.eachRow((row, rowNumber) => {
-      const rowData = row.values.slice(1); // 移除第一个空元素
-      data.push({
-        rowNumber,
-        values: rowData.map(cell => {
-          if (cell && typeof cell === 'object' && 'text' in cell) {
-            return cell.text;
-          }
-          if (cell && typeof cell === 'object' && 'formula' in cell) {
-            return { formula: cell.formula, result: cell.result };
-          }
-          return cell;
-        })
-      });
-    });
-    
-    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
-
-    return {
-      success: true,
-      filePath: filePath,
-      url: urlInfo?.fullUrl || null,
-      fullUrl: urlInfo?.fullUrl || null,
-      signedPath: urlInfo?.path || null,
-      sheets: workbook.worksheets.map(sheet => ({
-        name: sheet.name,
-        rowCount: sheet.rowCount,
-        columnCount: sheet.columnCount
-      })),
-      currentSheet: {
-        name: worksheet.name,
-        index: worksheet.id
-      },
-      data: data.slice(0, 1000), // 限制返回行数
-      totalRows: data.length,
-      message: `成功读取 Excel 文件，共 ${workbook.worksheets.length} 个工作表，当前工作表 "${worksheet.name}" 有 ${data.length} 行数据`
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error.message,
-      filePath: filePath
-    };
-  }
+  return readExcelImpl(filePath, sessionId, options);
 }
 
 /**
@@ -148,90 +80,7 @@ export async function readExcel(filePath, sessionId, options = {}) {
  * @returns {Promise<Object>}
  */
 export async function writeExcel(filePath, sessionId, data, options = {}) {
-  try {
-    if (!sessionId) {
-      throw new Error('需要提供 sessionId 来访问文件系统');
-    }
-    
-    const { sheetName = 'Sheet1', headers = null, overwrite = false } = options;
-    const absolutePath = resolveWorkspacePath(filePath, sessionId);
-    const dirPath = path.dirname(absolutePath);
-    
-    // 确保目录存在
-    await fs.mkdir(dirPath, { recursive: true });
-    
-    // 检查是否已存在
-    const exists = await fs.stat(absolutePath).catch(() => null);
-    if (exists && !overwrite) {
-      throw new Error(`文件已存在: ${filePath}，如需覆盖请设置 overwrite: true`);
-    }
-    
-    const workbook = new ExcelJS.Workbook();
-    workbook.created = new Date();
-    workbook.modified = new Date();
-    
-    const worksheet = workbook.addWorksheet(sheetName);
-    
-    // 添加表头
-    if (headers && headers.length > 0) {
-      worksheet.addRow(headers);
-      // 设置表头样式
-      worksheet.getRow(1).font = { bold: true };
-      worksheet.getRow(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' }
-      };
-    }
-    
-    // 添加数据
-    if (Array.isArray(data)) {
-      data.forEach(row => {
-        if (Array.isArray(row)) {
-          worksheet.addRow(row);
-        } else if (typeof row === 'object') {
-          worksheet.addRow(Object.values(row));
-        }
-      });
-    }
-    
-    // 自动调整列宽
-    worksheet.columns.forEach(column => {
-      let maxLength = 10;
-      column.eachCell({ includeEmpty: true }, cell => {
-        const cellLength = cell.value ? String(cell.value).length : 0;
-        if (cellLength > maxLength) {
-          maxLength = Math.min(cellLength, 50);
-        }
-      });
-      column.width = maxLength + 2;
-    });
-    
-    await workbook.xlsx.writeFile(absolutePath);
-    
-    const stats = await fs.stat(absolutePath);
-    
-    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
-
-    return {
-      success: true,
-      filePath: filePath,
-      url: urlInfo?.fullUrl || null,
-      fullUrl: urlInfo?.fullUrl || null,
-      signedPath: urlInfo?.path || null,
-      sheetName: sheetName,
-      rowCount: data.length,
-      size: stats.size,
-      formattedSize: formatFileSize(stats.size),
-      message: `Excel 文件创建成功: ${filePath}\n访问地址: ${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}`
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error.message,
-      filePath: filePath
-    };
-  }
+  return writeExcelImpl(filePath, sessionId, data, options);
 }
 
 /**
@@ -243,67 +92,7 @@ export async function writeExcel(filePath, sessionId, data, options = {}) {
  * @returns {Promise<Object>}
  */
 export async function appendToExcel(filePath, sessionId, data, options = {}) {
-  try {
-    if (!sessionId) {
-      throw new Error('需要提供 sessionId 来访问文件系统');
-    }
-    
-    const { sheetName = null } = options;
-    const absolutePath = resolveWorkspacePath(filePath, sessionId);
-    
-    // 检查文件存在
-    const exists = await fs.stat(absolutePath).catch(() => null);
-    if (!exists) {
-      // 文件不存在则创建
-      return await writeExcel(filePath, sessionId, data, options);
-    }
-    
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.readFile(absolutePath);
-    
-    // 获取工作表
-    const worksheet = sheetName 
-      ? workbook.getWorksheet(sheetName) 
-      : workbook.worksheets[0];
-    
-    if (!worksheet) {
-      throw new Error(`工作表不存在: ${sheetName || '默认工作表'}`);
-    }
-    
-    // 追加数据
-    const startRow = worksheet.rowCount;
-    if (Array.isArray(data)) {
-      data.forEach(row => {
-        if (Array.isArray(row)) {
-          worksheet.addRow(row);
-        } else if (typeof row === 'object') {
-          worksheet.addRow(Object.values(row));
-        }
-      });
-    }
-    
-    await workbook.xlsx.writeFile(absolutePath);
-    
-    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
-
-    return {
-      success: true,
-      filePath: filePath,
-      url: urlInfo?.fullUrl || null,
-      fullUrl: urlInfo?.fullUrl || null,
-      signedPath: urlInfo?.path || null,
-      sheetName: worksheet.name,
-      appendedRows: data.length,
-      totalRows: worksheet.rowCount,
-      message: `成功向 Excel 文件追加 ${data.length} 行数据，当前共 ${worksheet.rowCount} 行\n访问地址: ${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}`
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error.message,
-      filePath: filePath
-    };
-  }
+  return appendToExcelImpl(filePath, sessionId, data, options);
 }
 
 // ========== Word 文件处理 ==========
@@ -466,139 +255,7 @@ ${htmlContent}
  * @returns {Promise<Object>}
  */
 export async function writeDocx(filePath, sessionId, paragraphs, options = {}) {
-  try {
-    if (!sessionId) {
-      throw new Error('需要提供 sessionId 来访问文件系统');
-    }
-    
-    const { overwrite = false, title = 'Document' } = options;
-    const absolutePath = resolveWorkspacePath(filePath, sessionId);
-    const dirPath = path.dirname(absolutePath);
-    
-    // 确保目录存在
-    await fs.mkdir(dirPath, { recursive: true });
-    
-    // 检查是否已存在
-    const exists = await fs.stat(absolutePath).catch(() => null);
-    if (exists && !overwrite) {
-      throw new Error(`文件已存在: ${filePath}，如需覆盖请设置 overwrite: true`);
-    }
-    
-    // A4 纸张尺寸（单位：twips，1英寸 = 1440 twips）
-    // A4: 210mm x 297mm = 8.27英寸 x 11.69英寸
-    const A4_WIDTH = 11906;   // 约 8.27 英寸
-    const A4_HEIGHT = 16838;  // 约 11.69 英寸
-    const MARGIN = 1440;      // 1 英寸边距
-    
-    // 构建段落数组
-    const docParagraphs = [];
-    
-    if (Array.isArray(paragraphs)) {
-      for (const para of paragraphs) {
-        if (typeof para === 'string') {
-          // 简单字符串段落
-          docParagraphs.push(new Paragraph({
-            children: [new TextRun({ text: para })]
-          }));
-        } else if (para && typeof para === 'object') {
-          // 带样式的段落
-          const textRuns = [];
-          
-          if (para.text) {
-            const runOptions = { text: para.text };
-            
-            // 应用样式
-            if (para.bold) runOptions.bold = true;
-            if (para.italic) runOptions.italic = true;
-            if (para.underline) runOptions.underline = true;
-            if (para.fontSize) runOptions.size = para.fontSize * 2; // docx 使用 half-points
-            if (para.color) runOptions.color = para.color;
-            if (para.font) runOptions.font = para.font;
-            
-            textRuns.push(new TextRun(runOptions));
-          }
-          
-          if (para.runs && Array.isArray(para.runs)) {
-            for (const run of para.runs) {
-              const runOptions = typeof run === 'string' ? { text: run } : {
-                text: run.text || '',
-                bold: run.bold,
-                italic: run.italic,
-                underline: run.underline,
-                size: run.fontSize ? run.fontSize * 2 : undefined,
-                color: run.color,
-                font: run.font
-              };
-              textRuns.push(new TextRun(runOptions));
-            }
-          }
-          
-          const paraOptions = { children: textRuns };
-          
-          // 段落样式
-          if (para.heading) {
-            paraOptions.heading = para.heading; // Heading1, Heading2, etc.
-          }
-          if (para.alignment) {
-            paraOptions.alignment = para.alignment; // left, center, right, justified
-          }
-          if (para.spacing && para.spacing.after) {
-            paraOptions.spacing = { after: para.spacing.after * 20 }; // twips
-          }
-          
-          docParagraphs.push(new Paragraph(paraOptions));
-        }
-      }
-    }
-    
-    // 创建文档，使用 A4 纸张尺寸
-    const doc = new Document({
-      sections: [{
-        properties: {
-          page: {
-            width: A4_WIDTH,
-            height: A4_HEIGHT,
-            margin: {
-              top: MARGIN,
-              right: MARGIN,
-              bottom: MARGIN,
-              left: MARGIN
-            }
-          }
-        },
-        children: docParagraphs.length > 0 ? docParagraphs : [new Paragraph({
-          children: [new TextRun({ text: '' })]
-        })]
-      }]
-    });
-    
-    // 生成并保存文档
-    const buffer = await Packer.toBuffer(doc);
-    await fs.writeFile(absolutePath, buffer);
-    
-    const stats = await fs.stat(absolutePath);
-    
-    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
-
-    return {
-      success: true,
-      filePath: filePath,
-      url: urlInfo?.fullUrl || null,
-      fullUrl: urlInfo?.fullUrl || null,
-      signedPath: urlInfo?.path || null,
-      size: stats.size,
-      formattedSize: formatFileSize(stats.size),
-      pageSize: 'A4 (210mm x 297mm)',
-      paragraphCount: docParagraphs.length,
-      message: `Word 文档创建成功: ${filePath}（A4 纸张）\n访问地址: ${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}`
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error.message,
-      filePath: filePath
-    };
-  }
+  return writeDocxImpl(filePath, sessionId, paragraphs, options);
 }
 
 // ========== PDF 文件处理 ==========
@@ -1250,12 +907,3 @@ export async function writeJson(filePath, sessionId, data, options = {}) {
   }
 }
 
-// ========== 工具函数 ==========
-
-function formatFileSize(bytes) {
-  if (bytes === 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const k = 1024;
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + units[i];
-}
