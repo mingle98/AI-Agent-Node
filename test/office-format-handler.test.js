@@ -111,6 +111,61 @@ test('TOOLS excel wrappers should accept structured options without breaking exi
   assert.equal(readResult.data[2].values[1].value, 88);
 });
 
+test('fileFormatHandler.writeExcel should parse JSON-string payloads passed directly to implementation', async () => {
+  const filePath = 'tmp/direct-json-string.xlsx';
+  const payload = JSON.stringify({
+    sheetName: 'conversion_funnel',
+    headers: ['日期', '渠道', '曝光量', '点击量', '注册量', '付费量', 'ROI'],
+    rows: [['2024-04-01', 'Web', 128500, 8920, 1160, 210, '18.6%']],
+    columns: [{ width: 14 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 10 }],
+    autoWidth: false,
+  });
+
+  const writeResult = await writeExcel(filePath, TEST_SESSION, payload, { overwrite: true });
+  assert.equal(writeResult.success, true);
+
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(path.join(SESSION_ROOT, filePath));
+  const worksheet = workbook.getWorksheet('conversion_funnel');
+  assert.equal(worksheet.getCell('A1').value, '日期');
+  assert.equal(worksheet.getCell('A2').value, '2024-04-01');
+  assert.equal(worksheet.getCell('B2').value, 'Web');
+  assert.equal(worksheet.getCell('C2').value, 128500);
+});
+
+test('fileFormatHandler.writeDocx should parse JSON-string payloads passed directly to implementation', async () => {
+  const filePath = 'tmp/direct-json-string.docx';
+  const payload = JSON.stringify([
+    { heading: 'HEADING_1', text: '春夜观代码有感' },
+    { alignment: 'RIGHT', text: '—— 甲辰年三月于\n云栈机房' },
+    { type: 'blank' },
+    { text: '星轨盘桓未肯休，云栈千层接斗牛。' },
+  ]);
+
+  const result = await writeDocx(filePath, TEST_SESSION, payload, { overwrite: true, title: 'Direct JSON Word Test' });
+  assert.equal(result.success, true);
+
+  const htmlResult = await readWordAsHtml(filePath, TEST_SESSION);
+  assert.equal(htmlResult.success, true);
+  assert.match(htmlResult.html, /<h1[^>]*>春夜观代码有感<\/h1>/i);
+  assert.match(htmlResult.html, /甲辰年三月于/i);
+  assert.match(htmlResult.html, /星轨盘桓未肯休/i);
+});
+
+test('fileFormatHandler.writeDocx should parse markdown strings passed directly to implementation', async () => {
+  const filePath = 'tmp/direct-markdown.docx';
+  const markdown = '# 主标题\n\n- 第一项\n- 第二项\n\n| 列1 | 列2 |\n| --- | --- |\n| A | B |';
+
+  const result = await writeDocx(filePath, TEST_SESSION, markdown, { overwrite: true, title: 'Direct Markdown Word Test' });
+  assert.equal(result.success, true);
+
+  const htmlResult = await readWordAsHtml(filePath, TEST_SESSION);
+  assert.equal(htmlResult.success, true);
+  assert.match(htmlResult.html, /<h1[^>]*>主标题<\/h1>/i);
+  assert.match(htmlResult.html, /<ul>/i);
+  assert.match(htmlResult.html, /<table>/i);
+});
+
 test('fileFormatHandler.writeDocx should support markdown parsing for headings, lists and tables', async () => {
   const filePath = 'tmp/word-markdown.docx';
   const markdown = [

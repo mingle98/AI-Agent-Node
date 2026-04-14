@@ -52,9 +52,10 @@ function addExcelRow(worksheet, rowData) {
 }
 
 function normalizeExcelWritePayload(data, options = {}) {
-  const base = { rows: Array.isArray(data) ? data : [], sheetName: options.sheetName || 'Sheet1', headers: options.headers || null, columns: options.columns || null, merges: options.merges || [], views: options.views || [], overwrite: options.overwrite || false, autoWidth: options.autoWidth !== false };
-  if (isPlainObject(data) && !Array.isArray(data)) {
-    return { rows: Array.isArray(data.rows) ? data.rows : Array.isArray(data.data) ? data.data : [], sheetName: data.sheetName || base.sheetName, headers: data.headers || base.headers, columns: data.columns || base.columns, merges: data.merges || base.merges, views: data.views || base.views, overwrite: options.overwrite ?? data.overwrite ?? false, autoWidth: data.autoWidth ?? base.autoWidth };
+  const normalizedData = parseExcelInput(data);
+  const base = { rows: Array.isArray(normalizedData) ? normalizedData : [], sheetName: options.sheetName || 'Sheet1', headers: options.headers || null, columns: options.columns || null, merges: options.merges || [], views: options.views || [], overwrite: options.overwrite || false, autoWidth: options.autoWidth !== false };
+  if (isPlainObject(normalizedData) && !Array.isArray(normalizedData)) {
+    return { rows: Array.isArray(normalizedData.rows) ? normalizedData.rows : Array.isArray(normalizedData.data) ? normalizedData.data : [], sheetName: normalizedData.sheetName || base.sheetName, headers: normalizedData.headers || base.headers, columns: normalizedData.columns || base.columns, merges: normalizedData.merges || base.merges, views: normalizedData.views || base.views, overwrite: options.overwrite ?? normalizedData.overwrite ?? false, autoWidth: normalizedData.autoWidth ?? base.autoWidth };
   }
   return base;
 }
@@ -136,8 +137,8 @@ function parseDelimitedTextTable(text) {
 
 export function parseExcelInput(input) {
   if (isPlainObject(input) || Array.isArray(input)) return input;
-  const raw = String(input || '').trim();
-  if (!raw) return { rows: [] };
+  const raw = String(input || '');
+  if (!raw.trim()) return { rows: [] };
   if ((raw.startsWith('{') && raw.endsWith('}')) || (raw.startsWith('[') && raw.endsWith(']'))) {
     try { return JSON.parse(raw); } catch {}
   }

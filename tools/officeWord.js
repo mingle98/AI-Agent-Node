@@ -266,7 +266,8 @@ export async function writeDocx(filePath, sessionId, paragraphs, options = {}) {
     await fs.mkdir(dirPath, { recursive: true });
     const exists = await fs.stat(absolutePath).catch(() => null);
     if (exists && !overwrite) throw new Error(`文件已存在: ${filePath}，如需覆盖请设置 overwrite: true`);
-    const docChildren = buildDocxChildren(parseWordInput(paragraphs));
+    const normalizedParagraphs = parseWordInput(paragraphs);
+    const docChildren = buildDocxChildren(normalizedParagraphs);
     const paragraphCount = docChildren.filter((child) => child instanceof Paragraph).length;
     const tableCount = docChildren.filter((child) => child instanceof Table).length;
     const doc = new Document({ creator: 'AI-Agent-Node', title, numbering: { config: [{ reference: 'ai-agent-bullet-list', levels: Array.from({ length: 9 }, (_, level) => ({ level, format: LevelFormat.BULLET, text: ['•', '◦', '▪'][level % 3], alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 720 + level * 360, hanging: 360 } } } })) }, { reference: 'ai-agent-ordered-list', levels: Array.from({ length: 9 }, (_, level) => ({ level, format: LevelFormat.DECIMAL, text: `%${level + 1}.`, alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 720 + level * 360, hanging: 360 } } } })) }] }, sections: [{ properties: { page: { width: 11906, height: 16838, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } }, children: docChildren }] });
