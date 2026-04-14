@@ -173,7 +173,7 @@ export class ProductionAgent {
     this.vectorStore = vectorStore;
     this.embeddings = embeddings;
     this.options = options;
-    this.maxIterations = options.maxIterations || 10;
+    this.maxIterations = options.maxIterations || 20;
     this.defaultSessionId = options.defaultSessionId || "default";
     this.sessionTtlMs = options.sessionTtlMs || 30 * 60 * 1000;
     this.maxSessions = options.maxSessions || 300;
@@ -191,7 +191,7 @@ export class ProductionAgent {
     this.taskMode = options.taskMode || "auto";  // 'auto' | 'react' | 'plan_exec'
     this.complexityThreshold = options.complexityThreshold || 0.5;  // 复杂度阈值
     this.maxPlanSteps = options.maxPlanSteps || 10;  // 最大计划步骤数
-    this.maxStepIterations = options.maxStepIterations || 3;  // 每个计划步骤的最大迭代次数
+    this.maxStepIterations = options.maxStepIterations || 5;  // 每个计划步骤的最大迭代次数
 
     // ========== 长期记忆配置 ==========
     this.longTermMemoryEnabled = options.longTermMemoryEnabled !== false;  // 默认开启
