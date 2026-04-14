@@ -61,6 +61,63 @@ function emitToolEvent(callback, toolExcResult) {
   }
 }
 
+function sanitizeToolArgs(args) {
+  if (args === undefined) {
+    return {};
+  }
+  if (args === null) {
+    return null;
+  }
+  if (typeof args === "string") {
+    try {
+      return JSON.parse(args);
+    } catch {
+      return {};
+    }
+  }
+  if (typeof args === "object") {
+    return args;
+  }
+  return args;
+}
+
+function sanitizeAIMessageForHistory(message) {
+  if (!AIMessage.isInstance(message)) {
+    return message;
+  }
+
+  const sanitizedToolCalls = Array.isArray(message.tool_calls)
+    ? message.tool_calls.map((toolCall) => ({
+        ...toolCall,
+        args: sanitizeToolArgs(toolCall?.args),
+      }))
+    : [];
+
+  const sanitizedAdditionalToolCalls = Array.isArray(message.additional_kwargs?.tool_calls)
+    ? message.additional_kwargs.tool_calls.map((toolCall) => ({
+        ...toolCall,
+        function: {
+          ...toolCall?.function,
+          arguments: JSON.stringify(sanitizeToolArgs(toolCall?.function?.arguments)),
+        },
+      }))
+    : undefined;
+
+  return new AIMessage({
+    content: message.content,
+    name: message.name,
+    id: message.id,
+    tool_calls: sanitizedToolCalls,
+    invalid_tool_calls: [],
+    additional_kwargs: {
+      ...message.additional_kwargs,
+      ...(sanitizedAdditionalToolCalls ? { tool_calls: sanitizedAdditionalToolCalls } : {}),
+    },
+    response_metadata: message.response_metadata,
+    usage_metadata: message.usage_metadata,
+  });
+}
+
 function extractReasoningContent(chunk) {
   const raw = chunk?.additional_kwargs?.__raw_response;
   const delta = raw?.choices?.[0]?.delta;
@@ -907,9 +964,10 @@ export class ProductionAgent {
 
           this.ensureRequestActive(session, requestState, sessionId);
 
-          const toolCalls = aiResponse.tool_calls || [];
+          const normalizedAiResponse = sanitizeAIMessageForHistory(aiResponse);
+          const toolCalls = normalizedAiResponse.tool_calls || [];
 
-          const aiText = normalizeTextContent(aiResponse.content);
+          const aiText = normalizeTextContent(normalizedAiResponse.content);
 
           if (toolCalls.length === 0) {
             const shouldExpandCapabilities =
@@ -927,7 +985,7 @@ export class ProductionAgent {
               continue;
             }
 
-            session.messages.push(aiResponse);
+            session.messages.push(normalizedAiResponse);
             if (streamEnabled) {
               if (!streamedText) {
                 emitStreamEvent(chunkCallback, { type: "chunk", content: aiText });
@@ -955,7 +1013,7 @@ export class ProductionAgent {
           // 工具调用前检查 abort
           this.ensureRequestActive(session, requestState, sessionId);
 
-          session.messages.push(aiResponse);
+          session.messages.push(normalizedAiResponse);
 
           if (streamEnabled) {
             emitStreamEvent(chunkCallback, { type: "status", content: getToolDivBox('⌛️ 【TOOL】正在调用工具/技能...', 'start') });
