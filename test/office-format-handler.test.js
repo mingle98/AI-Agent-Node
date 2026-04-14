@@ -4,7 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import ExcelJS from 'exceljs';
 
-import { writeExcel, readExcel, appendToExcel, writeDocx, readWordAsHtml } from '../tools/fileFormatHandler.js';
+import { writeExcel, readExcel, appendToExcel, writeDocx, readWordAsHtml, writePptx, readPptx } from '../tools/fileFormatHandler.js';
 import { TOOLS } from '../tools/index.js';
 
 const TEST_SESSION = `office_format_${Date.now()}`;
@@ -368,6 +368,154 @@ test('TOOLS excel wrappers should parse markdown table text automatically', asyn
   assert.equal(readResult.data[0].values[0].text, '姓名');
   assert.equal(readResult.data[1].values[0].text, '张三');
   assert.equal(readResult.data[2].values[1].value, 0.885);
+});
+
+test('fileFormatHandler.writePptx/readPptx should support basic slide operations', async () => {
+  const filePath = 'tmp/basic-deck.pptx';
+  const payload = {
+    slides: [
+      {
+        title: '季度复盘',
+        text: '核心经营指标回顾',
+        bullets: ['收入增长 18%', '续费率提升到 82%', '重点客户流失率下降'],
+        notes: '用于管理层晨会同步',
+      },
+      {
+        title: '下季度重点',
+        bullets: ['优化转化漏斗', '降低获客成本', '提升客诉响应效率'],
+      },
+    ],
+  };
+
+  const writeResult = await writePptx(filePath, TEST_SESSION, payload, { overwrite: true, title: '季度汇报' });
+  assert.equal(writeResult.success, true);
+  assert.equal(writeResult.slideCount, 2);
+
+  const readResult = await readPptx(filePath, TEST_SESSION);
+  assert.equal(readResult.success, true);
+  assert.equal(readResult.slideCount, 2);
+  assert.equal(readResult.slides[0].title, '季度复盘');
+  assert.match(readResult.slides[0].text, /收入增长 18%/);
+  assert.equal(readResult.slides[1].title, '下季度重点');
+});
+
+test('TOOLS.ppt_write should accept structured slide content', async () => {
+  const filePath = 'tmp/tool-deck.pptx';
+  const writeResult = await TOOLS.ppt_write(
+    TEST_SESSION,
+    filePath,
+    JSON.stringify({
+      slides: [
+        { title: 'AI Agent 方案', text: '基础版能力', bullets: ['文件处理', '知识库问答', 'Office 读写'] },
+      ],
+    }),
+    JSON.stringify({ title: '方案介绍' })
+  );
+  assert.equal(writeResult.success, true);
+
+  const readResult = await TOOLS.ppt_read(TEST_SESSION, filePath);
+  assert.equal(readResult.success, true);
+  assert.equal(readResult.slideCount, 1);
+  assert.equal(readResult.slides[0].title, 'AI Agent 方案');
+  assert.match(readResult.slides[0].text, /Office 读写/);
+});
+
+test('fileFormatHandler.writePptx should support basic table slides', async () => {
+  const filePath = 'tmp/table-deck.pptx';
+  const payload = {
+    slides: [
+      {
+        title: '经营指标总览',
+        text: '核心经营数据表',
+        table: [
+          ['指标', 'Q1', 'Q2'],
+          ['收入', '120', '142'],
+          ['毛利率', '35%', '38%'],
+        ],
+      },
+    ],
+  };
+
+  const writeResult = await writePptx(filePath, TEST_SESSION, payload, { overwrite: true, title: '经营看板' });
+  assert.equal(writeResult.success, true);
+
+  const readResult = await readPptx(filePath, TEST_SESSION);
+  assert.equal(readResult.success, true);
+  assert.equal(readResult.slideCount, 1);
+  assert.equal(readResult.slides[0].title, '经营指标总览');
+  assert.match(readResult.slides[0].text, /指标/);
+  assert.match(readResult.slides[0].text, /毛利率/);
+  assert.match(readResult.slides[0].text, /38%/);
+});
+
+test('fileFormatHandler.writePptx should support image, chart, cards and templates', async () => {
+  const filePath = 'tmp/advanced-deck.pptx';
+  const tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WnSUs8AAAAASUVORK5CYII=';
+  const payload = {
+    slides: [
+      {
+        title: '经营总览',
+        template: 'executive',
+        cards: [
+          { label: '收入', value: '¥142万', change: '+18%' },
+          { label: '续费率', value: '82%', change: '+4pp' },
+        ],
+        chart: {
+          type: 'bar',
+          title: '季度收入',
+          series: [{ name: '收入', labels: ['Q1', 'Q2'], values: [120, 142] }],
+        },
+      },
+      {
+        title: '客户案例',
+        template: 'growth',
+        image: {
+          data: tinyPng,
+          caption: '重点客户上线效果图',
+          w: 8,
+          h: 4.5,
+          x: 2.4,
+        },
+      },
+    ],
+  };
+
+  const writeResult = await writePptx(filePath, TEST_SESSION, payload, { overwrite: true, title: '高级演示稿', template: 'default' });
+  assert.equal(writeResult.success, true);
+  assert.equal(writeResult.template, 'default');
+  assert.equal(writeResult.slideCount, 2);
+
+  const readResult = await readPptx(filePath, TEST_SESSION);
+  assert.equal(readResult.success, true);
+  assert.equal(readResult.slideCount, 2);
+  assert.match(readResult.slides[0].text, /经营总览/);
+  assert.match(readResult.slides[0].text, /收入/);
+  assert.match(readResult.slides[1].text, /客户案例/);
+});
+
+test('TOOLS.ppt_write should accept advanced slide content', async () => {
+  const filePath = 'tmp/tool-advanced-deck.pptx';
+  const writeResult = await TOOLS.ppt_write(
+    TEST_SESSION,
+    filePath,
+    JSON.stringify({
+      slides: [
+        {
+          title: '方案总览',
+          cards: [{ label: '转化率', value: '14.2%', change: '+2.1pp' }],
+          chart: { type: 'line', series: [{ name: '转化率', labels: ['周一', '周二'], values: [12.1, 14.2] }] },
+        },
+      ],
+    }),
+    JSON.stringify({ title: '方案演示', template: 'executive' })
+  );
+  assert.equal(writeResult.success, true);
+
+  const readResult = await TOOLS.ppt_read(TEST_SESSION, filePath);
+  assert.equal(readResult.success, true);
+  assert.equal(readResult.slideCount, 1);
+  assert.equal(readResult.slides[0].title, '方案总览');
+  assert.match(readResult.slides[0].text, /转化率/);
 });
 
 test('fileFormatHandler.writeDocx should support table/list/blank blocks', async () => {

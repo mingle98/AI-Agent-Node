@@ -66,6 +66,11 @@ const DOMAIN_PATTERNS = [
     skills: [],
   },
   {
+    test: /(ppt|pptx|powerpoint|幻灯片|演示文稿|演示稿|课件|投影片|发布会材料|路演材料|汇报材料)/i,
+    tools: ["ppt_read", "ppt_write"],
+    skills: [],
+  },
+  {
     test: /(pdf|合并pdf|导出pdf|pdf合并|pdf导出|转pdf|生成pdf)/i,
     tools: ["pdf_read", "pdf_merge", "pdf_write"],
     skills: [],

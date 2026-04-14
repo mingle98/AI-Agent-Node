@@ -3,10 +3,14 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 import PDFKit from 'pdfkit';
 import { PDFDocument } from 'pdf-lib';
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import mammoth from 'mammoth';
+const require = createRequire(import.meta.url);
+const PptxGenJS = require('pptxgenjs');
+import unzipper from 'unzipper';
 import { resolveWorkspacePath, getPublicUrlInfo } from './fileManager.js';
 import { readExcel as readExcelImpl, writeExcel as writeExcelImpl, appendToExcel as appendToExcelImpl } from './officeExcel.js';
 import { writeDocx as writeDocxImpl } from './officeWord.js';
@@ -256,6 +260,329 @@ ${htmlContent}
  */
 export async function writeDocx(filePath, sessionId, paragraphs, options = {}) {
   return writeDocxImpl(filePath, sessionId, paragraphs, options);
+}
+
+// ========== PowerPoint 文件处理 ==========
+
+function normalizePptInput(input) {
+  if (Array.isArray(input)) return input;
+  if (input && typeof input === 'object') {
+    if (Array.isArray(input.slides)) return input.slides;
+    return [input];
+  }
+  const raw = String(input || '').trim();
+  if (!raw) return [];
+  if ((raw.startsWith('[') && raw.endsWith(']')) || (raw.startsWith('{') && raw.endsWith('}'))) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.slides)) return parsed.slides;
+      if (parsed && typeof parsed === 'object') return [parsed];
+    } catch {}
+  }
+  const sections = raw.split(/\n\s*---+\s*\n/g).map((section) => section.trim()).filter(Boolean);
+  return sections.map((section, index) => {
+    const lines = section.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    const first = lines[0] || `幻灯片 ${index + 1}`;
+    const title = first.replace(/^#+\s*/, '');
+    const bulletLines = lines.slice(1).map((line) => line.replace(/^[-*]\s+/, '')).filter(Boolean);
+    return { title, bullets: bulletLines.length > 0 ? bulletLines : lines.slice(1) };
+  });
+}
+
+function normalizePptTableRows(table) {
+  if (!Array.isArray(table) || table.length === 0) return [];
+  return table.map((row) => Array.isArray(row) ? row.map((cell) => cell == null ? '' : String(cell)) : [String(row)]);
+}
+
+const PPT_TEMPLATE_PRESETS = {
+  default: {
+    background: 'F7F9FC',
+    titleColor: '1F2937',
+    bodyColor: '334155',
+    accent: '2563EB',
+    cardBg: 'FFFFFF',
+    cardTitle: '64748B',
+    cardValue: '0F172A',
+    tableBorder: '94A3B8',
+    headFontFace: 'Aptos Display',
+    bodyFontFace: 'Aptos',
+  },
+  executive: {
+    background: '0F172A',
+    titleColor: 'F8FAFC',
+    bodyColor: 'CBD5E1',
+    accent: '38BDF8',
+    cardBg: '111827',
+    cardTitle: '94A3B8',
+    cardValue: 'F8FAFC',
+    tableBorder: '334155',
+    headFontFace: 'Aptos Display',
+    bodyFontFace: 'Aptos',
+  },
+  growth: {
+    background: 'FFF7ED',
+    titleColor: '7C2D12',
+    bodyColor: '9A3412',
+    accent: 'EA580C',
+    cardBg: 'FFFFFF',
+    cardTitle: 'C2410C',
+    cardValue: '7C2D12',
+    tableBorder: 'FDBA74',
+    headFontFace: 'Aptos Display',
+    bodyFontFace: 'Aptos',
+  },
+};
+
+function getPptTheme(templateName = 'default') {
+  const template = PPT_TEMPLATE_PRESETS[templateName] || PPT_TEMPLATE_PRESETS.default;
+  return {
+    template,
+    theme: {
+      headFontFace: template.headFontFace,
+      bodyFontFace: template.bodyFontFace,
+      lang: 'zh-CN',
+    },
+  };
+}
+
+function resolvePptAssetPath(assetPath, sessionId) {
+  if (!assetPath) return null;
+  if (/^(https?:)?\/\//i.test(assetPath) || assetPath.startsWith('data:')) return assetPath;
+  return resolveWorkspacePath(assetPath, sessionId);
+}
+
+function normalizePptChartSeries(series = []) {
+  if (!Array.isArray(series)) return [];
+  return series
+    .filter((item) => item && typeof item === 'object')
+    .map((item, index) => ({
+      name: item.name || `Series ${index + 1}`,
+      labels: Array.isArray(item.labels) ? item.labels.map((label) => String(label)) : [],
+      values: Array.isArray(item.values) ? item.values.map((value) => Number(value)) : [],
+    }))
+    .filter((item) => item.labels.length > 0 && item.values.length > 0);
+}
+
+function renderPptDataCards(slide, cards = [], template) {
+  if (!Array.isArray(cards) || cards.length === 0) return false;
+  const gap = 0.22;
+  const cardCount = Math.min(cards.length, 4);
+  const totalWidth = 11.6;
+  const cardWidth = (totalWidth - gap * (cardCount - 1)) / cardCount;
+  cards.slice(0, cardCount).forEach((card, index) => {
+    const x = 0.7 + index * (cardWidth + gap);
+    slide.addShape('roundRect', {
+      x,
+      y: 1.45,
+      w: cardWidth,
+      h: 1.25,
+      rectRadius: 0.08,
+      fill: { color: template.cardBg },
+      line: { color: template.tableBorder, width: 1 },
+      shadow: { type: 'outer', color: '64748B', blur: 1, angle: 45, offset: 1, opacity: 0.18 },
+    });
+    slide.addText(String(card?.label || `指标 ${index + 1}`), {
+      x: x + 0.18,
+      y: 1.63,
+      w: cardWidth - 0.36,
+      h: 0.28,
+      fontFace: template.bodyFontFace,
+      fontSize: 10,
+      bold: true,
+      color: template.cardTitle,
+      margin: 0,
+    });
+    slide.addText(String(card?.value ?? '--'), {
+      x: x + 0.18,
+      y: 1.92,
+      w: cardWidth - 0.36,
+      h: 0.4,
+      fontFace: template.headFontFace,
+      fontSize: 20,
+      bold: true,
+      color: template.cardValue,
+      margin: 0,
+    });
+    if (card?.change || card?.meta) {
+      slide.addText(String(card.change || card.meta), {
+        x: x + 0.18,
+        y: 2.32,
+        w: cardWidth - 0.36,
+        h: 0.2,
+        fontFace: template.bodyFontFace,
+        fontSize: 9,
+        color: template.accent,
+        margin: 0,
+      });
+    }
+  });
+  return true;
+}
+
+function renderPptChart(slide, chart, template, hasCards) {
+  const series = normalizePptChartSeries(chart?.series);
+  if (series.length === 0) return false;
+  const chartType = chart?.type || 'bar';
+  const chartTitle = chart?.title || '';
+  slide.addChart(chartType, series, {
+    x: 0.7,
+    y: hasCards ? 3.0 : 1.7,
+    w: 11.6,
+    h: hasCards ? 3.7 : 4.8,
+    catAxisLabelFontFace: template.bodyFontFace,
+    catAxisLabelFontSize: 10,
+    valAxisLabelFontFace: template.bodyFontFace,
+    valAxisLabelFontSize: 10,
+    chartColors: [template.accent, '22C55E', 'F59E0B', 'A855F7'],
+    showLegend: series.length > 1,
+    showTitle: Boolean(chartTitle),
+    title: chartTitle,
+    titleFontFace: template.headFontFace,
+    titleFontSize: 14,
+    titleColor: template.titleColor,
+    showValue: Boolean(chart?.showValue),
+    showCatName: false,
+    showPercent: chartType === 'pie' || chartType === 'doughnut',
+    legendPos: 'b',
+    valGridLine: { color: 'E2E8F0', pt: 1 },
+    showCatAxisTitle: Boolean(chart?.xAxisTitle),
+    catAxisTitle: chart?.xAxisTitle,
+    showValAxisTitle: Boolean(chart?.yAxisTitle),
+    valAxisTitle: chart?.yAxisTitle,
+  });
+  return true;
+}
+
+function renderPptImage(slide, image, sessionId, hasCards, template) {
+  const pathOrData = resolvePptAssetPath(image?.path || image?.src || image?.url || image?.data, sessionId);
+  if (!pathOrData) return false;
+  const x = image?.x ?? 0.7;
+  const y = image?.y ?? (hasCards ? 3.0 : 1.7);
+  const w = image?.w ?? 11.6;
+  const h = image?.h ?? (hasCards ? 3.7 : 4.8);
+  slide.addImage({
+    ...(pathOrData.startsWith('data:') ? { data: pathOrData } : { path: pathOrData }),
+    x,
+    y,
+    w,
+    h,
+    altText: image?.alt || image?.caption || 'PPT image',
+    sizing: image?.fit ? { type: image.fit, w, h } : undefined,
+  });
+  if (image?.caption) {
+    slide.addText(String(image.caption), {
+      x,
+      y: y + h + 0.08,
+      w,
+      h: 0.28,
+      fontFace: template.bodyFontFace,
+      fontSize: 10,
+      color: template.bodyColor,
+      italic: true,
+      margin: 0,
+    });
+  }
+  return true;
+}
+
+function extractPptSlideText(xml = '') {
+  return Array.from(xml.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)).map((match) => match[1]).join('\n').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
+}
+
+export async function readPptx(filePath, sessionId) {
+  try {
+    if (!sessionId) throw new Error('需要提供 sessionId 来访问文件系统');
+    const absolutePath = resolveWorkspacePath(filePath, sessionId);
+    const buffer = await fs.readFile(absolutePath);
+    const zip = await unzipper.Open.buffer(buffer);
+    const slideEntries = zip.files.filter((file) => /^ppt\/slides\/slide\d+\.xml$/.test(file.path)).sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }));
+    const slides = [];
+    for (const entry of slideEntries) {
+      const xml = await entry.buffer();
+      const text = extractPptSlideText(xml.toString('utf8'));
+      const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      const title = lines.find((line) => /[\u4e00-\u9fa5A-Za-z0-9]/.test(line) && line.length >= 2 && line.length <= 30) || lines[0] || `Slide ${slides.length + 1}`;
+      slides.push({ index: slides.length + 1, title, text, bulletCount: Math.max(0, lines.length - 1) });
+    }
+    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+    return { success: true, filePath, url: urlInfo?.fullUrl || null, fullUrl: urlInfo?.fullUrl || null, signedPath: urlInfo?.path || null, slideCount: slides.length, slides, message: `成功读取 PowerPoint 文件，共 ${slides.length} 页幻灯片` };
+  } catch (error) {
+    return { success: false, error: error.message, filePath };
+  }
+}
+
+export async function writePptx(filePath, sessionId, content, options = {}) {
+  try {
+    if (!sessionId) throw new Error('需要提供 sessionId 来访问文件系统');
+    const { overwrite = false, title = 'Presentation', layout = 'LAYOUT_WIDE', template = 'default' } = options;
+    const absolutePath = resolveWorkspacePath(filePath, sessionId);
+    const dirPath = path.dirname(absolutePath);
+    await fs.mkdir(dirPath, { recursive: true });
+    const exists = await fs.stat(absolutePath).catch(() => null);
+    if (exists && !overwrite) throw new Error(`文件已存在: ${filePath}，如需覆盖请设置 overwrite: true`);
+    const slidesData = normalizePptInput(content);
+    const pptx = new PptxGenJS();
+    pptx.layout = layout;
+    pptx.author = 'AI-Agent-Node';
+    pptx.subject = title;
+    pptx.title = title;
+    pptx.company = 'AI-Agent-Node';
+    pptx.lang = 'zh-CN';
+    const { template: deckTemplate, theme } = getPptTheme(template);
+    pptx.theme = theme;
+    const safeSlides = slidesData.length > 0 ? slidesData : [{ title: title || '演示文稿', bullets: [] }];
+    safeSlides.forEach((slideData, index) => {
+      const slide = pptx.addSlide();
+      const activeTemplate = PPT_TEMPLATE_PRESETS[slideData?.template] || deckTemplate;
+      const titleText = slideData?.title || slideData?.heading || `幻灯片 ${index + 1}`;
+      const bullets = Array.isArray(slideData?.bullets) ? slideData.bullets : Array.isArray(slideData?.points) ? slideData.points : [];
+      const bodyText = slideData?.text || slideData?.content || '';
+      const tableRows = normalizePptTableRows(slideData?.table || slideData?.rows);
+      const cards = Array.isArray(slideData?.cards) ? slideData.cards : [];
+      const chart = slideData?.chart || null;
+      const image = slideData?.image || slideData?.heroImage || null;
+
+      slide.background = { color: activeTemplate.background };
+      slide.addText(titleText, { x: 0.5, y: 0.4, w: 12.3, h: 0.6, fontFace: activeTemplate.headFontFace, bold: true, fontSize: 24, color: activeTemplate.titleColor });
+      if (bodyText) {
+        slide.addText(String(bodyText), { x: 0.7, y: 1.02, w: 11.8, h: cards.length > 0 || chart || image || tableRows.length > 0 || bullets.length > 0 ? 0.72 : 4.8, fontFace: activeTemplate.bodyFontFace, fontSize: 16, color: activeTemplate.bodyColor, breakLine: true, margin: 0.02, valign: 'top' });
+      }
+      const hasCards = renderPptDataCards(slide, cards, activeTemplate);
+      const renderedChart = chart ? renderPptChart(slide, chart, activeTemplate, hasCards) : false;
+      const renderedImage = !renderedChart && image ? renderPptImage(slide, image, sessionId, hasCards, activeTemplate) : false;
+      if (!renderedChart && !renderedImage && tableRows.length > 0) {
+        slide.addTable(tableRows, {
+          x: 0.7,
+          y: bodyText ? 2.0 : 1.35,
+          w: 11.6,
+          h: Math.min(4.4, 0.45 * tableRows.length + 0.3),
+          border: { type: 'solid', color: activeTemplate.tableBorder, pt: 1 },
+          fill: { color: 'FFFFFF' },
+          color: activeTemplate.cardValue,
+          fontFace: activeTemplate.bodyFontFace,
+          fontSize: 14,
+          margin: 0.05,
+          autoFit: true,
+          rowH: 0.45,
+          bold: false,
+        });
+      }
+      if (bullets.length > 0) {
+        const y = tableRows.length > 0
+          ? (bodyText ? 6.0 : 5.3)
+          : ((renderedChart || renderedImage || hasCards) ? 6.2 : (bodyText ? 2.0 : 1.35));
+        slide.addText(bullets.map((item) => ({ text: String(item), options: { bullet: { indent: 18 } } })), { x: 0.9, y, w: 11.2, h: 1.0, fontFace: activeTemplate.bodyFontFace, fontSize: 18, color: activeTemplate.cardValue, breakLine: true, margin: 0.08, valign: 'top' });
+      }
+      if (slideData?.notes) slide.addNotes(String(slideData.notes));
+    });
+    await pptx.writeFile({ fileName: absolutePath });
+    const stats = await fs.stat(absolutePath);
+    const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
+    return { success: true, filePath, url: urlInfo?.fullUrl || null, fullUrl: urlInfo?.fullUrl || null, signedPath: urlInfo?.path || null, slideCount: safeSlides.length, size: stats.size, formattedSize: formatFileSize(stats.size), template, message: `PowerPoint 文件创建成功: ${filePath}\n访问地址: ${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}` };
+  } catch (error) {
+    return { success: false, error: error.message, filePath };
+  }
 }
 
 // ========== PDF 文件处理 ==========

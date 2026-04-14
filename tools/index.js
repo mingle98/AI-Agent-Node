@@ -14,7 +14,7 @@ import {
 import {
   readExcel, writeExcel, appendToExcel, readWord, writeWord,
   readWordAsHtml, readPdf, writePdf, mergePdfs, getImageInfo, writeSvg,
-  readCsv, writeCsv, readJson, writeJson, writeDocx
+  readCsv, writeCsv, readJson, writeJson, writeDocx, readPptx, writePptx
 } from './fileFormatHandler.js';
 import { parseExcelInput } from './officeExcel.js';
 import { parseWordInput } from './officeWord.js';
@@ -337,6 +337,29 @@ export const TOOL_DEFINITIONS = [
     ],
     example: 'word_write_docx("output/report.docx", "# AI 工程实践入门指南\n\n1. 统一数据管理\n2. 模型生命周期管理\n\n| 阶段 | 关键活动 |\n| --- | --- |\n| 开发 | Prompt 设计 |")',
   },
+  {
+    name: "ppt_read",
+    func: (sessionId, filePath) => readPptx(filePath, sessionId),
+    description: "读取用户 workspace 中 PowerPoint 文件的基础内容，返回幻灯片数量、标题与文本摘要",
+    params: [
+      { name: "文件路径", type: "string", example: "slides/demo.pptx" }
+    ],
+    example: 'ppt_read("slides/demo.pptx")',
+  },
+  {
+    name: "ppt_write",
+    func: (sessionId, filePath, content, options = "{}") => {
+      const parsedOptions = typeof options === 'string' ? JSON.parse(options || '{}') : (options || {});
+      return writePptx(filePath, sessionId, content, { overwrite: true, ...parsedOptions });
+    },
+    description: "创建基础 PowerPoint 演示文稿（.pptx），支持标题、正文、要点列表、基础表格页、图片页、图表/数据卡片页、简单模板主题和备注；适合汇报、提纲、演示草稿等轻量场景",
+    params: [
+      { name: "文件路径", type: "string", example: "output/demo.pptx", description: "输出 .pptx 文件路径" },
+      { name: "内容", type: "string|array|object", example: '{"slides":[{"title":"季度复盘","cards":[{"label":"收入","value":"¥142万","change":"+18%"},{"label":"续费率","value":"82%","change":"+4pp"}],"chart":{"type":"bar","title":"季度收入","series":[{"name":"收入","labels":["Q1","Q2"],"values":[120,142]}]}},{"title":"客户案例","image":{"path":"assets/case.png","caption":"重点客户上线效果图"}},{"title":"下季度重点","table":[["指标","Q1","Q2"],["收入","120","142"],["毛利率","35%","38%"]]}]}', description: "支持 slides 数组、单对象或简单分隔文本。每页支持 title、text、bullets/points、table(rows)、image、chart、cards、template、notes" },
+      { name: "选项", type: "object", example: '{"title":"业务汇报","template":"executive"}', description: "可选：title、layout、template(default/executive/growth)、overwrite", required: false }
+    ],
+    example: 'ppt_write("output/demo.pptx", "{\"slides\":[{\"title\":\"季度复盘\",\"cards\":[{\"label\":\"收入\",\"value\":\"¥142万\",\"change\":\"+18%\"}],\"chart\":{\"type\":\"bar\",\"series\":[{\"name\":\"收入\",\"labels\":[\"Q1\",\"Q2\"],\"values\":[120,142]}]}}]}", "{\"template\":\"executive\"}")',
+  },
   // ========== PDF 文件工具 ==========
   {
     name: "pdf_read",
@@ -603,7 +626,7 @@ export const TOOL_DEFINITIONS = [
     description: "创建定时任务（延迟 N 分钟后执行一次指定工具）。用户ID由系统自动注入。多步骤场景请使用 Plan 模式编排多个定时任务",
     params: [
       { name: "延迟分钟数", type: "number", example: 2, description: "延迟多少分钟后执行任务" },
-      { name: "任务类型", type: "string", example: "daily_news", options: ["daily_news", "email_send", "email_sender", "email_template", "exec_code", "script_generator", "pdf_write"], description: "要执行的任务类型，对应工具名" },
+      { name: "任务类型", type: "string", example: "daily_news", options: ["daily_news", "email_send", "email_sender", "email_template", "exec_code", "script_generator", "pdf_write", "ppt_write"], description: "要执行的任务类型，对应工具名" },
       { name: "任务参数", type: "object", example: '{"code":"console.log(1+2)","language":"javascript"}', description: "任务参数，直接传递到对应工具的各参数位置（如 email_send 需传入 to/subject/content/options）" },
       { name: "任务描述", type: "string", example: "2分钟后执行代码", description: "任务描述（可选）", required: false }
     ],

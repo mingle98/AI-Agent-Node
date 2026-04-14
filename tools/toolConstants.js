@@ -36,6 +36,10 @@ export const TOOLS_NEEDING_SESSION_ID = [
   'word_read_html',
   'word_write_docx',
   
+  // ========== PowerPoint 工具 ==========
+  'ppt_read',
+  'ppt_write',
+  
   // ========== PDF 工具 ==========
   'pdf_read',
   'pdf_write',

@@ -160,26 +160,27 @@ function buildRulesSection(options = {}) {
    - 按文件内容搜索: file_content_search(keyword, dirPath, maxResults, maxFileSize)（默认最多返回 3 条；最多扫描 30 个文本文件；单文件最大读取 256KB；单次搜索总读取上限 2MB；maxFileSize 用于进一步缩小单文件扫描上限）
    - 存储配额: file_quota()
 10. Excel操作 → 使用 excel_read/excel_write/excel_append 工具
-11. Word操作 → 使用 word_read/word_read_html 工具
-12. PDF操作 → 使用 pdf_read/pdf_merge 工具
-13. CSV/JSON → 使用 csv_read/csv_write/json_read/json_write 工具
-14. 图片操作 → 使用 image_info/svg_write 工具；压缩图片必须使用 image_compress（单张）或 image_compress_batch（批量）工具，支持 jpg/png/gif/webp/avif
-15. 压缩/解压操作 → 使用 zip_compress/zip_extract/zip_info/zip_list 工具
-16. 邮件发送 → 【优先使用 email_sender 技能】，它会自动完成信息提取、SMTP验证、模板选择、发送全流程；定时邮件请使用 schedule_task 工具
-17. 定时任务调度 → 使用 schedule_task 工具（延迟执行邮件发送、脚本执行等，支持用户隔离，只执行一次）；taskParams 为 JSON 字符串，定时邮件须含 to/subject/content
-18. 定时邮件示例：先用 daily_news 或其他工具生成内容，再用 schedule_task 定时发送邮件（多次定时任务请分开调用）
-19. 查看定时任务 → 使用 schedule_list 工具（查询当前用户的待执行/已完成任务）
-20. 取消定时任务 → 使用 schedule_cancel 工具（只能取消自己的任务）
-22. 文件操作返回的 URL 可直接访问下载（在用户专属的 workspace/{sessionId} 目录下）
-23. 如果工具结果里同时有 fullUrl、url、path、outputPath，向用户展示链接时必须优先直接使用 fullUrl；若无 fullUrl 才使用 url，严禁根据 outputPath/path/sessionId 手工拼接 /workspace/... 链接
-24. 文件路径以用户专属 workspace 为根目录，例如：file_write("docs/readme.md", "内容")
-25. 用户文件相互隔离，一个用户无法访问另一个用户的文件
-26. 复杂场景 → 使用高级技能（教学、咨询、问答、Mermaid画图、需要数据搜索和可视化、可用python_executor创建python脚本解决问题的场景）
-27. 如果问题过于复杂或没有可用的能力就优先使用python_executor技能自动创建python脚本尝试解决
-28. 优先使用技能处理综合场景，它们会自动完成多个步骤
-29. 参数要完整、准确，避免无效调用
-30. exec_code 生成 Python 代码时，f-string 要使用单花括号如 f'{variable}'，不要使用双花括号；同时避免引号冲突（如 f"{datetime.now().strftime('%Y-%m-%d')}"）；且代码在沙箱执行，禁止导入项目内部模块（如 tools、agent 等），只能用标准库
-31. 给出准确、友好、专业的回答`;
+11. Word操作 → 使用 word_read/word_read_html/word_write_docx 工具
+12. PowerPoint操作 → 使用 ppt_read/ppt_write 工具（适合基础演示稿读写，支持标题、正文、要点列表）
+13. PDF操作 → 使用 pdf_read/pdf_merge 工具
+14. CSV/JSON → 使用 csv_read/csv_write/json_read/json_write 工具
+15. 图片操作 → 使用 image_info/svg_write 工具；压缩图片必须使用 image_compress（单张）或 image_compress_batch（批量）工具，支持 jpg/png/gif/webp/avif
+16. 压缩/解压操作 → 使用 zip_compress/zip_extract/zip_info/zip_list 工具
+17. 邮件发送 → 【优先使用 email_sender 技能】，它会自动完成信息提取、SMTP验证、模板选择、发送全流程；定时邮件请使用 schedule_task 工具
+18. 定时任务调度 → 使用 schedule_task 工具（延迟执行邮件发送、脚本执行等，支持用户隔离，只执行一次）；taskParams 为 JSON 字符串，定时邮件须含 to/subject/content
+19. 定时邮件示例：先用 daily_news 或其他工具生成内容，再用 schedule_task 定时发送邮件（多次定时任务请分开调用）
+20. 查看定时任务 → 使用 schedule_list 工具（查询当前用户的待执行/已完成任务）
+21. 取消定时任务 → 使用 schedule_cancel 工具（只能取消自己的任务）
+23. 文件操作返回的 URL 可直接访问下载（在用户专属的 workspace/{sessionId} 目录下）
+24. 如果工具结果里同时有 fullUrl、url、path、outputPath，向用户展示链接时必须优先直接使用 fullUrl；若无 fullUrl 才使用 url，严禁根据 outputPath/path/sessionId 手工拼接 /workspace/... 链接
+25. 文件路径以用户专属 workspace 为根目录，例如：file_write("docs/readme.md", "内容")
+26. 用户文件相互隔离，一个用户无法访问另一个用户的文件
+27. 复杂场景 → 使用高级技能（教学、咨询、问答、Mermaid画图、需要数据搜索和可视化、可用python_executor创建python脚本解决问题的场景）
+28. 如果问题过于复杂或没有可用的能力就优先使用python_executor技能自动创建python脚本尝试解决
+29. 优先使用技能处理综合场景，它们会自动完成多个步骤
+30. 参数要完整、准确，避免无效调用
+31. exec_code 生成 Python 代码时，f-string 要使用单花括号如 f'{variable}'，不要使用双花括号；同时避免引号冲突（如 f"{datetime.now().strftime('%Y-%m-%d')}"）；且代码在沙箱执行，禁止导入项目内部模块（如 tools、agent 等），只能用标准库
+32. 给出准确、友好、专业的回答`;
 }
 
 /**
@@ -216,6 +217,8 @@ function buildExamplesSection(skillDefinitions, options = {}) {
     '- "我还剩多少存储空间?" → 用 file_quota 工具查询',
     '- "帮我创建一个叫report.txt的文件，内容是XXX" → 用 file_write 工具创建',
     '- "读取data/report.xlsx的内容" → 用 excel_read 工具读取',
+    '- "帮我生成一个季度汇报PPT" → 用 ppt_write 工具创建基础演示文稿',
+    '- "读取这个演示稿都有哪些页" → 用 ppt_read 工具提取幻灯片标题和摘要',
     '- "把这几个PDF合并成一个" → 用 pdf_merge 工具合并',
     '- "解压这个zip文件" → 用 zip_extract 工具解压',
     '- "把这几个文件打包成zip" → 用 zip_compress 工具压缩',
