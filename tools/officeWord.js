@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { Document, Paragraph, TextRun, Packer, Table, TableRow, TableCell, WidthType, AlignmentType, HeadingLevel, LevelFormat } from 'docx';
+import { marked } from 'marked';
 import { resolveWorkspacePath, getPublicUrlInfo } from './fileManager.js';
 import { formatFileSize, isPlainObject } from './officeFormatUtils.js';
 
@@ -24,7 +25,7 @@ function normalizeRun(run) {
   if (run == null) return null;
   if (typeof run === 'string' || typeof run === 'number' || typeof run === 'boolean') return new TextRun({ text: String(run), font: DOCX_DEFAULT_FONT, color: DOCX_DEFAULT_COLOR });
   if (typeof run !== 'object') return null;
-  return new TextRun({ text: run.text != null ? String(run.text) : '', bold: !!run.bold, italic: !!run.italic, underline: run.underline ? {} : undefined, size: run.fontSize ? Number(run.fontSize) * 2 : undefined, color: run.color || DOCX_DEFAULT_COLOR, font: run.font || DOCX_DEFAULT_FONT, break: run.break ? Number(run.break) : undefined });
+  return new TextRun({ text: run.text != null ? String(run.text) : '', bold: !!run.bold, italics: !!(run.italic || run.italics), underline: run.underline ? {} : undefined, size: run.fontSize ? Number(run.fontSize) * 2 : undefined, color: run.color || DOCX_DEFAULT_COLOR, font: run.font || DOCX_DEFAULT_FONT, break: run.break ? Number(run.break) : undefined });
 }
 
 function normalizeParagraphSpacing(spacing) {
@@ -85,9 +86,10 @@ function createListParagraphs(items, listType = 'bullet', level = 0) {
   const result = [];
   for (const item of Array.isArray(items) ? items : []) {
     if (item == null) continue;
-    if (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') result.push(createParagraphFromConfig({ text: String(item) }, numbering));
+    if (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') result.push(createParagraphFromConfig({ runs: parseInlineRuns(String(item)) }, numbering));
     else if (typeof item === 'object') {
-      result.push(createParagraphFromConfig(item.text != null || item.runs ? item : { ...item, text: item.text ?? '' }, numbering));
+      const normalizedItem = item.text != null || item.runs ? item : { ...item, text: item.text ?? '' };
+      result.push(createParagraphFromConfig(normalizedItem.text != null && !normalizedItem.runs ? { ...normalizedItem, runs: parseInlineRuns(String(normalizedItem.text)), text: undefined } : normalizedItem, numbering));
       if (Array.isArray(item.children) && item.children.length > 0) result.push(...createListParagraphs(item.children, item.type || listType, safeLevel + 1));
     }
   }
@@ -109,65 +111,91 @@ function buildDocxChildren(blocks) {
 }
 
 function parseInlineRuns(text) {
+  return inlineTokensToRuns(marked.lexer(String(text || ''), { gfm: true }).flatMap((token) => token.tokens || (token.type === 'paragraph' ? token.tokens || [] : [])));
+}
+
+function inlineTokensToRuns(tokens = []) {
   const runs = [];
-  const regex = /(\*\*([^*]+)\*\*)|(`([^`]+)`)/g;
-  let lastIndex = 0;
-  for (const match of text.matchAll(regex)) {
-    const index = match.index ?? 0;
-    if (index > lastIndex) runs.push({ text: text.slice(lastIndex, index) });
-    if (match[2] != null) runs.push({ text: match[2], bold: true });
-    else if (match[4] != null) runs.push({ text: match[4], font: 'Courier New' });
-    lastIndex = index + match[0].length;
-  }
-  if (lastIndex < text.length) runs.push({ text: text.slice(lastIndex) });
-  return runs.length > 0 ? runs : [{ text }];
-}
-
-function getListItemMeta(line) {
-  const ordered = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
-  if (ordered) {
-    return { type: 'ordered', level: Math.floor((ordered[1] || '').length / 2), text: ordered[3] };
-  }
-  const bullet = line.match(/^(\s*)[-*]\s+(.*)$/);
-  if (bullet) {
-    return { type: 'bullet', level: Math.floor((bullet[1] || '').length / 2), text: bullet[2] };
-  }
-  return null;
-}
-
-function normalizeListTree(items, type) {
-  const root = [];
-  const stack = [];
-  for (const item of items) {
-    const node = { text: item.text, children: [] };
-    while (stack.length > 0 && stack[stack.length - 1].level >= item.level) stack.pop();
-    if (stack.length === 0) root.push(node);
-    else stack[stack.length - 1].node.children.push(node);
-    stack.push({ level: item.level, node });
-  }
-  return { type, items: root };
-}
-
-function parseCodeFenceBlock(lines, startIndex) {
-  const firstLine = lines[startIndex].trim();
-  const language = firstLine.slice(3).trim();
-  const codeLines = [];
-  let index = startIndex + 1;
-  while (index < lines.length && !lines[index].trim().startsWith('```')) {
-    codeLines.push(lines[index]);
-    index += 1;
-  }
-  if (index < lines.length) index += 1;
-  return {
-    nextIndex: index,
-    block: {
-      text: codeLines.join('\n'),
-      font: 'Courier New',
-      spacing: { before: 120, after: 120 },
-      indent: { left: 360, right: 120 },
-      ...(language ? { keepLines: true } : {}),
-    }
+  const appendText = (value, extra = {}) => {
+    if (value == null || value === '') return;
+    const parts = String(value).split('\n');
+    parts.forEach((part, index) => {
+      if (part) runs.push({ text: part, ...extra, ...(index < parts.length - 1 ? { break: 1 } : {}) });
+      else if (index < parts.length - 1) runs.push({ text: '', break: 1, ...extra });
+    });
   };
+  for (const token of Array.isArray(tokens) ? tokens : []) {
+    if (!token) continue;
+    if (token.type === 'text' || token.type === 'escape') {
+      if (Array.isArray(token.tokens) && token.tokens.length > 0) runs.push(...inlineTokensToRuns(token.tokens));
+      else appendText(token.text || token.raw || '');
+      continue;
+    }
+    if (token.type === 'strong') {
+      inlineTokensToRuns(token.tokens).forEach((run) => runs.push({ ...run, bold: true }));
+      continue;
+    }
+    if (token.type === 'em') {
+      inlineTokensToRuns(token.tokens).forEach((run) => runs.push({ ...run, italic: true }));
+      continue;
+    }
+    if (token.type === 'codespan') {
+      appendText(token.text || '', { font: 'Courier New' });
+      continue;
+    }
+    if (token.type === 'link') {
+      const linkRuns = token.tokens?.length ? inlineTokensToRuns(token.tokens) : [{ text: token.text || token.href || '' }];
+      linkRuns.forEach((run) => runs.push({ ...run, underline: true, color: '0563C1' }));
+      continue;
+    }
+    if (token.type === 'br') {
+      runs.push({ text: '', break: 1 });
+      continue;
+    }
+    if (token.type === 'html') {
+      const stripped = String(token.raw || token.text || '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li|h[1-6])>/gi, '\n').replace(/<[^>]+>/g, '');
+      appendText(stripped);
+      continue;
+    }
+    if (Array.isArray(token.tokens) && token.tokens.length > 0) {
+      runs.push(...inlineTokensToRuns(token.tokens));
+      continue;
+    }
+    appendText(token.text || token.raw || '');
+  }
+  return runs.length > 0 ? runs : [{ text: '' }];
+}
+
+function tokensToPlainText(tokens = []) {
+  return inlineTokensToRuns(tokens).map((run) => run.text ?? '').join('');
+}
+
+function listItemsFromMarked(items = [], listType = 'bullet') {
+  return items.map((item) => {
+    const children = [];
+    const contentTokens = [];
+    for (const token of item.tokens || []) {
+      if (token.type === 'list') {
+        children.push(...listItemsFromMarked(token.items || [], token.ordered ? 'ordered' : 'bullet'));
+        continue;
+      }
+      if (token.type === 'space') continue;
+      if (token.type === 'paragraph' || token.type === 'text') {
+        if (Array.isArray(token.tokens)) contentTokens.push(...token.tokens);
+        else contentTokens.push(token);
+        continue;
+      }
+      if (token.type === 'html') {
+        contentTokens.push(token);
+        continue;
+      }
+    }
+    if (item.task) {
+      const checkbox = item.checked ? '☑ ' : '☐ ';
+      contentTokens.unshift({ type: 'text', text: checkbox, raw: checkbox });
+    }
+    return { runs: inlineTokensToRuns(contentTokens), children, type: listType };
+  });
 }
 
 function parseMarkdownTable(markdown) {
@@ -180,65 +208,56 @@ function parseMarkdownTable(markdown) {
 }
 
 function parseMarkdownToDocxBlocks(input) {
-  const lines = String(input || '').replace(/\r\n/g, '\n').split('\n');
+  const tokens = marked.lexer(String(input || ''), { gfm: true });
   const blocks = [];
-  let index = 0;
-  while (index < lines.length) {
-    const trimmed = lines[index].trim();
-    if (!trimmed) {
+  for (const token of tokens) {
+    if (!token) continue;
+    if (token.type === 'space') {
       blocks.push({ type: 'blank' });
-      index += 1;
       continue;
     }
-    if (trimmed.startsWith('```')) {
-      const codeBlock = parseCodeFenceBlock(lines, index);
-      blocks.push(codeBlock.block);
-      index = codeBlock.nextIndex;
+    if (token.type === 'heading') {
+      blocks.push({ heading: `HEADING_${Math.min(6, Math.max(1, Number(token.depth) || 1))}`, runs: inlineTokensToRuns(token.tokens || []) });
       continue;
     }
-    const headingMatch = trimmed.match(/^(#{1,6})\s+(.*)$/);
-    if (headingMatch) {
-      blocks.push({ heading: `HEADING_${headingMatch[1].length}`, text: headingMatch[2] });
-      index += 1;
+    if (token.type === 'paragraph') {
+      blocks.push({ runs: inlineTokensToRuns(token.tokens || []) });
       continue;
     }
-    if (trimmed.startsWith('>')) {
-      const quoteLines = [];
-      while (index < lines.length && lines[index].trim().startsWith('>')) {
-        quoteLines.push(lines[index].trim().replace(/^>\s?/, ''));
-        index += 1;
-      }
-      blocks.push({ runs: parseInlineRuns(quoteLines.join(' ')), indent: { left: 360 }, spacing: { before: 80, after: 120 } });
+    if (token.type === 'text') {
+      blocks.push({ runs: inlineTokensToRuns(token.tokens || [{ type: 'text', text: token.text || token.raw || '' }]) });
       continue;
     }
-    if (trimmed.startsWith('|')) {
-      const tableLines = [];
-      while (index < lines.length && lines[index].trim().startsWith('|')) tableLines.push(lines[index++].trim());
-      const parsedTable = parseMarkdownTable(tableLines.join('\n'));
-      blocks.push(parsedTable ? { type: 'table', rows: [parsedTable.headers, ...parsedTable.rows] } : { text: tableLines.join('\n') });
+    if (token.type === 'blockquote') {
+      const quoteText = (token.tokens || []).map((child) => {
+        if (child.type === 'paragraph' || child.type === 'text') return tokensToPlainText(child.tokens || [{ type: 'text', text: child.text || child.raw || '' }]);
+        if (child.type === 'space') return '';
+        return child.raw || child.text || '';
+      }).filter(Boolean).join(' ');
+      blocks.push({ runs: inlineTokensToRuns([{ type: 'text', text: quoteText, raw: quoteText }]), indent: { left: 360 }, spacing: { before: 80, after: 120 } });
       continue;
     }
-    const listMeta = getListItemMeta(lines[index]);
-    if (listMeta) {
-      const items = [];
-      const listType = listMeta.type;
-      while (index < lines.length) {
-        const meta = getListItemMeta(lines[index]);
-        if (!meta || meta.type !== listType) break;
-        items.push(meta);
-        index += 1;
-      }
-      blocks.push(normalizeListTree(items, listType === 'ordered' ? 'orderedList' : 'bulletList'));
+    if (token.type === 'code') {
+      blocks.push({ text: token.text || '', font: 'Courier New', spacing: { before: 120, after: 120 }, indent: { left: 360, right: 120 }, keepLines: true });
       continue;
     }
-    const paragraphLines = [];
-    while (index < lines.length && lines[index].trim() && !lines[index].trim().startsWith('```') && !lines[index].trim().startsWith('>') && !/^(#{1,6})\s+/.test(lines[index].trim()) && !getListItemMeta(lines[index]) && !lines[index].trim().startsWith('|')) {
-      paragraphLines.push(lines[index].trim());
-      index += 1;
+    if (token.type === 'table') {
+      const headerRow = (token.header || []).map((cell) => tokensToPlainText(cell.tokens || [{ type: 'text', text: cell.text || '' }]));
+      const bodyRows = (token.rows || []).map((row) => row.map((cell) => tokensToPlainText(cell.tokens || [{ type: 'text', text: cell.text || '' }])));
+      blocks.push({ type: 'table', rows: [headerRow, ...bodyRows] });
+      continue;
     }
-    blocks.push({ runs: parseInlineRuns(paragraphLines.join(' ')) });
+    if (token.type === 'list') {
+      blocks.push({ type: token.ordered ? 'orderedList' : 'bulletList', items: listItemsFromMarked(token.items || [], token.ordered ? 'ordered' : 'bullet') });
+      continue;
+    }
+    if (token.type === 'html') {
+      const htmlText = tokensToPlainText([{ type: 'html', raw: token.raw || token.text || '' }]);
+      if (htmlText.trim()) blocks.push({ runs: inlineTokensToRuns([{ type: 'text', text: htmlText, raw: htmlText }]) });
+      continue;
+    }
   }
-  return blocks;
+  return blocks.length > 0 ? blocks : [];
 }
 
 export function parseWordInput(input) {

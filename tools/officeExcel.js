@@ -9,6 +9,73 @@ function isExcelCellConfig(value) {
   return isPlainObject(value) && ['value','text','formula','result','richText','hyperlink','note','font','fill','border','alignment','numFmt','protection','style'].some((key) => key in value);
 }
 
+function normalizeExcelArgb(color) {
+  if (!color || typeof color !== 'string') return null;
+  const hex = color.trim().replace(/^#/, '');
+  if (/^[0-9a-fA-F]{8}$/.test(hex)) return hex.toUpperCase();
+  if (/^[0-9a-fA-F]{6}$/.test(hex)) return `FF${hex.toUpperCase()}`;
+  if (/^[0-9a-fA-F]{3}$/.test(hex)) return `FF${hex.split('').map((char) => char + char).join('').toUpperCase()}`;
+  return null;
+}
+
+function normalizeExcelColorConfig(color) {
+  if (!color) return color;
+  if (typeof color === 'string') {
+    const argb = normalizeExcelArgb(color);
+    return argb ? { argb } : color;
+  }
+  if (isPlainObject(color) && typeof color.argb === 'string') {
+    const argb = normalizeExcelArgb(color.argb);
+    return argb ? { ...color, argb } : color;
+  }
+  return color;
+}
+
+function normalizeExcelFont(font) {
+  if (!isPlainObject(font)) return font;
+  return {
+    ...font,
+    ...(font.color ? { color: normalizeExcelColorConfig(font.color) } : {}),
+  };
+}
+
+function normalizeExcelFill(fill) {
+  if (!isPlainObject(fill)) return fill;
+  const normalized = { ...fill };
+  if (normalized.fgColor) normalized.fgColor = normalizeExcelColorConfig(normalized.fgColor);
+  if (normalized.bgColor) normalized.bgColor = normalizeExcelColorConfig(normalized.bgColor);
+  return normalized;
+}
+
+function normalizeExcelBorder(border) {
+  if (!isPlainObject(border)) return border;
+  const normalizeBorderSide = (side) => {
+    if (!isPlainObject(side)) return side;
+    return {
+      ...side,
+      ...(side.color ? { color: normalizeExcelColorConfig(side.color) } : {}),
+    };
+  };
+  return {
+    ...border,
+    top: normalizeBorderSide(border.top),
+    left: normalizeBorderSide(border.left),
+    bottom: normalizeBorderSide(border.bottom),
+    right: normalizeBorderSide(border.right),
+    diagonal: normalizeBorderSide(border.diagonal),
+  };
+}
+
+function normalizeExcelStyle(style) {
+  if (!isPlainObject(style)) return style;
+  return {
+    ...style,
+    ...(style.font ? { font: normalizeExcelFont(style.font) } : {}),
+    ...(style.fill ? { fill: normalizeExcelFill(style.fill) } : {}),
+    ...(style.border ? { border: normalizeExcelBorder(style.border) } : {}),
+  };
+}
+
 function resolveExcelCellValue(value) {
   if (!isExcelCellConfig(value)) return value;
   if ('value' in value) return value.value;
@@ -24,24 +91,41 @@ function applyExcelCellConfig(cell, value) {
   if (cellValue !== undefined) cell.value = cellValue;
   if (!isExcelCellConfig(value)) return;
   if (value.numFmt) cell.numFmt = value.numFmt;
-  if (value.font) cell.font = value.font;
+  if (value.font) cell.font = normalizeExcelFont(value.font);
   if (value.alignment) cell.alignment = value.alignment;
-  if (value.fill) cell.fill = value.fill;
-  if (value.border) cell.border = value.border;
+  if (value.fill) cell.fill = normalizeExcelFill(value.fill);
+  if (value.border) cell.border = normalizeExcelBorder(value.border);
   if (value.protection) cell.protection = value.protection;
-  if (value.style && isPlainObject(value.style)) Object.assign(cell.style, value.style);
+  if (value.style && isPlainObject(value.style)) Object.assign(cell.style, normalizeExcelStyle(value.style));
   if (value.note) cell.note = value.note;
 }
 
-function addExcelRow(worksheet, rowData) {
+function addExcelRow(worksheet, rowData, rowOptions = {}) {
+  const { bold = false, fill = null } = rowOptions;
   if (Array.isArray(rowData)) {
     const row = worksheet.addRow(rowData.map(resolveExcelCellValue));
-    rowData.forEach((cellValue, index) => applyExcelCellConfig(row.getCell(index + 1), cellValue));
+    rowData.forEach((cellValue, index) => {
+      const cell = row.getCell(index + 1);
+      applyExcelCellConfig(cell, cellValue);
+      if (bold) {
+        if (!cell.font || Object.keys(cell.font).length === 0) cell.font = { bold: true };
+        else if (!cell.font.bold) cell.font = { ...normalizeExcelFont(cell.font), bold: true };
+      }
+      if (fill && (!cell.fill || Object.keys(cell.fill).length === 0)) cell.fill = normalizeExcelFill(fill);
+    });
     return row;
   }
   if (isPlainObject(rowData) && Array.isArray(rowData.cells)) {
     const row = worksheet.addRow(rowData.cells.map(resolveExcelCellValue));
-    rowData.cells.forEach((cellValue, index) => applyExcelCellConfig(row.getCell(index + 1), cellValue));
+    rowData.cells.forEach((cellValue, index) => {
+      const cell = row.getCell(index + 1);
+      applyExcelCellConfig(cell, cellValue);
+      if (bold) {
+        if (!cell.font || Object.keys(cell.font).length === 0) cell.font = { bold: true };
+        else if (!cell.font.bold) cell.font = { ...normalizeExcelFont(cell.font), bold: true };
+      }
+      if (fill && (!cell.fill || Object.keys(cell.fill).length === 0)) cell.fill = normalizeExcelFill(fill);
+    });
     if (rowData.height != null) row.height = rowData.height;
     if (rowData.hidden != null) row.hidden = !!rowData.hidden;
     if (rowData.outlineLevel != null) row.outlineLevel = rowData.outlineLevel;
@@ -51,13 +135,109 @@ function addExcelRow(worksheet, rowData) {
   return worksheet.addRow([rowData]);
 }
 
-function normalizeExcelWritePayload(data, options = {}) {
-  const normalizedData = parseExcelInput(data);
-  const base = { rows: Array.isArray(normalizedData) ? normalizedData : [], sheetName: options.sheetName || 'Sheet1', headers: options.headers || null, columns: options.columns || null, merges: options.merges || [], views: options.views || [], overwrite: options.overwrite || false, autoWidth: options.autoWidth !== false };
+function normalizeSheetPayload(sheet, options = {}) {
+  const normalizedData = parseExcelInput(sheet);
+  const base = {
+    rows: Array.isArray(normalizedData) ? normalizedData : [],
+    sheetName: options.sheetName || 'Sheet1',
+    headers: options.headers || null,
+    columns: options.columns || null,
+    merges: options.merges || [],
+    views: options.views || [],
+    overwrite: options.overwrite || false,
+    autoWidth: options.autoWidth !== false,
+  };
   if (isPlainObject(normalizedData) && !Array.isArray(normalizedData)) {
-    return { rows: Array.isArray(normalizedData.rows) ? normalizedData.rows : Array.isArray(normalizedData.data) ? normalizedData.data : [], sheetName: normalizedData.sheetName || base.sheetName, headers: normalizedData.headers || base.headers, columns: normalizedData.columns || base.columns, merges: normalizedData.merges || base.merges, views: normalizedData.views || base.views, overwrite: options.overwrite ?? normalizedData.overwrite ?? false, autoWidth: normalizedData.autoWidth ?? base.autoWidth };
+    return {
+      rows: Array.isArray(normalizedData.rows) ? normalizedData.rows : Array.isArray(normalizedData.data) ? normalizedData.data : [],
+      sheetName: normalizedData.sheetName || base.sheetName,
+      headers: normalizedData.headers || base.headers,
+      columns: normalizedData.columns || base.columns,
+      merges: normalizedData.merges || base.merges,
+      views: normalizedData.views || base.views,
+      overwrite: options.overwrite ?? normalizedData.overwrite ?? false,
+      autoWidth: normalizedData.autoWidth ?? base.autoWidth,
+    };
   }
   return base;
+}
+
+function buildDefaultSheetNames(count, baseName) {
+  const root = baseName || 'Sheet';
+  return Array.from({ length: count }, (_, index) => {
+    if (count === 1) return root === 'Sheet' ? 'Sheet1' : root;
+    if (index === 0 && root !== 'Sheet') return root;
+    return root === 'Sheet' ? `Sheet${index + 1}` : `${root}_${index + 1}`;
+  });
+}
+
+function isLegacyParallelSheetPayload(data) {
+  return isPlainObject(data)
+    && Array.isArray(data.headers)
+    && Array.isArray(data.rows)
+    && data.headers.length > 0
+    && data.rows.length > 0
+    && data.headers.length === data.rows.length
+    && data.headers.every((item) => Array.isArray(item))
+    && data.rows.every((item) => Array.isArray(item));
+}
+
+function columnIndexToName(index) {
+  let current = Number(index) + 1;
+  let result = '';
+  while (current > 0) {
+    const remainder = (current - 1) % 26;
+    result = String.fromCharCode(65 + remainder) + result;
+    current = Math.floor((current - 1) / 26);
+  }
+  return result || 'A';
+}
+
+function normalizeMergeRange(range) {
+  if (typeof range === 'string') return range.trim();
+  if (Array.isArray(range) && range.length === 4 && range.every((value) => Number.isInteger(Number(value)))) {
+    const [startRow, startCol, endRow, endCol] = range.map((value) => Number(value));
+    return `${columnIndexToName(startCol)}${startRow + 1}:${columnIndexToName(endCol)}${endRow + 1}`;
+  }
+  return null;
+}
+
+function normalizeExcelWritePayload(data, options = {}) {
+  const normalizedData = parseExcelInput(data);
+  if (Array.isArray(normalizedData) && normalizedData.length > 0 && normalizedData.every((item) => isPlainObject(item) && (item.sheetName || item.rows || item.headers || item.columns || item.merges || item.views))) {
+    return {
+      sheets: normalizedData.map((sheet, index) => normalizeSheetPayload(sheet, { ...options, sheetName: sheet.sheetName || options.sheetName || `Sheet${index + 1}` })),
+      overwrite: options.overwrite || false,
+    };
+  }
+  if (isPlainObject(normalizedData) && Array.isArray(normalizedData.sheets)) {
+    return {
+      sheets: normalizedData.sheets.map((sheet, index) => normalizeSheetPayload(sheet, { ...options, sheetName: sheet?.sheetName || options.sheetName || `Sheet${index + 1}` })),
+      overwrite: options.overwrite ?? normalizedData.overwrite ?? false,
+    };
+  }
+  if (isLegacyParallelSheetPayload(normalizedData)) {
+    const sheetCount = normalizedData.rows.length;
+    const sheetNames = Array.isArray(normalizedData.sheetNames) && normalizedData.sheetNames.length === sheetCount
+      ? normalizedData.sheetNames
+      : buildDefaultSheetNames(sheetCount, options.sheetName || normalizedData.sheetName || 'Sheet');
+    return {
+      sheets: normalizedData.rows.map((sheetRows, index) => normalizeSheetPayload({
+        sheetName: sheetNames[index],
+        headers: normalizedData.headers[index] || null,
+        rows: sheetRows,
+        columns: Array.isArray(normalizedData.columns) ? normalizedData.columns[index] || null : null,
+        merges: Array.isArray(normalizedData.merges) ? normalizedData.merges[index] || [] : [],
+        views: Array.isArray(normalizedData.views) ? normalizedData.views[index] || [] : [],
+        autoWidth: normalizedData.autoWidth,
+      }, options)),
+      overwrite: options.overwrite || false,
+    };
+  }
+  return {
+    sheets: [normalizeSheetPayload(normalizedData, options)],
+    overwrite: options.overwrite || false,
+  };
 }
 
 function applyExcelColumns(worksheet, columns) {
@@ -69,7 +249,7 @@ function applyExcelColumns(worksheet, columns) {
     if (column.width != null) nextColumn.width = Number(column.width);
     if (column.hidden != null) nextColumn.hidden = !!column.hidden;
     if (column.outlineLevel != null) nextColumn.outlineLevel = column.outlineLevel;
-    if (column.style) nextColumn.style = column.style;
+    if (column.style) nextColumn.style = normalizeExcelStyle(column.style);
     return nextColumn;
   });
 }
@@ -149,6 +329,40 @@ export function parseExcelInput(input) {
   return { rows: raw.split(/\r?\n/).filter((line) => line.trim()).map((line) => [line]) };
 }
 
+function applyHeaderRows(worksheet, headers) {
+  if (!Array.isArray(headers) || headers.length === 0) return 0;
+  const headerRows = Array.isArray(headers[0]) ? headers : [headers];
+  headerRows.forEach((headerRow) => addExcelRow(worksheet, headerRow, {
+    bold: true,
+    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } },
+  }));
+  return headerRows.length;
+}
+
+function applyWorksheetMerges(worksheet, merges) {
+  if (!Array.isArray(merges)) return 0;
+  let mergeCount = 0;
+  for (const range of merges) {
+    const normalizedRange = normalizeMergeRange(range);
+    if (!normalizedRange) continue;
+    worksheet.mergeCells(normalizedRange);
+    mergeCount += 1;
+  }
+  return mergeCount;
+}
+
+function writeSheetToWorksheet(workbook, sheetPayload, fallbackIndex) {
+  const { sheetName = `Sheet${fallbackIndex + 1}`, headers = null, columns = null, merges = [], views = [], autoWidth = true, rows = [] } = sheetPayload;
+  const worksheet = workbook.addWorksheet(sheetName);
+  applyExcelColumns(worksheet, columns);
+  if (Array.isArray(views) && views.length > 0) worksheet.views = views;
+  const headerRowCount = applyHeaderRows(worksheet, headers);
+  if (Array.isArray(rows)) rows.forEach((row) => addExcelRow(worksheet, row));
+  const mergeCount = applyWorksheetMerges(worksheet, merges);
+  if (autoWidth) autoFitExcelColumns(worksheet);
+  return { worksheet, headerRowCount, mergeCount, rowCount: Array.isArray(rows) ? rows.length : 0 };
+}
+
 export async function readExcel(filePath, sessionId, options = {}) {
   try {
     if (!sessionId) throw new Error('需要提供 sessionId 来访问文件系统');
@@ -187,7 +401,7 @@ export async function writeExcel(filePath, sessionId, data, options = {}) {
   try {
     if (!sessionId) throw new Error('需要提供 sessionId 来访问文件系统');
     const payload = normalizeExcelWritePayload(data, options);
-    const { sheetName = 'Sheet1', headers = null, columns = null, merges = [], views = [], overwrite = false, autoWidth = true, rows = [] } = payload;
+    const { sheets, overwrite = false } = payload;
     const absolutePath = resolveWorkspacePath(filePath, sessionId);
     const dirPath = path.dirname(absolutePath);
     await fs.mkdir(dirPath, { recursive: true });
@@ -196,24 +410,19 @@ export async function writeExcel(filePath, sessionId, data, options = {}) {
     const workbook = new ExcelJS.Workbook();
     workbook.created = new Date();
     workbook.modified = new Date();
-    const worksheet = workbook.addWorksheet(sheetName);
-    applyExcelColumns(worksheet, columns);
-    if (Array.isArray(views) && views.length > 0) worksheet.views = views;
-    if (headers && headers.length > 0) {
-      const headerRow = addExcelRow(worksheet, headers);
-      headerRow.eachCell((cell) => {
-        if (!cell.font || Object.keys(cell.font).length === 0) cell.font = { bold: true };
-        else if (!cell.font.bold) cell.font = { ...cell.font, bold: true };
-        if (!cell.fill || Object.keys(cell.fill).length === 0) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
-      });
-    }
-    if (Array.isArray(rows)) rows.forEach((row) => addExcelRow(worksheet, row));
-    if (Array.isArray(merges)) merges.forEach((range) => { if (typeof range === 'string' && range.trim()) worksheet.mergeCells(range.trim()); });
-    if (autoWidth) autoFitExcelColumns(worksheet);
+    let totalRows = 0;
+    let totalHeaders = 0;
+    let totalMerges = 0;
+    sheets.forEach((sheetPayload, index) => {
+      const { headerRowCount, mergeCount, rowCount } = writeSheetToWorksheet(workbook, sheetPayload, index);
+      totalRows += rowCount;
+      totalHeaders += headerRowCount;
+      totalMerges += mergeCount;
+    });
     await workbook.xlsx.writeFile(absolutePath);
     const stats = await fs.stat(absolutePath);
     const urlInfo = getPublicUrlInfo(absolutePath, sessionId);
-    return { success: true, filePath, url: urlInfo?.fullUrl || null, fullUrl: urlInfo?.fullUrl || null, signedPath: urlInfo?.path || null, sheetName, rowCount: rows.length, headerCount: headers ? headers.length : 0, mergeCount: merges.length, size: stats.size, formattedSize: formatFileSize(stats.size), message: `Excel 文件创建成功: ${filePath}\n访问地址: ${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}` };
+    return { success: true, filePath, url: urlInfo?.fullUrl || null, fullUrl: urlInfo?.fullUrl || null, signedPath: urlInfo?.path || null, sheetName: sheets[0]?.sheetName || 'Sheet1', sheetCount: sheets.length, rowCount: totalRows, headerCount: totalHeaders, mergeCount: totalMerges, size: stats.size, formattedSize: formatFileSize(stats.size), message: `Excel 文件创建成功: ${filePath}\n访问地址: ${urlInfo?.fullUrl || '不可用'}\n签名路径: ${urlInfo?.path || '不可用'}` };
   } catch (error) {
     return { success: false, error: error.message, filePath };
   }
@@ -223,7 +432,9 @@ export async function appendToExcel(filePath, sessionId, data, options = {}) {
   try {
     if (!sessionId) throw new Error('需要提供 sessionId 来访问文件系统');
     const payload = normalizeExcelWritePayload(data, options);
-    const { sheetName = null, rows = [], views = [] } = payload;
+    const { sheets } = payload;
+    if (sheets.length !== 1) throw new Error('appendToExcel 仅支持单工作表追加，请指定单个 sheet payload');
+    const { sheetName = null, rows = [], views = [] } = sheets[0];
     const absolutePath = resolveWorkspacePath(filePath, sessionId);
     const exists = await fs.stat(absolutePath).catch(() => null);
     if (!exists) return await writeExcel(filePath, sessionId, data, options);

@@ -133,6 +133,99 @@ test('fileFormatHandler.writeExcel should parse JSON-string payloads passed dire
   assert.equal(worksheet.getCell('C2').value, 128500);
 });
 
+test('fileFormatHandler.writeExcel should support multi-sheet payloads and normalize color strings', async () => {
+  const filePath = 'tmp/multi-sheet-report.xlsx';
+  const payload = {
+    sheets: [
+      {
+        sheetName: '销售漏斗',
+        headers: [
+          ['阶段总览', '阶段总览', '阶段总览', '阶段总览'],
+          ['阶段', 'UV', '转化率', '备注'],
+        ],
+        rows: [
+          [{ value: '曝光', font: { bold: true } }, { value: 120000, numFmt: '#,##0' }, null, '全渠道广告投放'],
+          [{ value: '点击', font: { bold: true } }, { value: 8400, numFmt: '#,##0' }, { value: 0.07, numFmt: '0.0%' }, '落地页优化中'],
+        ],
+        columns: [{ width: 12 }, { width: 14 }, { width: 14 }, { width: 22 }],
+        merges: ['A1:D1'],
+        autoWidth: false,
+      },
+      {
+        sheetName: '用户反馈',
+        headers: ['日期', '用户ID', '情感倾向'],
+        rows: [
+          [{ value: '2024-04-01', numFmt: 'yyyy-mm-dd' }, { value: 'U1001' }, { value: '负', font: { color: '#ff4d4f' } }],
+          [{ value: '2024-04-05', numFmt: 'yyyy-mm-dd' }, { value: 'U1002' }, { value: '正', font: { color: '#52c41a' } }],
+        ],
+        columns: [{ width: 12 }, { width: 12 }, { width: 12 }],
+        autoWidth: false,
+      },
+    ],
+  };
+
+  const writeResult = await writeExcel(filePath, TEST_SESSION, payload, { overwrite: true });
+  assert.equal(writeResult.success, true);
+  assert.equal(writeResult.sheetCount, 2);
+  assert.equal(writeResult.headerCount, 3);
+  assert.equal(writeResult.mergeCount, 1);
+
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(path.join(SESSION_ROOT, filePath));
+  assert.equal(workbook.worksheets.length, 2);
+  assert.equal(workbook.getWorksheet('销售漏斗').getCell('A1').value, '阶段总览');
+  assert.equal(workbook.getWorksheet('销售漏斗').getCell('B4').value, 8400);
+  assert.equal(workbook.getWorksheet('用户反馈').getCell('C2').font.color.argb, 'FFFF4D4F');
+  assert.equal(workbook.getWorksheet('用户反馈').getCell('C3').font.color.argb, 'FF52C41A');
+});
+
+test('fileFormatHandler.writeExcel should support legacy parallel-array multi-sheet payloads', async () => {
+  const filePath = 'tmp/legacy-parallel-multisheet.xlsx';
+  const payload = {
+    headers: [
+      ['订单ID', '客户姓名', '产品名称'],
+      ['客户ID', '客户姓名', '联系电话'],
+      ['产品ID', '产品名称', '类别'],
+    ],
+    rows: [
+      [
+        ['ORD-001', '张三', 'iPhone 15'],
+        ['ORD-002', '李四', 'MacBook Pro'],
+      ],
+      [
+        ['CUST-001', '张三', '13800138000'],
+        ['CUST-002', '李四', '13900139000'],
+      ],
+      [
+        ['PROD-001', 'iPhone 15', '手机'],
+        ['PROD-002', 'MacBook Pro', '电脑'],
+      ],
+    ],
+    columns: [
+      [{ width: 12 }, { width: 12 }, { width: 15 }],
+      [{ width: 12 }, { width: 12 }, { width: 15 }],
+      [{ width: 12 }, { width: 15 }, { width: 12 }],
+    ],
+    merges: [
+      [[0, 0, 0, 2]],
+      [[0, 0, 0, 2]],
+      [[0, 0, 0, 2]],
+    ],
+  };
+
+  const writeResult = await writeExcel(filePath, TEST_SESSION, payload, { overwrite: true, sheetName: '销售数据' });
+  assert.equal(writeResult.success, true);
+  assert.equal(writeResult.sheetCount, 3);
+  assert.equal(writeResult.mergeCount, 3);
+
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(path.join(SESSION_ROOT, filePath));
+  assert.equal(workbook.worksheets.length, 3);
+  assert.equal(workbook.getWorksheet('销售数据').getCell('A1').value, '订单ID');
+  assert.equal(workbook.getWorksheet('销售数据_2').getCell('A2').value, 'CUST-001');
+  assert.equal(workbook.getWorksheet('销售数据_3').getCell('B2').value, 'iPhone 15');
+});
+
 test('fileFormatHandler.writeDocx should parse JSON-string payloads passed directly to implementation', async () => {
   const filePath = 'tmp/direct-json-string.docx';
   const payload = JSON.stringify([
@@ -150,6 +243,30 @@ test('fileFormatHandler.writeDocx should parse JSON-string payloads passed direc
   assert.match(htmlResult.html, /<h1[^>]*>春夜观代码有感<\/h1>/i);
   assert.match(htmlResult.html, /甲辰年三月于/i);
   assert.match(htmlResult.html, /星轨盘桓未肯休/i);
+});
+
+test('fileFormatHandler.writeDocx should parse inline markdown inside list items and strip html tags', async () => {
+  const filePath = 'tmp/word-inline-markdown.docx';
+  const markdown = [
+    '1. **需求分析阶段**',
+    '   - 支持 *斜体* 与 **加粗** 样式',
+    '   - 可包含 [外部链接](https://example.com)',
+    '',
+    '<span style="background-color:#f0f8ff;padding:4px 8px;border-left:3px solid #1890ff;">仅保留引用内容（代码）</span>',
+  ].join('\n');
+
+  const result = await writeDocx(filePath, TEST_SESSION, markdown, { overwrite: true, title: 'Word Inline Markdown Test' });
+  assert.equal(result.success, true);
+
+  const htmlResult = await readWordAsHtml(filePath, TEST_SESSION);
+  assert.equal(htmlResult.success, true);
+  assert.match(htmlResult.html, /需求分析阶段/);
+  assert.match(htmlResult.html, /<strong[^>]*>需求分析阶段<\/strong>|<b[^>]*>需求分析阶段<\/b>/i);
+  assert.match(htmlResult.html, /<em[^>]*>斜体<\/em>|<i[^>]*>斜体<\/i>/i);
+  assert.match(htmlResult.html, /外部链接/);
+  assert.match(htmlResult.html, /仅保留引用内容（代码）/);
+  assert.doesNotMatch(htmlResult.html, /<span style=/i);
+  assert.doesNotMatch(htmlResult.html, /\*\*需求分析阶段\*\*/);
 });
 
 test('fileFormatHandler.writeDocx should parse markdown strings passed directly to implementation', async () => {
