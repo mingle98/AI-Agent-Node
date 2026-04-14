@@ -1,7 +1,5 @@
 node_modules
 
-private/
-
 .env
 .env.*
 !.env.example
