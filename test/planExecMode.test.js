@@ -83,7 +83,7 @@ function createAgentWithMockLLM(mockLlm, options = {}) {
     taskMode: options.taskMode || "react",
     complexityThreshold: options.complexityThreshold || 0.6,
     maxPlanSteps: options.maxPlanSteps || 10,
-    maxStepIterations: options.maxStepIterations || 3,
+    maxStepIterations: options.maxStepIterations || 5,
     ...options,
   });
 }
@@ -266,7 +266,7 @@ test("ProductionAgent: default plan_exec configuration", () => {
   assert.equal(agent.taskMode, "auto");
   assert.equal(agent.complexityThreshold, 0.5);
   assert.equal(agent.maxPlanSteps, 10);
-  assert.equal(agent.maxStepIterations, 3);
+  assert.equal(agent.maxStepIterations, 5);
 });
 
 test("ProductionAgent: withSessionLockWrapper is available for planExecMode", () => {

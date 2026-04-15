@@ -78,6 +78,33 @@ async function testWriteFile() {
   assert(mdResult.path.endsWith('.html'), '自动改为 .html 后缀');
   assert(mdResult.fullUrl && mdResult.fullUrl.endsWith('.html'), '完整 URL 指向 HTML');
   assert(mdResult.message.includes('自动转换为 HTML'), '消息提示格式转换');
+
+  // 测试显式代码文件后缀不应自动转 HTML
+  const tsContent = `/** 冒泡排序 */
+export function bubbleSort(arr: number[]): number[] {
+  const result = [...arr];
+  for (let i = 0; i < result.length - 1; i++) {
+    for (let j = 0; j < result.length - 1 - i; j++) {
+      if (result[j] > result[j + 1]) {
+        [result[j], result[j + 1]] = [result[j + 1], result[j]];
+      }
+    }
+  }
+  return result;
+}`;
+  const tsResult = await writeFile(TEST_SESSION, `${TEST_DIR}/bubbleSort.ts`, tsContent);
+  assert(tsResult.success, 'TypeScript 文件写入成功');
+  assert(!tsResult.isConverted, 'TypeScript 文件不应自动转换');
+  assert(tsResult.path.endsWith('.ts'), 'TypeScript 文件保持 .ts 后缀');
+
+  const jsContent = `/* comment */
+export function sum(a, b) {
+  return a + b;
+}`;
+  const jsResult = await writeFile(TEST_SESSION, `${TEST_DIR}/index.js`, jsContent);
+  assert(jsResult.success, 'JavaScript 文件写入成功');
+  assert(!jsResult.isConverted, 'JavaScript 文件不应自动转换');
+  assert(jsResult.path.endsWith('.js'), 'JavaScript 文件保持 .js 后缀');
 }
 
 async function testReadFile() {
@@ -261,7 +288,7 @@ async function testSmartMarkdownConversion() {
   // 测试 Markdown 特征检测（需要至少2个特征才识别为Markdown）
   const testCases = [
     { content: '# 标题\n\n**加粗**文字', shouldConvert: true, desc: '标题粗体' },
-    { content: '**粗体** 和 *斜体*', shouldConvert: true, desc: '粗体斜体' },
+    { content: '**粗体** 和 *斜体*', shouldConvert: false, desc: '粗体斜体' },
     { content: '- 列表1\n- 列表2\n\n**粗体**', shouldConvert: true, desc: '列表粗体' },
     { content: '1. 第一项\n2. 第二项\n\n> 引用', shouldConvert: true, desc: '有序列表引用' },
     { content: '> 引用文字\n\n**加粗**', shouldConvert: true, desc: '引用加粗' },

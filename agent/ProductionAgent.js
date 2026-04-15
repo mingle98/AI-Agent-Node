@@ -61,6 +61,82 @@ function emitToolEvent(callback, toolExcResult) {
   }
 }
 
+function sanitizeToolArgs(args) {
+  if (args === undefined) {
+    return {};
+  }
+  if (args === null) {
+    return {};
+  }
+  if (typeof args === "string") {
+    try {
+      const parsed = JSON.parse(args);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  if (typeof args === "object" && !Array.isArray(args)) {
+    return args;
+  }
+  return {};
+}
+
+function sanitizeAIMessageForHistory(message) {
+  if (!AIMessage.isInstance(message)) {
+    return message;
+  }
+
+  const sanitizedToolCalls = Array.isArray(message.tool_calls)
+    ? message.tool_calls
+        .filter((toolCall) => typeof toolCall?.name === "string" && toolCall.name && toolCall?.id)
+        .map((toolCall) => ({
+          id: toolCall.id,
+          name: toolCall.name,
+          args: sanitizeToolArgs(toolCall?.args),
+          type: "tool_call",
+        }))
+    : [];
+
+  const additionalKwargs = { ...(message.additional_kwargs || {}) };
+  delete additionalKwargs.tool_calls;
+
+  return new AIMessage({
+    content: message.content,
+    name: message.name,
+    id: message.id,
+    tool_calls: sanitizedToolCalls,
+    invalid_tool_calls: [],
+    additional_kwargs: additionalKwargs,
+    response_metadata: message.response_metadata,
+    usage_metadata: message.usage_metadata,
+  });
+}
+
+function isToolArgumentsJsonError(error) {
+  const message = String(error?.message || "");
+  return (
+    message.includes("function.arguments") &&
+    message.includes("JSON format")
+  ) || (
+    message.includes("InvalidParameter") &&
+    message.includes("function.arguments")
+  );
+}
+
+function buildCleanRetryMessages(messages = []) {
+  const systemMessage = messages.find((message) => message?._getType?.() === "system") || null;
+
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    if (message?._getType?.() === "human") {
+      return [systemMessage, message].filter(Boolean);
+    }
+  }
+
+  return systemMessage ? [systemMessage] : [];
+}
+
 function extractReasoningContent(chunk) {
   const raw = chunk?.additional_kwargs?.__raw_response;
   const delta = raw?.choices?.[0]?.delta;
@@ -94,7 +170,7 @@ export class ProductionAgent {
     this.vectorStore = vectorStore;
     this.embeddings = embeddings;
     this.options = options;
-    this.maxIterations = options.maxIterations || 10;
+    this.maxIterations = options.maxIterations || 20;
     this.defaultSessionId = options.defaultSessionId || "default";
     this.sessionTtlMs = options.sessionTtlMs || 30 * 60 * 1000;
     this.maxSessions = options.maxSessions || 300;
@@ -112,7 +188,7 @@ export class ProductionAgent {
     this.taskMode = options.taskMode || "auto";  // 'auto' | 'react' | 'plan_exec'
     this.complexityThreshold = options.complexityThreshold || 0.5;  // 复杂度阈值
     this.maxPlanSteps = options.maxPlanSteps || 10;  // 最大计划步骤数
-    this.maxStepIterations = options.maxStepIterations || 3;  // 每个计划步骤的最大迭代次数
+    this.maxStepIterations = options.maxStepIterations || 5;  // 每个计划步骤的最大迭代次数
 
     // ========== 长期记忆配置 ==========
     this.longTermMemoryEnabled = options.longTermMemoryEnabled !== false;  // 默认开启
@@ -555,7 +631,7 @@ export class ProductionAgent {
       console.log(`🧰 [${session?.id || "unknown"}] 本轮绑定工具/技能数量: ${tools.length}`);
     }
 
-    const invokePrimary = async () => {
+    const invokePrimary = async (targetMessages = messages) => {
       if (!this.llm?.bindTools) {
         throw new Error("LLM does not support bindTools");
       }
@@ -565,12 +641,12 @@ export class ProductionAgent {
           : this.llm;
       const model = baseLlm.bindTools(tools, { tool_choice: "auto" });
       if (streamEnabled) {
-        return withTimeout(this.collectFromStream(model, messages, onChunk, session, requestState), this.resilience.llmTimeoutMs, "LLM stream");
+        return withTimeout(this.collectFromStream(model, targetMessages, onChunk, session, requestState), this.resilience.llmTimeoutMs, "LLM stream");
       }
-      return withTimeout(this.collectFromInvoke(model, messages, session, requestState), this.resilience.llmTimeoutMs, "LLM invoke");
+      return withTimeout(this.collectFromInvoke(model, targetMessages, session, requestState), this.resilience.llmTimeoutMs, "LLM invoke");
     };
 
-    const invokeFallback = async () => {
+    const invokeFallback = async (targetMessages = messages) => {
       if (!this.fallbackLlm) {
         return { message: new AIMessage("抱歉，服务暂时繁忙，请稍后重试。"), streamedText: false };
       }
@@ -580,15 +656,42 @@ export class ProductionAgent {
       const fallbackModel = this.fallbackLlm.bindTools(tools, { tool_choice: "auto" });
       if (streamEnabled) {
         return withTimeout(
-          this.collectFromStream(fallbackModel, messages, onChunk, session, requestState),
+          this.collectFromStream(fallbackModel, targetMessages, onChunk, session, requestState),
           this.resilience.llmTimeoutMs,
           "Fallback LLM stream"
         );
       }
       return withTimeout(
-        this.collectFromInvoke(fallbackModel, messages, session, requestState),
+        this.collectFromInvoke(fallbackModel, targetMessages, session, requestState),
         this.resilience.llmTimeoutMs,
         "Fallback LLM invoke"
+      );
+    };
+
+    const tryRecoverFromBrokenContext = async (error) => {
+      if (!isToolArgumentsJsonError(error)) {
+        return null;
+      }
+
+      const cleanMessages = buildCleanRetryMessages(messages);
+      const beforeCount = Array.isArray(messages) ? messages.length : 0;
+      const afterCount = Array.isArray(cleanMessages) ? cleanMessages.length : 0;
+      if (afterCount === 0 || afterCount === beforeCount) {
+        console.warn(`🧹 [${session?.id || "unknown"}] 检测到工具参数 JSON 上下文污染，但无法有效收缩上下文（清理前: ${beforeCount}，清理后: ${afterCount}）`);
+        return null;
+      }
+
+      console.warn(`🧹 [${session?.id || "unknown"}] 检测到工具参数 JSON 上下文污染，已清理历史上下文并重试当前请求（清理前: ${beforeCount}，清理后: ${afterCount}）`);
+      session.messages = cleanMessages;
+      this.messages = session.messages;
+      this.touchSession(session);
+
+      return retryWithBackoff(
+        () => invokePrimary(cleanMessages),
+        {
+          maxAttempts: 1,
+          baseDelayMs: this.resilience.retryBaseDelayMs,
+        }
       );
     };
 
@@ -597,13 +700,23 @@ export class ProductionAgent {
     }
 
     try {
-      const result = await retryWithBackoff(invokePrimary, {
+      const result = await retryWithBackoff(() => invokePrimary(messages), {
         maxAttempts: this.resilience.llmRetries,
         baseDelayMs: this.resilience.retryBaseDelayMs,
       });
       session.llmBreaker.recordSuccess();
       return result;
     } catch (error) {
+      const recoveredResult = await tryRecoverFromBrokenContext(error).catch((recoveryError) => {
+        console.error(`  ❌ LLM 上下文清理后重试失败: ${recoveryError.message}`);
+        return null;
+      });
+
+      if (recoveredResult) {
+        session.llmBreaker.recordSuccess();
+        return recoveredResult;
+      }
+
       session.llmBreaker.recordFailure();
       console.error(`  ❌ LLM 调用失败（主链路）: ${error.message}`);
       return invokeFallback();
@@ -886,9 +999,10 @@ export class ProductionAgent {
 
           this.ensureRequestActive(session, requestState, sessionId);
 
-          const toolCalls = aiResponse.tool_calls || [];
+          const normalizedAiResponse = sanitizeAIMessageForHistory(aiResponse);
+          const toolCalls = normalizedAiResponse.tool_calls || [];
 
-          const aiText = normalizeTextContent(aiResponse.content);
+          const aiText = normalizeTextContent(normalizedAiResponse.content);
 
           if (toolCalls.length === 0) {
             const shouldExpandCapabilities =
@@ -906,7 +1020,7 @@ export class ProductionAgent {
               continue;
             }
 
-            session.messages.push(aiResponse);
+            session.messages.push(normalizedAiResponse);
             if (streamEnabled) {
               if (!streamedText) {
                 emitStreamEvent(chunkCallback, { type: "chunk", content: aiText });
@@ -934,7 +1048,7 @@ export class ProductionAgent {
           // 工具调用前检查 abort
           this.ensureRequestActive(session, requestState, sessionId);
 
-          session.messages.push(aiResponse);
+          session.messages.push(normalizedAiResponse);
 
           if (streamEnabled) {
             emitStreamEvent(chunkCallback, { type: "status", content: getToolDivBox('⌛️ 【TOOL】正在调用工具/技能...', 'start') });

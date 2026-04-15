@@ -30,6 +30,10 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const MAX_FILES_IN_DIR = 1000; // 单个目录最大文件数
 const MAX_FILES_PER_USER = 100; // 每个用户最多文件数
 const FILE_NAME_PATTERN = /^[a-zA-Z0-9_\-\.\u4e00-\u9fa5]+$/; // 支持中英文、数字、下划线、连字符、点
+const NON_AUTO_FORMAT_EXTENSIONS = new Set([
+  'js', 'ts', 'jsx', 'tsx', 'py', 'java', 'c', 'cpp', 'h', 'hpp', 'cs', 'go', 'rs', 'rb', 'php', 'swift', 'kt',
+  'html', 'htm', 'css', 'scss', 'sass', 'less', 'json', 'xml', 'yaml', 'yml', 'sql', 'csv', 'log', 'sh', 'bash', 'zsh'
+]);
 
 // 有效的 session ID 格式（字母、数字、连字符、下划线）
 const SESSION_ID_PATTERN = /^[a-zA-Z0-9_\-]+$/;
@@ -567,16 +571,15 @@ function isMarkdownContent(content) {
   const markdownPatterns = [
     /^#{1,6}\s+/m,           // 标题
     /\*\*.*?\*\*/,           // 粗体
-    /\*.*?\*/,               // 斜体
     /`{3}.*?`{3}/s,          // 代码块
     /`[^`]+`/,               // 行内代码
-    /^\-|\*\s+/m,           // 列表
+    /^(?:-|\*)\s+/m,        // 无序列表
     /^\d+\.\s+/m,           // 有序列表
-    /^\>\s+/m,              // 引用
+    /^>\s+/m,                // 引用
     /\[.*?\]\(.*?\)/,       // 链接
     /!\[.*?\]\(.*?\)/,      // 图片
-    /~~.*?~~/,              // 删除线
-    /^---+/m,               // 分割线
+    /~~.*?~~/,               // 删除线
+    /^---+$/m,               // 分割线
   ];
   
   // 至少匹配 2 个特征才认为是 Markdown
@@ -609,13 +612,15 @@ export async function writeFile(sessionId, filePath, content, options = {}) {
     }
     
     const { overwrite = false, encoding = 'utf-8', autoFormat = true } = options;
+    const fileExt = path.extname(filePath).toLowerCase().slice(1);
+    const shouldSkipAutoFormat = NON_AUTO_FORMAT_EXTENSIONS.has(fileExt);
     
     // 智能格式检测：如果是 Markdown 内容且目标不是 .md/.html，自动转 HTML
     let finalPath = filePath;
     let finalContent = content;
     let isConverted = false;
     
-    if (autoFormat && typeof content === 'string' && !filePath.endsWith('.md') && !filePath.endsWith('.html')) {
+    if (autoFormat && !shouldSkipAutoFormat && typeof content === 'string' && !filePath.endsWith('.md') && !filePath.endsWith('.html')) {
       if (isMarkdownContent(content)) {
         // 将目标路径改为 .html
         const baseName = path.basename(filePath, path.extname(filePath));
