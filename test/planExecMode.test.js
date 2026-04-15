@@ -266,7 +266,7 @@ test("ProductionAgent: default plan_exec configuration", () => {
   assert.equal(agent.taskMode, "auto");
   assert.equal(agent.complexityThreshold, 0.5);
   assert.equal(agent.maxPlanSteps, 10);
-  assert.equal(agent.maxStepIterations, 3);
+  assert.equal(agent.maxStepIterations, 5);
 });
 
 test("ProductionAgent: withSessionLockWrapper is available for planExecMode", () => {
