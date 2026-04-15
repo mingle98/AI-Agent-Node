@@ -28,12 +28,16 @@ class MockLLM {
   constructor(script = []) {
     this.script = [...script];
     this.lastBoundTools = [];
+    this.boundToolsHistory = [];
+    this.calls = [];
   }
 
   bindTools(tools = []) {
     this.lastBoundTools = tools;
+    this.boundToolsHistory.push(tools);
     return {
-      stream: async function* () {
+      stream: async function* (messages) {
+        this.calls.push({ mode: "stream", messages });
         const next = this.script.shift() || {};
         if (next.error) {
           throw next.error;
@@ -49,6 +53,20 @@ class MockLLM {
           return;
         }
         yield new AIMessage({ content: "" });
+      }.bind(this),
+      invoke: async function (messages) {
+        this.calls.push({ mode: "invoke", messages });
+        const next = this.script.shift() || {};
+        if (next.error) {
+          throw next.error;
+        }
+        if (next.message) {
+          return next.message;
+        }
+        if (Array.isArray(next.chunks) && next.chunks.length > 0) {
+          return next.chunks[next.chunks.length - 1];
+        }
+        return new AIMessage({ content: "" });
       }.bind(this),
     };
   }
@@ -395,6 +413,149 @@ test("ProductionAgent.invokeLLMWithResilience: should handle LLM errors with fal
   assert.ok(message.content.includes("fallback") || message.content === "fallback response");
 });
 
+test("ProductionAgent.chat: should sanitize dirty tool_calls before saving to history", async () => {
+  const aiTool = new AIMessage({ content: "" });
+  aiTool.tool_calls = [
+    { name: "render_mermaid", id: "dirty-1", args: '{"arg1":"sequence","arg2":"A-->B"}' },
+    { name: "render_mermaid", id: "dirty-2", args: null },
+    { name: "render_mermaid", id: "dirty-3", args: ["bad"] },
+    { name: "", id: "dirty-4", args: { arg1: "sequence" } },
+    { name: "render_mermaid", args: { arg1: "sequence" } },
+  ];
+  aiTool.additional_kwargs = {
+    tool_calls: [
+      {
+        id: "raw-bad-1",
+        function: {
+          name: "render_mermaid",
+          arguments: '{not-json}',
+        },
+      },
+    ],
+  };
+
+  const aiFinal = new AIMessage({ content: "ok" });
+  const llm = new MockLLM([{ chunks: [aiTool] }, { chunks: [aiFinal] }]);
+  const agent = createAgentWithMockLLM(llm);
+
+  const result = await agent.chat("draw", () => {}, null, "sanitize-history-test");
+  assert.equal(result, "ok");
+
+  const session = agent.getOrCreateSession("sanitize-history-test");
+  const aiMessages = session.messages.filter((m) => m._getType?.() === "ai");
+  const sanitized = aiMessages.find((m) => Array.isArray(m.tool_calls) && m.tool_calls.length > 0);
+
+  assert.ok(sanitized, "should preserve sanitized tool call message in history");
+  assert.equal(sanitized.tool_calls.length, 3);
+  assert.deepEqual(sanitized.tool_calls.map((call) => call.id), ["dirty-1", "dirty-2", "dirty-3"]);
+  assert.deepEqual(sanitized.tool_calls[0].args, { arg1: "sequence", arg2: "A-->B" });
+  assert.deepEqual(sanitized.tool_calls[1].args, {});
+  assert.deepEqual(sanitized.tool_calls[2].args, {});
+  assert.equal(sanitized.additional_kwargs?.tool_calls, undefined);
+});
+
+test("ProductionAgent.invokeLLMWithResilience: should reset broken context and retry once", async () => {
+  const recoveryError = new Error('InternalError.Algo.InvalidParameter: The "function.arguments" parameter of the code model must be in JSON format.');
+  const llm = new MockLLM([
+    { error: recoveryError },
+    { message: new AIMessage({ content: "recovered response" }) },
+  ]);
+  const agent = createAgentWithMockLLM(llm, {
+    llmRetries: 1,
+    fallbackLlm: null,
+  });
+
+  const session = agent.getOrCreateSession("recover-once-test");
+  const system = new SystemMessage("system prompt");
+  const earlierHuman = new HumanMessage("old question");
+  const badAi = new AIMessage({ content: "bad tool call" });
+  const latestHuman = new HumanMessage("latest question");
+  session.messages = [system, earlierHuman, badAi, latestHuman];
+
+  const result = await agent.invokeLLMWithResilience(session, session.messages, {
+    streamEnabled: false,
+  });
+
+  assert.equal(result.message.content, "recovered response");
+  assert.equal(llm.calls.length, 2);
+  assert.equal(llm.calls[0].messages.length, 4);
+  assert.equal(llm.calls[1].messages.length, 2);
+  assert.equal(llm.calls[1].messages[0]._getType(), "system");
+  assert.equal(llm.calls[1].messages[1]._getType(), "human");
+  assert.equal(llm.calls[1].messages[1].content, "latest question");
+  assert.equal(session.messages.length, 2);
+  assert.equal(session.messages[0]._getType(), "system");
+  assert.equal(session.messages[1]._getType(), "human");
+});
+
+test("ProductionAgent.invokeLLMWithResilience: should preserve memory block after broken context reset", async () => {
+  const recoveryError = new Error('InternalError.Algo.InvalidParameter: The "function.arguments" parameter of the code model must be in JSON format.');
+  const llm = new MockLLM([
+    { error: recoveryError },
+    { message: new AIMessage({ content: "memory kept" }) },
+  ]);
+  const agent = createAgentWithMockLLM(llm, {
+    llmRetries: 1,
+    fallbackLlm: null,
+  });
+
+  const session = agent.getOrCreateSession("recover-memory-test");
+  const memoryBlock = `${LTM_INJECT_START}\n## 用户记忆\n- 偏好 Mermaid 图\n${LTM_INJECT_END}`;
+  const system = new SystemMessage(`system prompt\n${memoryBlock}`);
+  session.messages = [
+    system,
+    new HumanMessage("old question"),
+    new AIMessage({ content: "broken ai" }),
+    new HumanMessage("latest question"),
+  ];
+
+  const result = await agent.invokeLLMWithResilience(session, session.messages, {
+    streamEnabled: false,
+  });
+
+  assert.equal(result.message.content, "memory kept");
+  assert.equal(session.messages.length, 2);
+  const rebuiltSystem = String(session.messages[0].content);
+  assert.match(rebuiltSystem, new RegExp(LTM_INJECT_START));
+  assert.match(rebuiltSystem, /偏好 Mermaid 图/);
+  assert.match(rebuiltSystem, new RegExp(LTM_INJECT_END));
+  assert.equal(session.messages[1].content, "latest question");
+});
+
+test("ProductionAgent.invokeLLMWithResilience: should preserve capability tool binding after broken context reset", async () => {
+  const recoveryError = new Error('InternalError.Algo.InvalidParameter: The "function.arguments" parameter of the code model must be in JSON format.');
+  const llm = new MockLLM([
+    { error: recoveryError },
+    { message: new AIMessage({ content: "capability kept" }) },
+  ]);
+  const agent = createAgentWithMockLLM(llm, {
+    llmRetries: 1,
+    fallbackLlm: null,
+  });
+
+  const session = agent.getOrCreateSession("recover-capability-test");
+  session.activeCapabilityNames = ["render_mermaid", "search_knowledge"];
+  session.messages = [
+    new SystemMessage("system prompt"),
+    new HumanMessage("old question"),
+    new AIMessage({ content: "broken ai" }),
+    new HumanMessage("latest question"),
+  ];
+
+  const result = await agent.invokeLLMWithResilience(session, session.messages, {
+    streamEnabled: false,
+  });
+
+  assert.equal(result.message.content, "capability kept");
+  assert.equal(llm.calls.length, 2);
+  assert.equal(llm.boundToolsHistory.length, 2);
+  const firstBoundNames = llm.boundToolsHistory[0].map((tool) => tool.function?.name).filter(Boolean).sort();
+  const secondBoundNames = llm.boundToolsHistory[1].map((tool) => tool.function?.name).filter(Boolean).sort();
+  assert.deepEqual(firstBoundNames, ["render_mermaid", "search_knowledge"]);
+  assert.deepEqual(secondBoundNames, ["render_mermaid", "search_knowledge"]);
+  assert.deepEqual(session.activeCapabilityNames, ["render_mermaid", "search_knowledge"]);
+});
+
 test("ProductionAgent.executeCallableWithResilience: should execute tool with timeout", async () => {
   const llm = new MockLLM([]);
   const agent = createAgentWithMockLLM(llm, { toolTimeoutMs: 5000 });
@@ -488,7 +649,7 @@ test("ProductionAgent: constructor should set default options", () => {
   const llm = new MockLLM([]);
   const agent = new ProductionAgent(llm, null, null);
 
-  assert.equal(agent.maxIterations, 10);
+  assert.equal(agent.maxIterations, 20);
   assert.equal(agent.defaultSessionId, "default");
   assert.equal(agent.multimodalEnabled, true);
   assert.equal(agent.capabilityRoutingEnabled, false);
