@@ -14,6 +14,42 @@ import { getToolDivBox } from "../utils/streamRenderer.js";
 import { LongTermMemory, LTM_INJECT_START, LTM_INJECT_END } from "./longTermMemory.js";
 import { selectActiveCapabilities, expandCapabilitiesToAll } from "./capabilityRouter.js";
 
+const DOMAIN_KNOWLEDGE_PREFLIGHTS = [
+  {
+    test: /(文件|目录|文件夹|workspace|读取文件|读文件|写入文件|写文件|重命名|删除文件|复制文件|移动文件|列目录|路径|搜索文件内容|内容搜索|全文搜索|关键词搜索|查找文本|搜索文本|file\s*list|file\s*read|\bls\b|\bcat\b)/i,
+    guidance: "当前请求属于【文件/workspace 操作】场景。在调用 file_ 系列工具前，先用 search_knowledge 检索相关 SOP / boundaries（如 workspace_file_operations_playbook、uploaded_file_processing_sop、file_handling_boundaries），确认是否需要先澄清路径、是否应保留原件、是否存在覆盖/删除/配额风险。"
+  },
+  {
+    test: /(excel|xlsx|xls|\bword\b|docx|\bdoc\b|pdf|ppt|pptx|office|表格|文档|演示稿|幻灯片)/i,
+    guidance: "当前请求属于【Office / 文档处理】场景。在调用 Office 相关工具前，先用 search_knowledge 检索 support matrix / playbook / fallbacks（如 office_file_support_matrix、office_task_playbook、document_templates_and_fallbacks），确认支持边界、推荐交付格式和是否需要降级。"
+  },
+  {
+    test: /(分析数据|统计|转化率|加权|脚本|python|pandas|numpy|matplotlib|回归分析|预测|建模|批处理|自动化脚本|数据处理|数据清洗)/i,
+    guidance: "当前请求属于【Python 数据分析 / 执行】场景。在调用 python_executor、script_generator 或 exec_code 前，先用 search_knowledge 检索相关 guardrails（如 python_execution_guardrails、data_analysis_task_patterns），确认是否只应使用标准库、是否需要补齐输入、是否应降级为非执行型方案。"
+  },
+  {
+    test: /(流程图|时序图|类图|状态图|架构图|泳道图|甘特图|思维导图|脑图|ER图|实体关系图|mermaid|diagram|graph|图示|示意图|关系图|画图|画个图|梳理流程|流程梳理|图表|可视化|走势|趋势|echarts|柱状图|折线图|饼图|散点图|雷达图|面积图|仪表盘|热力图|k线|数据看板|dashboard|bi|kpi|同比|环比)/i,
+    guidance: "当前请求属于【图表 / Mermaid / 可视化】场景。在生成图或 option 前，先用 search_knowledge 检索相关 guide（如 visualization_support_matrix、chart_type_decision_guide、mermaid_business_patterns），确认应该选哪类图、哪些能力有边界、是否需要先澄清目标。"
+  },
+  {
+    test: /(报错|异常|debug|调试|故障|排查|修复|错误|报bug|bug|崩溃|卡死|traceback|stack\s*trace|堆栈|报异常|review|code\s*review|代码审查|代码走查|代码质量|优化建议|性能问题|安全问题|重构建议|最佳实践|可维护性|技术债)/i,
+    guidance: "当前请求属于【调试 / 代码审查】场景。在直接下结论或给修复方案前，先用 search_knowledge 检索相关 playbook（如 debugging_playbook、code_review_checklist），确认排查顺序、问题分级和哪些信息还需要先向用户补齐。"
+  },
+  {
+    test: /(邮件|邮箱|发送|发信|mail|smtp|定时|schedule|通知|提醒|群发|定时任务|延时发送|邮件模板|报告投递)/i,
+    guidance: "当前请求属于【邮件 / 通知 / 报告投递】场景。在调用 email_sender、email_send 或 schedule_task 前，先用 search_knowledge 检索相关手册（如 email_scenarios_playbook、notification_and_report_delivery_guide），确认这是写邮件、发邮件、定时发还是带附件发，并检查是否缺少收件人、主题、附件路径或场景类型。"
+  }
+];
+
+function buildDomainKnowledgeGuidance(userInput = "") {
+  const text = typeof userInput === "string" ? userInput : String(userInput || "");
+  const matched = DOMAIN_KNOWLEDGE_PREFLIGHTS.filter((item) => item.test.test(text)).map((item) => item.guidance);
+  if (!matched.length) {
+    return "";
+  }
+  return `\n\n【领域知识库前置提醒】\n${matched.map((item, idx) => `${idx + 1}. ${item}`).join("\n")}`;
+}
+
 // ========== 会话中止错误类 ==========
 export class AbortError extends Error {
   constructor(message = "Session aborted by client") {
@@ -332,7 +368,7 @@ export class ProductionAgent {
     });
   }
 
-  buildSystemPromptForCapabilities(capabilitySelection) {
+  buildSystemPromptForCapabilities(capabilitySelection, userInput = "") {
     const toolNames = capabilitySelection?.toolNames || [];
     const skillNames = capabilitySelection?.skillNames || [];
 
@@ -342,14 +378,17 @@ export class ProductionAgent {
     const activeTools = TOOL_DEFINITIONS.filter((d) => toolSet.has(d.name));
     const activeSkills = SKILL_DEFINITIONS.filter((d) => skillSet.has(d.name));
 
-    return buildSystemPrompt(activeTools, activeSkills, {
+    const basePrompt = buildSystemPrompt(activeTools, activeSkills, {
       roleName: this.options.roleName || "智能问答助手",
       roleDescription: this.options.roleDescription || "可以帮助用户解决问题",
       compact: this.compactSystemPrompt,
     });
+
+    const domainKnowledgeGuidance = buildDomainKnowledgeGuidance(userInput);
+    return domainKnowledgeGuidance ? `${basePrompt}${domainKnowledgeGuidance}` : basePrompt;
   }
 
-  applyCapabilitySelectionToSession(session, capabilitySelection) {
+  applyCapabilitySelectionToSession(session, capabilitySelection, userInput = "") {
     const selected = capabilitySelection || expandCapabilitiesToAll(TOOL_DEFINITIONS, SKILL_DEFINITIONS);
     session.activeCapabilities = selected;
     session.activeCapabilityNames = selected.capabilityNames || [];
@@ -360,7 +399,7 @@ export class ProductionAgent {
       : String(firstSystemMessage?.content || "");
     const existingMemoryBlock = extractMemoryBlock(previousPrompt);
 
-    const rebuiltPrompt = this.buildSystemPromptForCapabilities(selected);
+    const rebuiltPrompt = this.buildSystemPromptForCapabilities(selected, userInput);
     session.activeSystemPrompt = existingMemoryBlock
       ? `${rebuiltPrompt}\n${existingMemoryBlock}`
       : rebuiltPrompt;
@@ -918,7 +957,7 @@ export class ProductionAgent {
 
     if (this.capabilityRoutingEnabled) {
       const capabilitySelection = this.resolveCapabilitySelection(userInput);
-      this.applyCapabilitySelectionToSession(session, capabilitySelection);
+      this.applyCapabilitySelectionToSession(session, capabilitySelection, userInput);
     }
 
     const taskMode = await selectTaskMode(this, userInput, requestOptions, sessionHistory);
@@ -966,7 +1005,7 @@ export class ProductionAgent {
 
     if (this.capabilityRoutingEnabled && (!session.activeCapabilityNames || session.activeCapabilityNames.length === 0)) {
       const capabilitySelection = this.resolveCapabilitySelection(userInput);
-      this.applyCapabilitySelectionToSession(session, capabilitySelection);
+      this.applyCapabilitySelectionToSession(session, capabilitySelection, userInput);
     }
 
     if (this.options.debug) {
@@ -1034,7 +1073,7 @@ export class ProductionAgent {
 
             if (shouldExpandCapabilities) {
               const expanded = expandCapabilitiesToAll(TOOL_DEFINITIONS, SKILL_DEFINITIONS);
-              this.applyCapabilitySelectionToSession(session, expanded);
+              this.applyCapabilitySelectionToSession(session, expanded, userInput);
               if (this.options.debug) {
                 console.log(`🔁 [${sessionId}] 首轮无输出，扩展为全量能力后重试`);
               }

@@ -125,25 +125,28 @@ function buildRulesSection(options = {}) {
   if (compact) {
     return `📋 使用规则：
 1. 优先选择最匹配用户意图的工具或技能，避免无关调用
-2. 知识查询优先 search_knowledge；代码相关优先 analyze_code / code_review / debug_assistant
-3. 图表与流程梳理优先 mermaid_diagram 或 ai_agent_echart，必要时再调用 render_mermaid
-4. 文件、Office、压缩、图片、邮件等场景使用对应专用工具
-5. 涉及执行脚本可使用 exec_code 或 python_executor
-6. 文件操作遵循 sessionId 隔离；路径以用户 workspace 为根目录
-7. 参数要完整准确；失败时给出可执行修复建议
-8. 回答需准确、友好、专业`;
+2. 对文件操作、Office处理、Python执行、图表生成、调试/代码审查、邮件发送这类高风险或多步骤场景，必须先用 search_knowledge 检索相关 SOP/guardrails/support matrix，再决定是否调用执行型工具
+3. 知识查询优先 search_knowledge；代码相关优先 analyze_code / code_review / debug_assistant
+4. 图表与流程梳理优先 mermaid_diagram 或 ai_agent_echart，必要时再调用 render_mermaid
+5. 文件、Office、压缩、图片、邮件等场景使用对应专用工具，但在执行前先参考相关知识库并确认边界/澄清点
+6. 涉及执行脚本可使用 exec_code 或 python_executor，但生成或执行 Python 前必须先参考相关 guardrails，优先确认是否只用标准库、是否需要补齐输入
+7. 文件操作遵循 sessionId 隔离；路径以用户 workspace 为根目录
+8. 参数要完整准确；如果知识库提示需要澄清，就先追问，不要直接执行
+9. 回答需准确、友好、专业`;
   }
 
   return `📋 使用规则：
-1. 知识查询 → 使用 search_knowledge 工具（AI Agent资料、组件文档）
-2. 代码分析 → 使用 analyze_code 工具（解释逻辑、问题排查）
-3. 文档生成 → 使用 generate_document 工具（API文档、教程、README）
-4. 图表分析讲解 → 使用 analyze_chart 工具（Mermaid/ECharts 源码或配置解析、要点与总结）
-5. 数据搜索或可视化 → 使用ai_agent_echart技能(数据搜索和可视化)
-6. 画图/梳理逻辑/流程/时序/类关系/架构图 → 必须先使用 mermaid_diagram 技能（用户不需要提 Mermaid，直接描述需求即可）
-7. 图表场景禁止首轮直接调用 render_mermaid；只能在 mermaid_diagram 技能返回绘图指令后再调用 render_mermaid
-8. 执行代码/数据转换/算法验证 → 使用 exec_code 工具（沙箱执行 JS/TS/Python）
-9. 文件管理操作 → 使用 file_ 系列工具：
+1. 知识查询 → 使用 search_knowledge 工具（AI Agent资料、组件文档，以及文件/Office/Python/图表/调试/邮件等场景的 SOP、guardrails、support matrix）
+2. 对以下高风险或多步骤场景，不要直接调用执行型工具，必须先用 search_knowledge 检索相关知识库，再根据检索结果决定是否执行：文件操作、Office处理、Python脚本生成与执行、图表/Mermaid生成、调试/代码审查、邮件发送/通知/报告投递
+3. 如果知识库提示该场景需要先澄清路径、输入、附件、格式、边界或保留原件，就必须先追问，不要直接执行
+4. 代码分析 → 使用 analyze_code 工具（解释逻辑、问题排查）
+5. 文档生成 → 使用 generate_document 工具（API文档、教程、README）
+6. 图表分析讲解 → 使用 analyze_chart 工具（Mermaid/ECharts 源码或配置解析、要点与总结）
+7. 数据搜索或可视化 → 使用ai_agent_echart技能(数据搜索和可视化)
+8. 画图/梳理逻辑/流程/时序/类关系/架构图 → 必须先使用 mermaid_diagram 技能（用户不需要提 Mermaid，直接描述需求即可）
+9. 图表场景禁止首轮直接调用 render_mermaid；只能在 mermaid_diagram 技能返回绘图指令后再调用 render_mermaid
+10. 执行代码/数据转换/算法验证 → 使用 exec_code 工具（沙箱执行 JS/TS/Python）
+11. 文件管理操作 → 使用 file_ 系列工具：
    【重要】每个用户拥有独立的文件空间，基于 sessionId 隔离，无法访问其他用户的文件
    - 查看目录: file_list(path, recursive)
    - 读取文件: file_read(path, maxSize)
@@ -159,28 +162,28 @@ function buildRulesSection(options = {}) {
    - 按文件名搜索: file_search(keyword, dirPath)
    - 按文件内容搜索: file_content_search(keyword, dirPath, maxResults, maxFileSize)（默认最多返回 3 条；最多扫描 30 个文本文件；单文件最大读取 256KB；单次搜索总读取上限 2MB；maxFileSize 用于进一步缩小单文件扫描上限）
    - 存储配额: file_quota()
-10. Excel操作 → 使用 excel_read/excel_write/excel_append 工具
-11. Word操作 → 使用 word_read/word_read_html/word_write_docx 工具
-12. PowerPoint操作 → 使用 ppt_read/ppt_write 工具（适合基础演示稿读写，支持标题、正文、要点列表）
-13. PDF操作 → 使用 pdf_read/pdf_merge 工具
-14. CSV/JSON → 使用 csv_read/csv_write/json_read/json_write 工具
-15. 图片操作 → 使用 image_info/svg_write 工具；压缩图片必须使用 image_compress（单张）或 image_compress_batch（批量）工具，支持 jpg/png/gif/webp/avif
-16. 压缩/解压操作 → 使用 zip_compress/zip_extract/zip_info/zip_list 工具
-17. 邮件发送 → 【优先使用 email_sender 技能】，它会自动完成信息提取、SMTP验证、模板选择、发送全流程；定时邮件请使用 schedule_task 工具
-18. 定时任务调度 → 使用 schedule_task 工具（延迟执行邮件发送、脚本执行等，支持用户隔离，只执行一次）；taskParams 为 JSON 字符串，定时邮件须含 to/subject/content
-19. 定时邮件示例：先用 daily_news 或其他工具生成内容，再用 schedule_task 定时发送邮件（多次定时任务请分开调用）
-20. 查看定时任务 → 使用 schedule_list 工具（查询当前用户的待执行/已完成任务）
-21. 取消定时任务 → 使用 schedule_cancel 工具（只能取消自己的任务）
-23. 文件操作返回的 URL 可直接访问下载（在用户专属的 workspace/{sessionId} 目录下）
-24. 如果工具结果里同时有 fullUrl、url、path、outputPath，向用户展示链接时必须优先直接使用 fullUrl；若无 fullUrl 才使用 url，严禁根据 outputPath/path/sessionId 手工拼接 /workspace/... 链接
-25. 文件路径以用户专属 workspace 为根目录，例如：file_write("docs/readme.md", "内容")
-26. 用户文件相互隔离，一个用户无法访问另一个用户的文件
-27. 复杂场景 → 使用高级技能（教学、咨询、问答、Mermaid画图、需要数据搜索和可视化、可用python_executor创建python脚本解决问题的场景）
-28. 如果问题过于复杂或没有可用的能力就优先使用python_executor技能自动创建python脚本尝试解决
-29. 优先使用技能处理综合场景，它们会自动完成多个步骤
-30. 参数要完整、准确，避免无效调用
-31. exec_code 生成 Python 代码时，f-string 要使用单花括号如 f'{variable}'，不要使用双花括号；同时避免引号冲突（如 f"{datetime.now().strftime('%Y-%m-%d')}"）；且代码在沙箱执行，禁止导入项目内部模块（如 tools、agent 等），只能用标准库
-32. 给出准确、友好、专业的回答`;
+12. Excel操作 → 使用 excel_read/excel_write/excel_append 工具
+13. Word操作 → 使用 word_read/word_read_html/word_write_docx 工具
+14. PowerPoint操作 → 使用 ppt_read/ppt_write 工具（适合基础演示稿读写，支持标题、正文、要点列表）
+15. PDF操作 → 使用 pdf_read/pdf_merge 工具
+16. CSV/JSON → 使用 csv_read/csv_write/json_read/json_write 工具
+17. 图片操作 → 使用 image_info/svg_write 工具；压缩图片必须使用 image_compress（单张）或 image_compress_batch（批量）工具，支持 jpg/png/gif/webp/avif
+18. 压缩/解压操作 → 使用 zip_compress/zip_extract/zip_info/zip_list 工具
+19. 邮件发送 → 【优先使用 email_sender 技能】，它会自动完成信息提取、SMTP验证、模板选择、发送全流程；定时邮件请使用 schedule_task 工具
+20. 定时任务调度 → 使用 schedule_task 工具（延迟执行邮件发送、脚本执行等，支持用户隔离，只执行一次）；taskParams 为 JSON 字符串，定时邮件须含 to/subject/content
+21. 定时邮件示例：先用 daily_news 或其他工具生成内容，再用 schedule_task 定时发送邮件（多次定时任务请分开调用）
+22. 查看定时任务 → 使用 schedule_list 工具（查询当前用户的待执行/已完成任务）
+23. 取消定时任务 → 使用 schedule_cancel 工具（只能取消自己的任务）
+24. 文件操作返回的 URL 可直接访问下载（在用户专属的 workspace/{sessionId} 目录下）
+25. 如果工具结果里同时有 fullUrl、url、path、outputPath，向用户展示链接时必须优先直接使用 fullUrl；若无 fullUrl 才使用 url，严禁根据 outputPath/path/sessionId 手工拼接 /workspace/... 链接
+26. 文件路径以用户专属 workspace 为根目录，例如：file_write("docs/readme.md", "内容")
+27. 用户文件相互隔离，一个用户无法访问另一个用户的文件
+28. 复杂场景 → 使用高级技能（教学、咨询、问答、Mermaid画图、需要数据搜索和可视化、可用python_executor创建python脚本解决问题的场景）
+29. 如果问题过于复杂或没有可用的能力就优先使用python_executor技能自动创建python脚本尝试解决，但在生成/执行前仍需先参考相关知识库 guardrails
+30. 优先使用技能处理综合场景，它们会自动完成多个步骤
+31. 参数要完整、准确，避免无效调用
+32. exec_code 生成 Python 代码时，f-string 要使用单花括号如 f'{variable}'，不要使用双花括号；同时避免引号冲突（如 f"{datetime.now().strftime('%Y-%m-%d')}"）；且代码在沙箱执行，禁止导入项目内部模块（如 tools、agent 等），只能用标准库
+33. 给出准确、友好、专业的回答`;
 }
 
 /**

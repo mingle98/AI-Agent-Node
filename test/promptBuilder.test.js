@@ -45,6 +45,18 @@ test("buildSystemPrompt: should document file name and content search tools", ()
   assert.match(prompt, /搜索 TODO \/ 某段文本/);
 });
 
+test("buildSystemPrompt: compact mode should enforce KB-first for risky domains", () => {
+  const prompt = buildSystemPrompt([], [], {
+    roleName: "R",
+    roleDescription: "D",
+    compact: true,
+  });
+
+  assert.match(prompt, /必须先用 search_knowledge 检索相关 SOP\/guardrails\/support matrix/);
+  assert.match(prompt, /文件操作、Office处理、Python执行、图表生成、调试\/代码审查、邮件发送/);
+  assert.match(prompt, /如果知识库提示需要澄清，就先追问，不要直接执行/);
+});
+
 test("buildSystemPrompt: compact mode should trim examples and detail fields", () => {
   const toolDefs = [
     {

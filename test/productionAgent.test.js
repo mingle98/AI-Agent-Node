@@ -209,6 +209,69 @@ test("ProductionAgent: should handle multimodal input", async () => {
   assert.equal(result, "image received");
 });
 
+test("ProductionAgent.buildSystemPromptForCapabilities: should append domain KB guidance for file scenarios", () => {
+  const llm = new MockLLM([]);
+  const agent = createAgentWithMockLLM(llm, { capabilityRoutingEnabled: true, compactSystemPrompt: true });
+
+  const prompt = agent.buildSystemPromptForCapabilities({
+    toolNames: ["search_knowledge", "file_list"],
+    skillNames: [],
+    capabilityNames: ["search_knowledge", "file_list"],
+  }, "帮我整理 workspace 里的文件并删除没用的");
+
+  assert.match(prompt, /领域知识库前置提醒/);
+  assert.match(prompt, /文件\/workspace 操作/);
+  assert.match(prompt, /workspace_file_operations_playbook/);
+  assert.match(prompt, /uploaded_file_processing_sop/);
+});
+
+test("ProductionAgent.buildSystemPromptForCapabilities: should not append KB guidance for general chat", () => {
+  const llm = new MockLLM([]);
+  const agent = createAgentWithMockLLM(llm, { capabilityRoutingEnabled: true, compactSystemPrompt: true });
+
+  const prompt = agent.buildSystemPromptForCapabilities({
+    toolNames: ["search_knowledge"],
+    skillNames: [],
+    capabilityNames: ["search_knowledge"],
+  }, "你好，今天天气怎么样？");
+
+  assert.doesNotMatch(prompt, /领域知识库前置提醒/);
+  assert.doesNotMatch(prompt, /workspace_file_operations_playbook/);
+  assert.doesNotMatch(prompt, /email_scenarios_playbook/);
+});
+
+test("ProductionAgent.buildSystemPromptForCapabilities: should append domain KB guidance for python scenarios", () => {
+  const llm = new MockLLM([]);
+  const agent = createAgentWithMockLLM(llm, { capabilityRoutingEnabled: true, compactSystemPrompt: true });
+
+  const prompt = agent.buildSystemPromptForCapabilities({
+    toolNames: ["search_knowledge", "exec_code"],
+    skillNames: ["python_executor"],
+    capabilityNames: ["search_knowledge", "exec_code", "python_executor"],
+  }, "帮我写个 Python 脚本分析这组数据");
+
+  assert.match(prompt, /领域知识库前置提醒/);
+  assert.match(prompt, /Python 数据分析 \/ 执行/);
+  assert.match(prompt, /python_execution_guardrails/);
+  assert.match(prompt, /data_analysis_task_patterns/);
+});
+
+test("ProductionAgent.buildSystemPromptForCapabilities: should append domain KB guidance for email scenarios", () => {
+  const llm = new MockLLM([]);
+  const agent = createAgentWithMockLLM(llm, { capabilityRoutingEnabled: true, compactSystemPrompt: true });
+
+  const prompt = agent.buildSystemPromptForCapabilities({
+    toolNames: ["search_knowledge", "schedule_task"],
+    skillNames: ["email_sender"],
+    capabilityNames: ["search_knowledge", "schedule_task", "email_sender"],
+  }, "帮我定时发送周报邮件给老板");
+
+  assert.match(prompt, /领域知识库前置提醒/);
+  assert.match(prompt, /邮件 \/ 通知 \/ 报告投递/);
+  assert.match(prompt, /email_scenarios_playbook/);
+  assert.match(prompt, /notification_and_report_delivery_guide/);
+});
+
 test("ProductionAgent.getStructuredTools: should return tool schemas", () => {
   const llm = new MockLLM([]);
   const agent = createAgentWithMockLLM(llm);
