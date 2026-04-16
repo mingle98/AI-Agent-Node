@@ -123,6 +123,47 @@ test("LocalVectorStore: should use metadata scoring when body text is weak", asy
   assert.ok(docs[0].metadata._debug.metadataScore > 0);
 });
 
+test("LocalVectorStore: should keep vector-only candidates through hybrid recall", async () => {
+  const embeddings = {
+    async embedDocuments(texts) {
+      return texts.map((text) => this._vectorize(text));
+    },
+    async embedQuery(text) {
+      return this._vectorize(text);
+    },
+    _vectorize(text) {
+      const normalized = String(text || "").toLowerCase();
+      if (normalized.includes("开启流式请求")) return [1, 0, 0];
+      if (normalized.includes("enable-streaming")) return [1, 0, 0];
+      if (normalized.includes("访客登记")) return [0, 1, 0];
+      return [0, 0, 1];
+    },
+  };
+
+  const vectorStore = await LocalVectorStore.fromDocuments(
+    [
+      {
+        pageContent: "组件通过 :enable-streaming=\"true\" 开启 SSE 流式响应。",
+        metadata: { source: "/kb/streaming.md", title: "流式响应模式" },
+      },
+      {
+        pageContent: "访客登记需要核对手机号和身份证。",
+        metadata: { source: "/kb/visitor.md", title: "访客登记" },
+      },
+    ],
+    embeddings
+  );
+
+  const docs = await vectorStore.similaritySearch("开启流式请求", 1, {
+    lexicalCandidateCount: 1,
+    vectorCandidateCount: 1,
+  });
+
+  assert.equal(docs.length, 1);
+  assert.match(docs[0].pageContent, /enable-streaming/);
+  assert.ok(docs[0].metadata._debug.recallSources.includes("vector"));
+});
+
 test("LocalVectorStore: should persist and reload without breaking search behavior", async () => {
   const tmpDir = createTempDir("test-vectordb-");
   const embeddings = createMockEmbeddings();

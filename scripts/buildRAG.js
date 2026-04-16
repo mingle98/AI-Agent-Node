@@ -73,8 +73,8 @@ async function main() {
       knowledgeBasePath,
       vectorDbPath,
       embeddings,
-      chunkSize: 2000,
-      chunkOverlap: 200,
+      chunkSize: 600,
+      chunkOverlap: 100,
     });
 
     console.log("=".repeat(70));

@@ -258,6 +258,14 @@ export class LocalVectorStore {
       this.items.length,
       Math.max(topK * candidateMultiplier, Number(options.candidateCount || options.topN || topK * 8) || topK * 8)
     );
+    const lexicalCandidateCount = Math.min(
+      this.items.length,
+      Math.max(topK * 4, Number(options.lexicalCandidateCount || Math.ceil(candidateCount * 0.7)) || Math.ceil(candidateCount * 0.7))
+    );
+    const vectorCandidateCount = Math.min(
+      this.items.length,
+      Math.max(topK * 4, Number(options.vectorCandidateCount || Math.ceil(candidateCount * 0.7)) || Math.ceil(candidateCount * 0.7))
+    );
 
     let queryEmbedding = null;
     if (this.embeddings && typeof this.embeddings.embedQuery === "function") {
@@ -287,7 +295,7 @@ export class LocalVectorStore {
       alpha = 0.35;
     }
 
-    const scored = this.items.map((item) => {
+    const scored = this.items.map((item, index) => {
       const lexicalScoreRaw = bm25Score(queryTokens, item, this.lexicalIndex);
       const metadataItem = {
         tokenFreq: item.metadataTokenFreq || {},
@@ -303,6 +311,7 @@ export class LocalVectorStore {
       }
 
       return {
+        index,
         item,
         lexicalScoreRaw,
         metadataScoreRaw,
@@ -320,7 +329,31 @@ export class LocalVectorStore {
     if (maxLex === 0) maxLex = 1;
     if (maxMeta === 0) maxMeta = 1;
 
-    const candidates = scored
+    const lexicalCandidates = scored
+      .slice()
+      .sort((a, b) => b.lexicalScoreRaw - a.lexicalScoreRaw)
+      .slice(0, lexicalCandidateCount);
+
+    const vectorCandidates = queryEmbedding
+      ? scored
+          .slice()
+          .sort((a, b) => b.embScore - a.embScore)
+          .slice(0, vectorCandidateCount)
+      : [];
+
+    const candidateMap = new Map();
+    lexicalCandidates.forEach((entry) => {
+      candidateMap.set(entry.index, { ...entry, recallSources: ["lexical"] });
+    });
+    vectorCandidates.forEach((entry) => {
+      if (candidateMap.has(entry.index)) {
+        candidateMap.get(entry.index).recallSources.push("vector");
+      } else {
+        candidateMap.set(entry.index, { ...entry, recallSources: ["vector"] });
+      }
+    });
+
+    const candidates = Array.from(candidateMap.values())
       .map((entry) => {
         const lexicalScore = entry.lexicalScoreRaw / maxLex;
         const metadataScore = entry.metadataScoreRaw / maxMeta;
@@ -337,6 +370,7 @@ export class LocalVectorStore {
           metadataScore,
           overlap: entry.overlap,
           embScore: entry.embScore,
+          recallSources: entry.recallSources,
           doc: {
             pageContent: entry.item.pageContent,
             metadata: {
@@ -347,6 +381,7 @@ export class LocalVectorStore {
                 metadataScore: Number(metadataScore.toFixed(6)),
                 overlap: Number(entry.overlap.toFixed(6)),
                 embScore: Number(entry.embScore.toFixed(6)),
+                recallSources: entry.recallSources,
               },
             },
           },
@@ -393,8 +428,8 @@ export async function buildRAGKnowledgeBase(options) {
     knowledgeBasePath,
     vectorDbPath,
     embeddings,
-    chunkSize = 2000,
-    chunkOverlap = 200,
+    chunkSize = 600,
+    chunkOverlap = 100,
   } = options;
 
   try {
