@@ -1058,6 +1058,10 @@ export class ProductionAgent {
         const logText = typeof userInput === "string" ? userInput : (userInput?.text || "[多模态输入]");
         const knowledgeDecisionReminder = this.getKnowledgeDecisionReminder(userInput);
         console.log(`👤 [${sessionId}] 用户: ${logText}`);
+        console.log(`🧭 [${sessionId}] 知识库决策提醒: ${knowledgeDecisionReminder ? "已命中" : "未命中"}`);
+        if (knowledgeDecisionReminder) {
+          console.log(`🧭 [${sessionId}] 提醒内容摘要: ${knowledgeDecisionReminder.slice(0, 200)}`);
+        }
         if (!skipUserMessageAppend) {
           const addMessage = this.buildHumanMessage(userInput);
           if (this.options.debug) {
@@ -1066,6 +1070,7 @@ export class ProductionAgent {
           session.messages.push(addMessage);
           if (knowledgeDecisionReminder) {
             session.messages.push(new SystemMessage(knowledgeDecisionReminder));
+            console.log(`🧭 [${sessionId}] 已追加知识库决策提醒到 session.messages，当前消息数: ${session.messages.length}`);
           }
           await this.manageContext(session);
         }

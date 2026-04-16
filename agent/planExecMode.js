@@ -465,12 +465,17 @@ export async function chatWithPlanExec(agent, userInput, chunkCallback, fullResp
       // 构建并记录用户消息（关键：保持与 chatWithReAct 一致的上下文处理）
       const addMessage = agent.buildHumanMessage(userInput);
       const knowledgeDecisionReminder = agent.getKnowledgeDecisionReminder(userInput);
+      console.log(`🧭 [${sessionId}] 知识库决策提醒: ${knowledgeDecisionReminder ? "已命中" : "未命中"}`);
+      if (knowledgeDecisionReminder) {
+        console.log(`🧭 [${sessionId}] 提醒内容摘要: ${knowledgeDecisionReminder.slice(0, 200)}`);
+      }
       if (agent.options.debug) {
         console.log(`👤 [${sessionId}] 用户消息:`, addMessage.toString());
       }
       session.messages.push(addMessage);
       if (knowledgeDecisionReminder) {
         session.messages.push(new SystemMessage(knowledgeDecisionReminder));
+        console.log(`🧭 [${sessionId}] 已追加知识库决策提醒到 session.messages，当前消息数: ${session.messages.length}`);
       }
       await agent.manageContext(session);
 
