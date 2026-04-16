@@ -53,7 +53,9 @@ test("buildSystemPrompt: compact mode should enforce KB-first for risky domains"
   });
 
   assert.match(prompt, /必须先用 search_knowledge 检索相关 SOP\/guardrails\/support matrix/);
-  assert.match(prompt, /文件操作、Office处理、Python执行、图表生成、调试\/代码审查、邮件发送/);
+  assert.match(prompt, /search_knowledge 在单轮中通常调用 1 次就够了/);
+  assert.match(prompt, /避免围绕同一问题反复检索/);
+  assert.match(prompt, /component_consulting、ai_agent_teaching、generate_document、ai_agent_echart、analyze_chart/);
   assert.match(prompt, /如果知识库提示需要澄清，就先追问，不要直接执行/);
 });
 

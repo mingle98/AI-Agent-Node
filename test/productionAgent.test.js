@@ -220,6 +220,17 @@ test("ProductionAgent.getKnowledgeDecisionReminder: should return reminder for r
   assert.match(reminder, /文件\/workspace 操作/);
 });
 
+test("ProductionAgent.getKnowledgeDecisionReminder: should return reminder for risky debug scenario", () => {
+  const llm = new MockLLM([]);
+  const agent = createAgentWithMockLLM(llm);
+
+  const reminder = agent.getKnowledgeDecisionReminder("帮我排查这个流式响应为什么没有增量输出");
+
+  assert.match(reminder, /本轮工具决策提醒/);
+  assert.match(reminder, /search_knowledge/);
+  assert.match(reminder, /调试 \/ 代码审查/);
+});
+
 test("ProductionAgent.getKnowledgeDecisionReminder: should return empty for general chat", () => {
   const llm = new MockLLM([]);
   const agent = createAgentWithMockLLM(llm);
@@ -244,7 +255,7 @@ test("ProductionAgent.chat: should append per-turn knowledge reminder for risky 
   const agent = createAgentWithMockLLM(llm, { streamEnabled: false });
 
   const sessionId = "react-kb-reminder";
-  await agent.chat("帮我删除 workspace 里的无用文件", null, null, sessionId, { streamEnabled: false });
+  await agent.chat("帮我排查这个流式响应为什么没有增量输出", null, null, sessionId, { streamEnabled: false });
 
   const session = agent.getOrCreateSession(sessionId);
   const systemMessages = session.messages.filter((m) => m._getType() === "system");
@@ -261,7 +272,7 @@ test("ProductionAgent.chat: should not append per-turn knowledge reminder when f
   });
 
   const sessionId = "react-kb-reminder-disabled";
-  await agent.chat("帮我删除 workspace 里的无用文件", null, null, sessionId, { streamEnabled: false });
+  await agent.chat("帮我排查这个流式响应为什么没有增量输出", null, null, sessionId, { streamEnabled: false });
 
   const session = agent.getOrCreateSession(sessionId);
   const reminderMessages = session.messages.filter(
@@ -293,7 +304,7 @@ test("ProductionAgent.chat: should clear stale knowledge reminder before next sa
   const agent = createAgentWithMockLLM(llm, { streamEnabled: false });
 
   const sessionId = "react-reminder-reset";
-  await agent.chat("帮我删除 workspace 里的无用文件", null, null, sessionId, { streamEnabled: false });
+  await agent.chat("帮我排查这个流式响应为什么没有增量输出", null, null, sessionId, { streamEnabled: false });
   await agent.chat("你好", null, null, sessionId, { streamEnabled: false });
 
   const session = agent.getOrCreateSession(sessionId);
