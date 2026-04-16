@@ -241,6 +241,115 @@ test("selectTaskMode: empty requestOptions object", async () => {
   assert.equal(mode, "plan_exec", "Should handle empty requestOptions object");
 });
 
+test("ProductionAgent.plan_exec: should inject proactive knowledge context before planning", async () => {
+  const llm = new MockLLM([
+    {
+      message: new AIMessage({
+        content: JSON.stringify({
+          task_summary: "组件配置咨询",
+          estimated_steps: 1,
+          steps: [
+            {
+              step_id: 1,
+              description: "直接回答组件欢迎界面配置方式",
+              depends_on: [],
+              expected_output: "配置说明",
+            },
+          ],
+          final_goal: "回答用户问题",
+        }),
+      }),
+    },
+    {
+      message: new AIMessage({ content: "可以通过组件配置项自定义欢迎界面。" }),
+    },
+  ]);
+
+  const vectorStore = {
+    similaritySearch: async () => [
+      {
+        pageContent: "AISuspendedBallChat 支持通过 props 配置欢迎界面、欢迎语和开场白。",
+        metadata: { source: "/kb/AISuspendedBallChat.md" },
+      },
+    ],
+  };
+
+  const agent = new ProductionAgent(llm, vectorStore, null, {
+    debug: false,
+    taskMode: "plan_exec",
+    maxPlanSteps: 5,
+    maxStepIterations: 2,
+    streamEnabled: false,
+    knowledgeDecisionReminderEnabled: true,
+  });
+
+  const result = await agent.chat("组件怎么欢迎界面配置？", null, null, "plan-exec-kb", {
+    taskMode: "plan_exec",
+    streamEnabled: false,
+  });
+
+  assert.match(result, /欢迎界面/);
+  const session = agent.getOrCreateSession("plan-exec-kb");
+  const injectedMessages = session.messages.filter(
+    (m) => m._getType() === "system" && String(m.content).includes("本轮知识库上下文")
+  );
+  assert.equal(injectedMessages.length, 1);
+});
+
+test("ProductionAgent.plan_exec: should not inject proactive knowledge context when feature switch is disabled", async () => {
+  const llm = new MockLLM([
+    {
+      message: new AIMessage({
+        content: JSON.stringify({
+          task_summary: "组件配置咨询",
+          estimated_steps: 1,
+          steps: [
+            {
+              step_id: 1,
+              description: "直接回答组件欢迎界面配置方式",
+              depends_on: [],
+              expected_output: "配置说明",
+            },
+          ],
+          final_goal: "回答用户问题",
+        }),
+      }),
+    },
+    {
+      message: new AIMessage({ content: "可以通过组件配置项自定义欢迎界面。" }),
+    },
+  ]);
+
+  const vectorStore = {
+    similaritySearch: async () => [
+      {
+        pageContent: "AISuspendedBallChat 支持通过 props 配置欢迎界面、欢迎语和开场白。",
+        metadata: { source: "/kb/AISuspendedBallChat.md" },
+      },
+    ],
+  };
+
+  const agent = new ProductionAgent(llm, vectorStore, null, {
+    debug: false,
+    taskMode: "plan_exec",
+    maxPlanSteps: 5,
+    maxStepIterations: 2,
+    streamEnabled: false,
+    knowledgeDecisionReminderEnabled: false,
+  });
+
+  await agent.chat("组件怎么欢迎界面配置？", null, null, "plan-exec-kb-disabled", {
+    taskMode: "plan_exec",
+    streamEnabled: false,
+  });
+
+  const session = agent.getOrCreateSession("plan-exec-kb-disabled");
+  const injectedMessages = session.messages.filter(
+    (m) => m._getType() === "system" && String(m.content).includes("本轮知识库上下文")
+  );
+  assert.equal(injectedMessages.length, 0);
+});
+
 // ========== Plan+Exec Configuration Tests ==========
 
 test("ProductionAgent: plan_exec configuration options", () => {
@@ -682,7 +791,7 @@ test("ProductionAgent: plan_exec mode handles plan fallback to react on invalid 
   assert.equal(reminderMessages.length, 0, "non-risky fallback should not inject reminder");
 });
 
-test("ProductionAgent: plan_exec mode appends knowledge reminder for risky request", async () => {
+test("ProductionAgent: plan_exec mode injects knowledge context for risky request", async () => {
   const planResponse = new AIMessage({
     content: JSON.stringify({
       task_summary: "Risky plan",
@@ -698,23 +807,33 @@ test("ProductionAgent: plan_exec mode appends knowledge reminder for risky reque
     { message: stepResponse }
   ]);
 
-  const agent = createAgentWithMockLLM(llm, {
+  const vectorStore = {
+    similaritySearch: async () => [
+      {
+        pageContent: "处理 workspace 文件前应先确认路径与删除范围。",
+        metadata: { source: "/kb/workspace.md" },
+      },
+    ],
+  };
+
+  const agent = new ProductionAgent(llm, vectorStore, null, {
+    debug: false,
     taskMode: "plan_exec",
     streamEnabled: false,
     knowledgeDecisionReminderEnabled: true,
   });
 
-  const sessionId = "plan-kb-reminder";
+  const sessionId = "plan-kb-context";
   await agent.chat("帮我整理 workspace 里的文件并删除无用内容", null, null, sessionId);
 
   const session = agent.getOrCreateSession(sessionId);
-  const reminderMessages = session.messages.filter(
-    (m) => m._getType() === "system" && String(m.content).includes("本轮工具决策提醒")
+  const injectedMessages = session.messages.filter(
+    (m) => m._getType() === "system" && String(m.content).includes("本轮知识库上下文")
   );
-  assert.equal(reminderMessages.length, 1, "risky plan request should append one reminder");
+  assert.equal(injectedMessages.length, 1, "risky plan request should append one knowledge context message");
 });
 
-test("ProductionAgent: plan_exec fallback keeps existing knowledge reminder for risky request", async () => {
+test("ProductionAgent: plan_exec fallback keeps existing knowledge context for risky request", async () => {
   const invalidPlanResponse = new AIMessage({ content: "not a valid json plan" });
   const fallbackResponse = new AIMessage({ content: "Fallback response after plan failure" });
 
@@ -723,13 +842,22 @@ test("ProductionAgent: plan_exec fallback keeps existing knowledge reminder for 
     { message: fallbackResponse }
   ]);
 
-  const agent = createAgentWithMockLLM(llm, {
+  const vectorStore = {
+    similaritySearch: async () => [
+      {
+        pageContent: "删除 workspace 文件前应先确认路径与范围。",
+        metadata: { source: "/kb/workspace.md" },
+      },
+    ],
+  };
+
+  const agent = new ProductionAgent(llm, vectorStore, null, {
     taskMode: "plan_exec",
     streamEnabled: false,
     knowledgeDecisionReminderEnabled: true,
   });
 
-  const sessionId = "plan-risky-fallback-reminder";
+  const sessionId = "plan-risky-fallback-context";
   await agent.chat("帮我删除 workspace 里的无用文件", null, null, sessionId);
 
   const session = agent.getOrCreateSession(sessionId);
@@ -740,13 +868,13 @@ test("ProductionAgent: plan_exec fallback keeps existing knowledge reminder for 
   });
   assert.equal(userMessages.length, 1, "fallback should still avoid duplicate user message");
 
-  const reminderMessages = session.messages.filter(
-    (m) => m._getType() === "system" && String(m.content).includes("本轮工具决策提醒")
+  const injectedMessages = session.messages.filter(
+    (m) => m._getType() === "system" && String(m.content).includes("本轮知识库上下文")
   );
-  assert.equal(reminderMessages.length, 1, "risky fallback request should preserve single reminder");
+  assert.equal(injectedMessages.length, 1, "risky fallback request should preserve single injected knowledge context");
 });
 
-test("ProductionAgent: plan_exec should remove stale knowledge reminder before next turn", async () => {
+test("ProductionAgent: plan_exec should remove stale injected knowledge context before next turn", async () => {
   const planResponse1 = new AIMessage({
     content: JSON.stringify({
       task_summary: "First risky plan",

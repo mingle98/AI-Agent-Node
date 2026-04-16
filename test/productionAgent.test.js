@@ -209,178 +209,102 @@ test("ProductionAgent: should handle multimodal input", async () => {
   assert.equal(result, "image received");
 });
 
-test("ProductionAgent.getKnowledgeDecisionReminder: should return reminder for risky file scenario", () => {
-  const llm = new MockLLM([]);
-  const agent = createAgentWithMockLLM(llm, { knowledgeDecisionReminderEnabled: true });
-
-  const reminder = agent.getKnowledgeDecisionReminder("帮我整理 workspace 里的文件并删除没用的");
-
-  assert.match(reminder, /本轮工具决策提醒/);
-  assert.match(reminder, /search_knowledge/);
-  assert.match(reminder, /文件\/workspace 操作/);
-});
-
-test("ProductionAgent.getKnowledgeDecisionReminder: should return reminder for risky debug scenario", () => {
-  const llm = new MockLLM([]);
-  const agent = createAgentWithMockLLM(llm, { knowledgeDecisionReminderEnabled: true });
-
-  const reminder = agent.getKnowledgeDecisionReminder("帮我排查这个流式响应为什么没有增量输出");
-
-  assert.match(reminder, /本轮工具决策提醒/);
-  assert.match(reminder, /search_knowledge/);
-  assert.match(reminder, /调试 \/ 代码审查/);
-});
-
-test("ProductionAgent.getKnowledgeDecisionReminder: should return empty for general chat", () => {
-  const llm = new MockLLM([]);
-  const agent = createAgentWithMockLLM(llm);
-
-  const reminder = agent.getKnowledgeDecisionReminder("你好，介绍一下你自己");
-
-  assert.equal(reminder, "");
-});
-
-test("ProductionAgent.getKnowledgeDecisionReminder: should return empty when feature switch is disabled", () => {
-  const llm = new MockLLM([]);
-  const agent = createAgentWithMockLLM(llm, { knowledgeDecisionReminderEnabled: false });
-
-  const reminder = agent.getKnowledgeDecisionReminder("帮我整理 workspace 里的文件并删除没用的");
-
-  assert.equal(reminder, "");
-});
-
-test("ProductionAgent.chat: should append per-turn knowledge reminder for risky ReAct request", async () => {
+test("ProductionAgent.chat: should inject proactive knowledge context using first matched preflight scene", async () => {
   const ai = new AIMessage({ content: "done" });
   const llm = new MockLLM([{ chunks: [ai] }]);
-  const agent = createAgentWithMockLLM(llm, {
+  const vectorStore = {
+    similaritySearch: async () => [
+      {
+        pageContent: "欢迎界面可通过组件配置项进行定制，支持欢迎语和开场白。",
+        metadata: { source: "/kb/AISuspendedBallChat.md" },
+      },
+    ],
+  };
+  const agent = new ProductionAgent(llm, vectorStore, null, {
+    debug: false,
+    maxIterations: 3,
+    maxHistoryMessages: 12,
+    keepRecentMessages: 8,
+    contextStrategy: "trim",
     streamEnabled: false,
     knowledgeDecisionReminderEnabled: true,
   });
 
-  const sessionId = "react-kb-reminder";
-  await agent.chat("帮我排查这个流式响应为什么没有增量输出", null, null, sessionId, { streamEnabled: false });
+  const sessionId = "react-component-kb-injection";
+  await agent.chat("组件怎么欢迎界面配置？", null, null, sessionId, { streamEnabled: false });
 
   const session = agent.getOrCreateSession(sessionId);
-  const systemMessages = session.messages.filter((m) => m._getType() === "system");
-  assert.ok(systemMessages.length >= 2, "should keep original system prompt and per-turn reminder");
-  assert.ok(systemMessages.some((m) => String(m.content).includes("本轮工具决策提醒")));
+  const injectedMessages = session.messages.filter(
+    (m) => m._getType() === "system" && String(m.content).includes("本轮知识库上下文")
+  );
+  assert.equal(injectedMessages.length, 1);
+  assert.match(String(injectedMessages[0].content), /前端组件咨询/);
+  assert.match(String(injectedMessages[0].content), /欢迎界面/);
 });
 
-test("ProductionAgent.chat: should not append per-turn knowledge reminder when feature switch is disabled", async () => {
+test("ProductionAgent.chat: should not inject knowledge context when feature switch is disabled", async () => {
   const ai = new AIMessage({ content: "done" });
   const llm = new MockLLM([{ chunks: [ai] }]);
-  const agent = createAgentWithMockLLM(llm, {
+  const vectorStore = {
+    similaritySearch: async () => [
+      {
+        pageContent: "AISuspendedBallChat 支持通过 props 配置欢迎界面。",
+        metadata: { source: "/kb/AISuspendedBallChat.md" },
+      },
+    ],
+  };
+  const agent = new ProductionAgent(llm, vectorStore, null, {
+    debug: false,
+    maxIterations: 3,
+    maxHistoryMessages: 12,
+    keepRecentMessages: 8,
+    contextStrategy: "trim",
     streamEnabled: false,
     knowledgeDecisionReminderEnabled: false,
   });
 
-  const sessionId = "react-kb-reminder-disabled";
-  await agent.chat("帮我排查这个流式响应为什么没有增量输出", null, null, sessionId, { streamEnabled: false });
+  const sessionId = "react-kb-injection-disabled";
+  await agent.chat("组件怎么欢迎界面配置？", null, null, sessionId, { streamEnabled: false });
 
   const session = agent.getOrCreateSession(sessionId);
-  const reminderMessages = session.messages.filter(
-    (m) => m._getType() === "system" && String(m.content).includes("本轮工具决策提醒")
+  const injectedMessages = session.messages.filter(
+    (m) => m._getType() === "system" && String(m.content).includes("本轮知识库上下文")
   );
-  assert.equal(reminderMessages.length, 0);
+  assert.equal(injectedMessages.length, 0);
 });
 
-test("ProductionAgent.chat: should not append per-turn knowledge reminder for general ReAct chat", async () => {
-  const ai = new AIMessage({ content: "hello" });
-  const llm = new MockLLM([{ chunks: [ai] }]);
-  const agent = createAgentWithMockLLM(llm, { streamEnabled: false });
-
-  const sessionId = "react-no-kb-reminder";
-  await agent.chat("你好", null, null, sessionId, { streamEnabled: false });
-
-  const session = agent.getOrCreateSession(sessionId);
-  const reminderMessages = session.messages.filter(
-    (m) => m._getType() === "system" && String(m.content).includes("本轮工具决策提醒")
-  );
-  assert.equal(reminderMessages.length, 0);
-});
-
-test("ProductionAgent.chat: should clear stale knowledge reminder before next safe ReAct turn", async () => {
+test("ProductionAgent.chat: should clear stale injected knowledge context before next safe ReAct turn", async () => {
   const llm = new MockLLM([
     { chunks: [new AIMessage({ content: "first done" })] },
     { chunks: [new AIMessage({ content: "second done" })] },
   ]);
-  const agent = createAgentWithMockLLM(llm, {
+  const vectorStore = {
+    similaritySearch: async () => [
+      {
+        pageContent: "欢迎界面支持自定义欢迎语。",
+        metadata: { source: "/kb/AISuspendedBallChat.md" },
+      },
+    ],
+  };
+  const agent = new ProductionAgent(llm, vectorStore, null, {
+    debug: false,
+    maxIterations: 3,
+    maxHistoryMessages: 12,
+    keepRecentMessages: 8,
+    contextStrategy: "trim",
     streamEnabled: false,
     knowledgeDecisionReminderEnabled: true,
   });
 
   const sessionId = "react-reminder-reset";
-  await agent.chat("帮我排查这个流式响应为什么没有增量输出", null, null, sessionId, { streamEnabled: false });
+  await agent.chat("组件怎么欢迎界面配置？", null, null, sessionId, { streamEnabled: false });
   await agent.chat("你好", null, null, sessionId, { streamEnabled: false });
 
   const session = agent.getOrCreateSession(sessionId);
-  const reminderMessages = session.messages.filter(
-    (m) => m._getType() === "system" && String(m.content).includes("本轮工具决策提醒")
+  const injectedKnowledgeMessages = session.messages.filter(
+    (m) => m._getType() === "system" && String(m.content).includes("本轮知识库上下文")
   );
-  assert.equal(reminderMessages.length, 0, "safe next turn should not keep stale reminder");
-});
-
-test("ProductionAgent.buildSystemPromptForCapabilities: should append domain KB guidance for file scenarios", () => {
-  const llm = new MockLLM([]);
-  const agent = createAgentWithMockLLM(llm, { capabilityRoutingEnabled: true, compactSystemPrompt: true });
-
-  const prompt = agent.buildSystemPromptForCapabilities({
-    toolNames: ["search_knowledge", "file_list"],
-    skillNames: [],
-    capabilityNames: ["search_knowledge", "file_list"],
-  }, "帮我整理 workspace 里的文件并删除没用的");
-
-  assert.match(prompt, /领域知识库前置提醒/);
-  assert.match(prompt, /文件\/workspace 操作/);
-  assert.match(prompt, /workspace_file_operations_playbook/);
-  assert.match(prompt, /uploaded_file_processing_sop/);
-});
-
-test("ProductionAgent.buildSystemPromptForCapabilities: should not append KB guidance for general chat", () => {
-  const llm = new MockLLM([]);
-  const agent = createAgentWithMockLLM(llm, { capabilityRoutingEnabled: true, compactSystemPrompt: true });
-
-  const prompt = agent.buildSystemPromptForCapabilities({
-    toolNames: ["search_knowledge"],
-    skillNames: [],
-    capabilityNames: ["search_knowledge"],
-  }, "你好，今天天气怎么样？");
-
-  assert.doesNotMatch(prompt, /领域知识库前置提醒/);
-  assert.doesNotMatch(prompt, /workspace_file_operations_playbook/);
-  assert.doesNotMatch(prompt, /email_scenarios_playbook/);
-});
-
-test("ProductionAgent.buildSystemPromptForCapabilities: should append domain KB guidance for python scenarios", () => {
-  const llm = new MockLLM([]);
-  const agent = createAgentWithMockLLM(llm, { capabilityRoutingEnabled: true, compactSystemPrompt: true });
-
-  const prompt = agent.buildSystemPromptForCapabilities({
-    toolNames: ["search_knowledge", "exec_code"],
-    skillNames: ["python_executor"],
-    capabilityNames: ["search_knowledge", "exec_code", "python_executor"],
-  }, "帮我写个 Python 脚本分析这组数据");
-
-  assert.match(prompt, /领域知识库前置提醒/);
-  assert.match(prompt, /Python 数据分析 \/ 执行/);
-  assert.match(prompt, /python_execution_guardrails/);
-  assert.match(prompt, /data_analysis_task_patterns/);
-});
-
-test("ProductionAgent.buildSystemPromptForCapabilities: should append domain KB guidance for email scenarios", () => {
-  const llm = new MockLLM([]);
-  const agent = createAgentWithMockLLM(llm, { capabilityRoutingEnabled: true, compactSystemPrompt: true });
-
-  const prompt = agent.buildSystemPromptForCapabilities({
-    toolNames: ["search_knowledge", "schedule_task"],
-    skillNames: ["email_sender"],
-    capabilityNames: ["search_knowledge", "schedule_task", "email_sender"],
-  }, "帮我定时发送周报邮件给老板");
-
-  assert.match(prompt, /领域知识库前置提醒/);
-  assert.match(prompt, /邮件 \/ 通知 \/ 报告投递/);
-  assert.match(prompt, /email_scenarios_playbook/);
-  assert.match(prompt, /notification_and_report_delivery_guide/);
+  assert.equal(injectedKnowledgeMessages.length, 0, "safe next turn should not keep stale knowledge context");
 });
 
 test("ProductionAgent.getStructuredTools: should return tool schemas", () => {

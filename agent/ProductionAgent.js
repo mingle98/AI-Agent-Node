@@ -14,44 +14,42 @@ import { getToolDivBox } from "../utils/streamRenderer.js";
 import { LongTermMemory, LTM_INJECT_START, LTM_INJECT_END } from "./longTermMemory.js";
 import { selectActiveCapabilities, expandCapabilitiesToAll } from "./capabilityRouter.js";
 
+const KNOWLEDGE_CONTEXT_PREFIX = "【本轮知识库上下文】";
+
 const DOMAIN_KNOWLEDGE_PREFLIGHTS = [
   {
     test: /(文件|目录|文件夹|workspace|读取文件|读文件|写入文件|写文件|重命名|删除文件|复制文件|移动文件|列目录|路径|搜索文件内容|内容搜索|全文搜索|关键词搜索|查找文本|搜索文本|file\s*list|file\s*read|\bls\b|\bcat\b)/i,
-    guidance: "当前请求属于【文件/workspace 操作】场景。在调用 file_ 系列工具前，先用 search_knowledge 检索相关 SOP / boundaries（如 workspace_file_operations_playbook、uploaded_file_processing_sop、file_handling_boundaries），确认是否需要先澄清路径、是否应保留原件、是否存在覆盖/删除/配额风险。"
+    scene: "文件/workspace 操作",
   },
   {
     test: /(excel|xlsx|xls|\bword\b|docx|\bdoc\b|pdf|ppt|pptx|office|表格|文档|演示稿|幻灯片)/i,
-    guidance: "当前请求属于【Office / 文档处理】场景。在调用 Office 相关工具前，先用 search_knowledge 检索 support matrix / playbook / fallbacks（如 office_file_support_matrix、office_task_playbook、document_templates_and_fallbacks），确认支持边界、推荐交付格式和是否需要降级。"
+    scene: "Office / 文档处理",
   },
   {
     test: /(分析数据|统计|转化率|加权|脚本|python|pandas|numpy|matplotlib|回归分析|预测|建模|批处理|自动化脚本|数据处理|数据清洗)/i,
-    guidance: "当前请求属于【Python 数据分析 / 执行】场景。在调用 python_executor、script_generator 或 exec_code 前，先用 search_knowledge 检索相关 guardrails（如 python_execution_guardrails、data_analysis_task_patterns），确认是否只应使用标准库、是否需要补齐输入、是否应降级为非执行型方案。"
+    scene: "Python 数据分析 / 执行",
   },
   {
     test: /(流程图|时序图|类图|状态图|架构图|泳道图|甘特图|思维导图|脑图|ER图|实体关系图|mermaid|diagram|graph|图示|示意图|关系图|画图|画个图|梳理流程|流程梳理|图表|可视化|走势|趋势|echarts|柱状图|折线图|饼图|散点图|雷达图|面积图|仪表盘|热力图|k线|数据看板|dashboard|bi|kpi|同比|环比)/i,
-    guidance: "当前请求属于【图表 / Mermaid / 可视化】场景。在生成图或 option 前，先用 search_knowledge 检索相关 guide（如 visualization_support_matrix、chart_type_decision_guide、mermaid_business_patterns），确认应该选哪类图、哪些能力有边界、是否需要先澄清目标。"
+    scene: "图表 / Mermaid / 可视化",
   },
   {
     test: /(报错|异常|debug|调试|故障|排查|修复|错误|报bug|bug|崩溃|卡死|traceback|stack\s*trace|堆栈|报异常|review|code\s*review|代码审查|代码走查|代码质量|优化建议|性能问题|安全问题|重构建议|最佳实践|可维护性|技术债)/i,
-    guidance: "当前请求属于【调试 / 代码审查】场景。在直接下结论或给修复方案前，先用 search_knowledge 检索相关 playbook（如 debugging_playbook、code_review_checklist），确认排查顺序、问题分级和哪些信息还需要先向用户补齐。"
+    scene: "调试 / 代码审查",
   },
   {
-    test: /(组件|控件|SuspendedBallChat|AISuspendedBallChat|ChatPanel|欢迎界面|欢迎语|开场白|流式|sse|回调|props|参数配置|组件配置|前端组件|接入组件|聊天组件|悬浮球|面板配置|样式配置)/i,
-    guidance: "当前请求属于【前端组件咨询 / 配置说明】场景。遇到 SuspendedBallChat、AISuspendedBallChat、ChatPanel 等组件的配置、接入、欢迎界面、回调、流式、样式问题时，先用 search_knowledge 检索组件文档（如 AISuspendedBallChat、ChatPanel、组件 props/示例），确认具体配置项、示例代码和限制，再回答或调用 component_consulting 做总结。"
+    test: /(组件|ai组件|控件|SuspendedBallChat|AISuspendedBallChat|ChatPanel|欢迎界面|欢迎语|开场白|流式|sse|回调|props|参数配置|组件配置|前端组件|接入组件|聊天组件|悬浮球|面板配置|样式配置)/i,
+    scene: "前端组件咨询 / 配置说明",
   },
   {
     test: /(邮件|邮箱|发送|发信|mail|smtp|定时|schedule|通知|提醒|群发|定时任务|延时发送|邮件模板|报告投递)/i,
-    guidance: "当前请求属于【邮件 / 通知 / 报告投递】场景。在调用 email_sender、email_send 或 schedule_task 前，先用 search_knowledge 检索相关手册（如 email_scenarios_playbook、notification_and_report_delivery_guide），确认这是写邮件、发邮件、定时发还是带附件发，并检查是否缺少收件人、主题、附件路径或场景类型。"
+    scene: "邮件 / 通知 / 报告投递",
   }
 ];
 
-function buildDomainKnowledgeGuidance(userInput = "") {
+function getMatchedKnowledgePreflights(userInput = "") {
   const text = typeof userInput === "string" ? userInput : String(userInput || "");
-  const matched = DOMAIN_KNOWLEDGE_PREFLIGHTS.filter((item) => item.test.test(text)).map((item) => item.guidance);
-  if (!matched.length) {
-    return "";
-  }
-  return `\n\n【领域知识库前置提醒】\n${matched.map((item, idx) => `${idx + 1}. ${item}`).join("\n")}`;
+  return DOMAIN_KNOWLEDGE_PREFLIGHTS.filter((item) => item.test.test(text));
 }
 
 function extractUserInputText(userInput) {
@@ -64,32 +62,28 @@ function extractUserInputText(userInput) {
   return String(userInput || "");
 }
 
-function buildKnowledgeDecisionReminder(userInput = "") {
-  const domainGuidance = buildDomainKnowledgeGuidance(userInput);
-  if (!domainGuidance) {
-    return "";
-  }
-
+function buildInjectedKnowledgeContextMessage(preflight, knowledgeContext = "") {
+  const normalized = String(knowledgeContext || "").trim();
+  if (!normalized || !preflight) return "";
   return [
-    "【本轮工具决策提醒】",
-    "如果当前请求命中了文件、Office、Python执行、图表/可视化、调试/代码审查、邮件/定时任务等场景，不要直接调用执行型工具。",
-    "你应该优先调用一次 search_knowledge，先确认 SOP、边界、缺失参数和澄清点。",
-    "如果不确定是直接执行还是先查规则，默认先查知识库，再继续后续动作。",
-    domainGuidance.trim(),
+    KNOWLEDGE_CONTEXT_PREFIX,
+    `以下内容是系统已主动检索到的【${preflight.scene}】知识，请优先基于这些内容回答当前问题。`,
+    "如果知识片段已足够，直接回答:",
+    normalized,
   ].join("\n");
 }
 
-function isKnowledgeDecisionReminderMessage(message) {
+function isInjectedKnowledgeContextMessage(message) {
   return message?._getType?.() === "system"
     && typeof message?.content === "string"
-    && message.content.startsWith("【本轮工具决策提醒】");
+    && message.content.startsWith(KNOWLEDGE_CONTEXT_PREFIX);
 }
 
-function stripKnowledgeDecisionReminderMessages(messages = []) {
+function stripInjectedKnowledgeContextMessages(messages = []) {
   if (!Array.isArray(messages) || messages.length === 0) {
     return messages;
   }
-  return messages.filter((message) => !isKnowledgeDecisionReminderMessage(message));
+  return messages.filter((message) => !isInjectedKnowledgeContextMessage(message));
 }
 
 // ========== 会话中止错误类 ==========
@@ -414,7 +408,7 @@ export class ProductionAgent {
     });
   }
 
-  buildSystemPromptForCapabilities(capabilitySelection, userInput = "") {
+  buildSystemPromptForCapabilities(capabilitySelection) {
     const toolNames = capabilitySelection?.toolNames || [];
     const skillNames = capabilitySelection?.skillNames || [];
 
@@ -430,8 +424,7 @@ export class ProductionAgent {
       compact: this.compactSystemPrompt,
     });
 
-    const domainKnowledgeGuidance = buildDomainKnowledgeGuidance(userInput);
-    return domainKnowledgeGuidance ? `${basePrompt}${domainKnowledgeGuidance}` : basePrompt;
+    return basePrompt;
   }
 
   applyCapabilitySelectionToSession(session, capabilitySelection, userInput = "") {
@@ -445,7 +438,7 @@ export class ProductionAgent {
       : String(firstSystemMessage?.content || "");
     const existingMemoryBlock = extractMemoryBlock(previousPrompt);
 
-    const rebuiltPrompt = this.buildSystemPromptForCapabilities(selected, userInput);
+    const rebuiltPrompt = this.buildSystemPromptForCapabilities(selected);
     session.activeSystemPrompt = existingMemoryBlock
       ? `${rebuiltPrompt}\n${existingMemoryBlock}`
       : rebuiltPrompt;
@@ -972,16 +965,36 @@ export class ProductionAgent {
     return this.beginRequest(session);
   }
 
-  getKnowledgeDecisionReminder(userInput) {
+  async getInjectedKnowledgeContext(userInput) {
     if (!this.knowledgeDecisionReminderEnabled) {
       return "";
     }
+
+    if (!this.vectorStore) {
+      return "";
+    }
+
     const userInputText = extractUserInputText(userInput);
-    return buildKnowledgeDecisionReminder(userInputText);
+    const matchedPreflights = getMatchedKnowledgePreflights(userInputText);
+    if (!matchedPreflights.length) {
+      return "";
+    }
+
+    const preflight = matchedPreflights[0];
+    try {
+      const knowledgeContext = await searchKnowledgeBase(this.vectorStore, userInputText);
+      if (!knowledgeContext || knowledgeContext.includes("知识库中未找到相关信息")) {
+        return "";
+      }
+      return buildInjectedKnowledgeContextMessage(preflight, knowledgeContext);
+    } catch (error) {
+      console.warn(`⚠️ 知识库主动注入失败[${preflight.scene}]: ${error.message}`);
+      return "";
+    }
   }
 
-  stripKnowledgeDecisionReminderMessages(messages = []) {
-    return stripKnowledgeDecisionReminderMessages(messages);
+  stripInjectedKnowledgeContextMessages(messages = []) {
+    return stripInjectedKnowledgeContextMessages(messages);
   }
 
   // ========== 任务入口 ==========
@@ -1076,15 +1089,15 @@ export class ProductionAgent {
 
         this.touchSession(session);
         if (!skipUserMessageAppend) {
-          session.messages = stripKnowledgeDecisionReminderMessages(session.messages);
+          session.messages = stripInjectedKnowledgeContextMessages(session.messages);
         }
         const toolExcResults = [];
         const logText = typeof userInput === "string" ? userInput : (userInput?.text || "[多模态输入]");
-        const knowledgeDecisionReminder = this.getKnowledgeDecisionReminder(userInput);
+        const injectedKnowledgeContext = await this.getInjectedKnowledgeContext(userInput);
         console.log(`👤 [${sessionId}] 用户: ${logText}`);
-        console.log(`🧭 [${sessionId}] 知识库决策提醒: ${knowledgeDecisionReminder ? "已命中" : "未命中"}`);
-        if (knowledgeDecisionReminder) {
-          console.log(`🧭 [${sessionId}] 提醒内容摘要: ${knowledgeDecisionReminder.slice(0, 200)}`);
+        console.log(`📚 [${sessionId}] 知识库上下文注入: ${injectedKnowledgeContext ? "已命中" : "未命中"}`);
+        if (injectedKnowledgeContext) {
+          console.log(`📚 [${sessionId}] 注入内容摘要: ${injectedKnowledgeContext.slice(0, 200)}`);
         }
         if (!skipUserMessageAppend) {
           const addMessage = this.buildHumanMessage(userInput);
@@ -1092,9 +1105,9 @@ export class ProductionAgent {
             console.log(`👤 [${sessionId}] 用户消息:`, addMessage.toString());
           }
           session.messages.push(addMessage);
-          if (knowledgeDecisionReminder) {
-            session.messages.push(new SystemMessage(knowledgeDecisionReminder));
-            console.log(`🧭 [${sessionId}] 已追加知识库决策提醒到 session.messages，当前消息数: ${session.messages.length}`);
+          if (injectedKnowledgeContext) {
+            session.messages.push(new SystemMessage(injectedKnowledgeContext));
+            console.log(`📚 [${sessionId}] 已追加知识库上下文到 session.messages，当前消息数: ${session.messages.length}`);
           }
           await this.manageContext(session);
         }

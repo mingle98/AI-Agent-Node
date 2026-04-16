@@ -23,5 +23,5 @@ export const CONFIG = {
   capabilityRoutingEnabled: false, // 默认关闭动态能力路由，保持全量能力注入
 
   // ========== 知识库决策提醒配置 ==========
-  knowledgeDecisionReminderEnabled: false, // 默认关闭：高风险场景追加“先查知识库”提醒
+  knowledgeDecisionReminderEnabled: true, // 默认关闭：高风险场景追加“先查知识库”提醒
 };
