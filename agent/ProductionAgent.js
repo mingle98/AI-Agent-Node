@@ -75,6 +75,19 @@ function buildKnowledgeDecisionReminder(userInput = "") {
   ].join("\n");
 }
 
+function isKnowledgeDecisionReminderMessage(message) {
+  return message?._getType?.() === "system"
+    && typeof message?.content === "string"
+    && message.content.startsWith("【本轮工具决策提醒】");
+}
+
+function stripKnowledgeDecisionReminderMessages(messages = []) {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return messages;
+  }
+  return messages.filter((message) => !isKnowledgeDecisionReminderMessage(message));
+}
+
 // ========== 会话中止错误类 ==========
 export class AbortError extends Error {
   constructor(message = "Session aborted by client") {
@@ -963,6 +976,10 @@ export class ProductionAgent {
     return buildKnowledgeDecisionReminder(userInputText);
   }
 
+  stripKnowledgeDecisionReminderMessages(messages = []) {
+    return stripKnowledgeDecisionReminderMessages(messages);
+  }
+
   // ========== 任务入口 ==========
   async chat(
     userInput,
@@ -1054,6 +1071,9 @@ export class ProductionAgent {
         this.ensureRequestActive(session, requestState, sessionId);
 
         this.touchSession(session);
+        if (!skipUserMessageAppend) {
+          session.messages = stripKnowledgeDecisionReminderMessages(session.messages);
+        }
         const toolExcResults = [];
         const logText = typeof userInput === "string" ? userInput : (userInput?.text || "[多模态输入]");
         const knowledgeDecisionReminder = this.getKnowledgeDecisionReminder(userInput);

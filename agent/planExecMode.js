@@ -442,6 +442,7 @@ export async function chatWithPlanExec(agent, userInput, chunkCallback, fullResp
       agent.ensureRequestActive(session, requestState, sessionId);
 
       agent.touchSession(session);
+      session.messages = agent.stripKnowledgeDecisionReminderMessages(session.messages);
 
       if (agent.capabilityRoutingEnabled && (!session.activeCapabilityNames || session.activeCapabilityNames.length === 0)) {
         const capabilitySelection = agent.resolveCapabilitySelection(userInput);

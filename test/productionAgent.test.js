@@ -285,6 +285,24 @@ test("ProductionAgent.chat: should not append per-turn knowledge reminder for ge
   assert.equal(reminderMessages.length, 0);
 });
 
+test("ProductionAgent.chat: should clear stale knowledge reminder before next safe ReAct turn", async () => {
+  const llm = new MockLLM([
+    { chunks: [new AIMessage({ content: "first done" })] },
+    { chunks: [new AIMessage({ content: "second done" })] },
+  ]);
+  const agent = createAgentWithMockLLM(llm, { streamEnabled: false });
+
+  const sessionId = "react-reminder-reset";
+  await agent.chat("帮我删除 workspace 里的无用文件", null, null, sessionId, { streamEnabled: false });
+  await agent.chat("你好", null, null, sessionId, { streamEnabled: false });
+
+  const session = agent.getOrCreateSession(sessionId);
+  const reminderMessages = session.messages.filter(
+    (m) => m._getType() === "system" && String(m.content).includes("本轮工具决策提醒")
+  );
+  assert.equal(reminderMessages.length, 0, "safe next turn should not keep stale reminder");
+});
+
 test("ProductionAgent.buildSystemPromptForCapabilities: should append domain KB guidance for file scenarios", () => {
   const llm = new MockLLM([]);
   const agent = createAgentWithMockLLM(llm, { capabilityRoutingEnabled: true, compactSystemPrompt: true });

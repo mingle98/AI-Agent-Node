@@ -744,6 +744,50 @@ test("ProductionAgent: plan_exec fallback keeps existing knowledge reminder for 
   assert.equal(reminderMessages.length, 1, "risky fallback request should preserve single reminder");
 });
 
+test("ProductionAgent: plan_exec should remove stale knowledge reminder before next turn", async () => {
+  const planResponse1 = new AIMessage({
+    content: JSON.stringify({
+      task_summary: "First risky plan",
+      estimated_steps: 1,
+      steps: [{ step_id: 1, description: "Handle workspace files", depends_on: [], expected_output: "done" }],
+      final_goal: "Complete"
+    })
+  });
+  const stepResponse1 = new AIMessage({ content: "First done" });
+
+  const planResponse2 = new AIMessage({
+    content: JSON.stringify({
+      task_summary: "Second safe plan",
+      estimated_steps: 1,
+      steps: [{ step_id: 1, description: "General answer", depends_on: [], expected_output: "done" }],
+      final_goal: "Complete"
+    })
+  });
+  const stepResponse2 = new AIMessage({ content: "Second done" });
+
+  const llm = new MockLLM([
+    { message: planResponse1 },
+    { message: stepResponse1 },
+    { message: planResponse2 },
+    { message: stepResponse2 }
+  ]);
+
+  const agent = createAgentWithMockLLM(llm, {
+    taskMode: "plan_exec",
+    streamEnabled: false
+  });
+
+  const sessionId = "plan-reminder-reset";
+  await agent.chat("帮我删除 workspace 里的无用文件", null, null, sessionId);
+  await agent.chat("你好", null, null, sessionId);
+
+  const session = agent.getOrCreateSession(sessionId);
+  const reminderMessages = session.messages.filter(
+    (m) => m._getType() === "system" && String(m.content).includes("本轮工具决策提醒")
+  );
+  assert.equal(reminderMessages.length, 0, "next turn should clear stale reminder before safe request");
+});
+
 test("ProductionAgent: plan_exec mode respects maxStepIterations", async () => {
   const planResponse = new AIMessage({
     content: JSON.stringify({
