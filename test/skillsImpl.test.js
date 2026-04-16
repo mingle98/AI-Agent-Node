@@ -27,17 +27,42 @@ test("skillAIAgentTeaching: should support all levels", async () => {
   assert.ok(advanced.includes("advanced"));
 });
 
-test("skillComponentConsulting: should generate generic focus guidance", async () => {
+test("skillComponentConsulting: should require knowledge context first", async () => {
   const result = await skillComponentConsulting("如何配置流式响应", "SuspendedBallChat");
-  assert.ok(result.includes("请求模式"));
-  assert.ok(result.includes("custom-request-config"));
-  assert.ok(result.includes("基于 SuspendedBallChat 和你当前的问题直接给出对应的组件示例配置"));
+  assert.ok(result.includes("requiresKnowledgeLookup"));
+  assert.ok(result.includes("请先调用 search_knowledge"));
+});
+
+test("skillComponentConsulting: should summarize based on provided knowledge context", async () => {
+  const result = await skillComponentConsulting(
+    "如何配置流式响应",
+    "SuspendedBallChat",
+    "文档显示：enable-streaming 可开启流式响应；可通过 custom-request-config 追加请求参数。"
+  );
+  assert.ok(result.includes("basedOnKnowledge"));
+  assert.ok(result.includes("enable-streaming"));
+  assert.ok(result.includes("请严格基于以上文档摘要回答用户"));
+});
+
+test("skillComponentConsulting: should act as strict summarizer", async () => {
+  const result = await skillComponentConsulting(
+    "如何配置流式响应",
+    "SuspendedBallChat",
+    "文档显示：enable-streaming 可开启流式响应；可通过 custom-request-config 追加请求参数。"
+  );
+  assert.ok(result.includes("已检索到的组件文档摘要"));
+  assert.ok(result.includes("不要脱离文档摘要自行补充未被检索到的组件事实"));
 });
 
 test("skillComponentConsulting: should use dynamic component title", async () => {
-  const result = await skillComponentConsulting("如何关闭面板", "ChatPanel");
-  assert.ok(result.includes("ChatPanel 组件咨询"));
+  const result = await skillComponentConsulting(
+    "如何关闭面板",
+    "ChatPanel",
+    "文档显示：ChatPanel 支持 @close 事件，可通过关闭事件控制面板状态。"
+  );
+  assert.ok(result.includes("ChatPanel 组件咨询（基于已检索文档）"));
   assert.ok(result.includes("组件: ChatPanel"));
+  assert.ok(result.includes("ChatPanel 支持 @close 事件"));
 });
 
 test("skillComponentConsulting: should generate consulting content", async () => {

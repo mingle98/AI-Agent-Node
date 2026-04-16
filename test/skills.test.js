@@ -56,12 +56,11 @@ test("ai_agent_teaching skill: should have difficulty options", () => {
   assert.ok(levelParam.options.includes("advanced"));
 });
 
-test("component_consulting skill: should have component options", () => {
+test("component_consulting skill: should require knowledge context param", () => {
   const skill = SKILL_DEFINITIONS.find(s => s.name === "component_consulting");
   assert.ok(skill);
-  const compParam = skill.params.find(p => p.name === "组件名称");
-  assert.ok(compParam);
-  assert.ok(compParam.options.includes("SuspendedBallChat"));
+  assert.equal(skill.params.length, 3);
+  assert.ok(skill.params.find(p => p.name === "组件文档上下文"));
 });
 
 test("code_explanation skill: should have detail level options", () => {

@@ -30,6 +30,49 @@ test("buildSystemPrompt: should include tools, skills and rules", () => {
   assert.match(prompt, /支持用户隔离|只执行一次/);
 });
 
+test("buildSystemPrompt: should document file name and content search tools", () => {
+  const prompt = buildSystemPrompt([], [], {});
+  assert.match(prompt, /按文件名搜索: file_search/);
+  assert.match(prompt, /按行读取文件片段: file_read_lines/);
+  assert.match(prompt, /按行编辑文件片段: file_edit_lines/);
+  assert.match(prompt, /按文本替换文件内容: file_replace_text/);
+  assert.match(prompt, /maxReplacements=0 表示全部替换/);
+  assert.match(prompt, /若读取被截断则禁止编辑/);
+  assert.match(prompt, /单次最多 200 行/);
+  assert.match(prompt, /按文件内容搜索: file_content_search/);
+  assert.match(prompt, /默认最多返回 3 条/);
+  assert.match(prompt, /最多扫描 30 个文本文件/);
+  // assert.match(prompt, /搜索 TODO \/ 某段文本/);
+});
+
+test("buildSystemPrompt: compact mode should enforce KB-first for risky domains", () => {
+  const prompt = buildSystemPrompt([], [], {
+    roleName: "R",
+    roleDescription: "D",
+    compact: true,
+  });
+
+  assert.match(prompt, /必须先用 search_knowledge 检索相关 SOP\/guardrails\/support matrix/);
+  assert.match(prompt, /search_knowledge 在单轮中通常调用 1 次就够了/);
+  assert.match(prompt, /不要围绕同一问题反复检索/);
+  assert.match(prompt, /组件类问题（如 SuspendedBallChat \/ ChatPanel 配置、接入、流式、回调、样式）应优先先用 search_knowledge 检索组件文档/);
+  assert.match(prompt, /禁止在没有文档上下文时直接调用 component_consulting/);
+  assert.match(prompt, /component_consulting、ai_agent_teaching、generate_document、ai_agent_echart、analyze_chart/);
+  assert.match(prompt, /如果知识库提示需要澄清，就先追问，不要直接执行/);
+});
+
+test("buildSystemPrompt: should include explicit component knowledge-to-consulting example", () => {
+  const prompt = buildSystemPrompt([], [{
+    name: "component_consulting",
+    description: "d",
+    functionality: "f",
+    params: [],
+    example: "e",
+  }], {});
+  assert.match(prompt, /search_knowledge\("SuspendedBallChat 流式响应 配置"\)/);
+  assert.match(prompt, /component_consulting\("如何配置流式响应", "SuspendedBallChat", "…检索结果…"\)/);
+});
+
 test("buildSystemPrompt: compact mode should trim examples and detail fields", () => {
   const toolDefs = [
     {

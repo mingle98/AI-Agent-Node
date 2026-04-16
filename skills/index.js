@@ -29,13 +29,14 @@ export const SKILL_DEFINITIONS = [
   {
     name: "component_consulting",
     func: skillComponentConsulting,
-    description: "AISuspendedBallChat组件咨询",
-    functionality: "提供组件使用指导、配置说明、问题排查",
+    description: "AISuspendedBallChat组件咨询（基于已检索文档总结）",
+    functionality: "基于 search_knowledge 已检索到的组件文档片段，整理组件使用指导、配置说明和问题排查建议",
     params: [
       { name: "咨询问题", type: "string", example: "如何配置流式响应" },
-      { name: "组件名称", type: "string", example: "SuspendedBallChat", options: ["SuspendedBallChat", "ChatPanel"] }
+      { name: "组件名称", type: "string", example: "SuspendedBallChat", options: ["SuspendedBallChat", "ChatPanel"] },
+      { name: "组件文档上下文", type: "string", example: "来自 search_knowledge 的组件文档片段或摘要" }
     ],
-    example: 'component_consulting("如何配置流式响应", "SuspendedBallChat")',
+    example: 'component_consulting("如何配置流式响应", "SuspendedBallChat", "来自 search_knowledge 的组件文档片段")',
   },
   {
     name: "code_explanation",
