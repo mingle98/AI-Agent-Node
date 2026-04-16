@@ -36,6 +36,7 @@ export function createFallbackLLM() {
 export function createEmbeddings() {
   return new OpenAIEmbeddings({
     openAIApiKey: process.env.DASHSCOPE_API_KEY,
+    model: 'text-embedding-v4',
     batchSize: 10,
     configuration: {
       baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",

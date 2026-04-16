@@ -6,11 +6,8 @@ import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { EPubLoader } from "@langchain/community/document_loaders/fs/epub";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import path from "path";
-import { fileURLToPath } from "url";
 import fs from "fs";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const VECTOR_DB_FILENAME = "vector-store.json";
 
 function ensureVectorDbDir(vectorDbPath) {
@@ -47,23 +44,98 @@ function normalizeVector(v = []) {
   return v.map((x) => (Number(x) || 0) / norm);
 }
 
-function tokenizeText(text = "") {
+function tokenizeText(text = "", options = {}) {
+  const {
+    unique = true,
+    includeChineseUnigrams = true,
+    includeChineseBigrams = true,
+    includeChineseFragments = true,
+  } = options;
+
   const s = String(text || "").toLowerCase();
   const parts = s.split(/[^a-z0-9\u4e00-\u9fff]+/).filter((w) => w && w.length > 0);
-  const tokens = new Set();
+  const tokens = [];
+
   parts.forEach((p) => {
     if (/[\u4e00-\u9fff]/.test(p)) {
-      // 对中文，生成字符二元组（bigram）以提升匹配
-      for (let i = 0; i < p.length - 1; i += 1) {
-        tokens.add(p.slice(i, i + 2));
+      if (includeChineseUnigrams) {
+        for (const ch of p) {
+          tokens.push(ch);
+        }
       }
-      // 也保留原片段
-      tokens.add(p);
-    } else {
-      if (p.length > 1) tokens.add(p);
+      if (includeChineseBigrams && p.length >= 2) {
+        for (let i = 0; i < p.length - 1; i += 1) {
+          tokens.push(p.slice(i, i + 2));
+        }
+      }
+      if (includeChineseFragments) {
+        tokens.push(p);
+      }
+    } else if (p.length > 1) {
+      tokens.push(p);
     }
   });
-  return Array.from(tokens);
+
+  return unique ? Array.from(new Set(tokens)) : tokens;
+}
+
+function buildTokenStats(text = "") {
+  const lexicalTokens = tokenizeText(text, { unique: false });
+  const tokenFreq = {};
+  lexicalTokens.forEach((token) => {
+    tokenFreq[token] = (tokenFreq[token] || 0) + 1;
+  });
+
+  return {
+    tokens: Array.from(new Set(lexicalTokens)),
+    tokenFreq,
+    length: lexicalTokens.length,
+  };
+}
+
+function extractMetadataText(metadata = {}) {
+  if (!metadata || typeof metadata !== "object") return "";
+
+  const values = [];
+  Object.values(metadata).forEach((value) => {
+    if (typeof value === "string") {
+      values.push(value);
+    }
+  });
+
+  return values.join(" ");
+}
+
+function bm25Score(queryTokens = [], item, lexicalIndex) {
+  if (!Array.isArray(queryTokens) || queryTokens.length === 0 || !item) return 0;
+
+  const k1 = 1.5;
+  const b = 0.75;
+  const idf = (lexicalIndex && lexicalIndex.idf) || {};
+  const avgLen = (lexicalIndex && lexicalIndex.avgLen) || 1;
+  const N = (lexicalIndex && lexicalIndex.N) || 1;
+  const docLen = item.length || (item.tokens || []).length || 1;
+
+  let score = 0;
+  for (const token of queryTokens) {
+    const termIdf = idf[token] || Math.log((N + 1) / 1);
+    const tf = (item.tokenFreq && item.tokenFreq[token]) ? item.tokenFreq[token] : 0;
+    if (!tf) continue;
+    const denom = tf + k1 * (1 - b + b * (docLen / avgLen));
+    score += termIdf * ((tf * (k1 + 1)) / (denom || 1));
+  }
+
+  return score;
+}
+
+function overlapScore(queryTokens = [], itemTokens = []) {
+  if (!queryTokens.length || !itemTokens.length) return 0;
+  const itemTokenSet = itemTokens instanceof Set ? itemTokens : new Set(itemTokens);
+  let hitCount = 0;
+  for (const token of queryTokens) {
+    if (itemTokenSet.has(token)) hitCount += 1;
+  }
+  return hitCount / queryTokens.length;
 }
 
 function jaccardSimilarity(setA, setB) {
@@ -76,6 +148,26 @@ function jaccardSimilarity(setA, setB) {
   return inter / union;
 }
 
+function buildItemRecord(doc = {}, embedding = []) {
+  const pageContent = doc.pageContent || "";
+  const metadata = doc.metadata || {};
+  const metadataText = extractMetadataText(metadata);
+  const tokenStats = buildTokenStats(pageContent);
+  const metadataTokenStats = buildTokenStats(metadataText);
+
+  return {
+    pageContent,
+    metadata,
+    embedding: normalizeVector(Array.isArray(embedding) ? embedding : []),
+    tokens: tokenStats.tokens,
+    tokenFreq: tokenStats.tokenFreq,
+    length: tokenStats.length,
+    metadataTokens: metadataTokenStats.tokens,
+    metadataTokenFreq: metadataTokenStats.tokenFreq,
+    metadataLength: metadataTokenStats.length,
+  };
+}
+
 export class LocalVectorStore {
   constructor(embeddings, items = []) {
     this.embeddings = embeddings;
@@ -85,25 +177,7 @@ export class LocalVectorStore {
   static async fromDocuments(documents, embeddings) {
     const texts = documents.map((doc) => doc.pageContent || "");
     const vectors = await embeddings.embedDocuments(texts);
-    const items = documents.map((doc, index) => {
-      const rawEmb = Array.isArray(vectors[index]) ? vectors[index] : [];
-      const emb = normalizeVector(rawEmb);
-      const tokens = tokenizeText(doc.pageContent || "");
-      // 计算 token 频次
-      const tokenFreq = {};
-      tokens.forEach((t) => {
-        tokenFreq[t] = (tokenFreq[t] || 0) + 1;
-      });
-      const length = tokens.length;
-      return {
-        pageContent: doc.pageContent,
-        metadata: doc.metadata || {},
-        embedding: emb,
-        tokens,
-        tokenFreq,
-        length,
-      };
-    });
+    const items = documents.map((doc, index) => buildItemRecord(doc, vectors[index]));
     const store = new LocalVectorStore(embeddings, items);
     // 默认启用动态权重 'auto'（可被调用者覆盖为数值或自定义函数）
     store.alpha = 'auto';
@@ -116,24 +190,7 @@ export class LocalVectorStore {
     const raw = await fs.promises.readFile(filePath, "utf-8");
     const parsed = JSON.parse(raw);
     const items = Array.isArray(parsed.items)
-      ? parsed.items.map((item) => {
-          const emb = Array.isArray(item.embedding) ? normalizeVector(item.embedding) : [];
-          const tokens = Array.isArray(item.tokens) ? item.tokens : tokenizeText(item.pageContent || "");
-          const tokenFreq = item.tokenFreq || (() => {
-            const tf = {};
-            tokens.forEach((t) => { tf[t] = (tf[t] || 0) + 1; });
-            return tf;
-          })();
-          const length = item.length || tokens.length;
-          return {
-            pageContent: item.pageContent,
-            metadata: item.metadata || {},
-            embedding: emb,
-            tokens,
-            tokenFreq,
-            length,
-          };
-        })
+      ? parsed.items.map((item) => buildItemRecord(item, item.embedding))
       : [];
     const store = new LocalVectorStore(embeddings, items);
     // 默认启用动态权重 'auto'（可被调用者覆盖为数值或自定义函数）
@@ -145,22 +202,7 @@ export class LocalVectorStore {
   async addDocuments(documents) {
     const texts = documents.map((doc) => doc.pageContent || "");
     const vectors = await this.embeddings.embedDocuments(texts);
-    const newItems = documents.map((doc, index) => {
-      const rawEmb = Array.isArray(vectors[index]) ? vectors[index] : [];
-      const emb = normalizeVector(rawEmb);
-      const tokens = tokenizeText(doc.pageContent || "");
-      const tokenFreq = {};
-      tokens.forEach((t) => { tokenFreq[t] = (tokenFreq[t] || 0) + 1; });
-      const length = tokens.length;
-      return {
-        pageContent: doc.pageContent,
-        metadata: doc.metadata || {},
-        embedding: emb,
-        tokens,
-        tokenFreq,
-        length,
-      };
-    });
+    const newItems = documents.map((doc, index) => buildItemRecord(doc, vectors[index]));
     this.items.push(...newItems);
     this._buildLexicalIndex();
     return newItems;
@@ -171,19 +213,24 @@ export class LocalVectorStore {
   }
 
   _buildLexicalIndex() {
-    // 构建简单的倒排/IDF 索引
-    const df = {}; // document frequency per token
+    const df = {};
     let totalLen = 0;
+
     this.items.forEach((item) => {
       totalLen += (item.length || 0);
-      const seen = new Set(item.tokens || []);
-      seen.forEach((t) => { df[t] = (df[t] || 0) + 1; });
+      item.tokenSet = new Set(item.tokens || []);
+      const seen = item.tokenSet;
+      seen.forEach((token) => {
+        df[token] = (df[token] || 0) + 1;
+      });
     });
+
     const N = this.items.length || 1;
     const idf = {};
-    Object.keys(df).forEach((t) => {
-      idf[t] = Math.log((N - df[t] + 0.5) / (df[t] + 0.5) + 1);
+    Object.keys(df).forEach((token) => {
+      idf[token] = Math.log((N - df[token] + 0.5) / (df[token] + 0.5) + 1);
     });
+
     this.lexicalIndex = {
       idf,
       avgLen: this.items.length ? totalLen / this.items.length : 1,
@@ -195,7 +242,7 @@ export class LocalVectorStore {
     ensureVectorDbDir(vectorDbPath);
     const filePath = getVectorDbFilePath(vectorDbPath);
     const payload = {
-      version: 1,
+      version: 2,
       createdAt: new Date().toISOString(),
       count: this.items.length,
       items: this.items,
@@ -206,78 +253,117 @@ export class LocalVectorStore {
   async similaritySearch(query, topK = 4, options = {}) {
     if (!query || this.items.length === 0) return [];
 
-    const candidateCount = Number(options.candidateCount || options.topN || 50) || 50;
+    const candidateMultiplier = Number(options.candidateMultiplier || 8) || 8;
+    const candidateCount = Math.min(
+      this.items.length,
+      Math.max(topK * candidateMultiplier, Number(options.candidateCount || options.topN || topK * 8) || topK * 8)
+    );
 
-    // compute query embedding if embeddings available
     let queryEmbedding = null;
-    if (this.embeddings && typeof this.embeddings.embedQuery === 'function') {
+    if (this.embeddings && typeof this.embeddings.embedQuery === "function") {
       const queryEmbeddingRaw = await this.embeddings.embedQuery(query);
       queryEmbedding = normalizeVector(Array.isArray(queryEmbeddingRaw) ? queryEmbeddingRaw : []);
     }
 
     const queryTokens = tokenizeText(query);
+    const metadataTokens = tokenizeText(query, { includeChineseFragments: false });
 
-    // BM25 参数
-    const k1 = 1.5; const b = 0.75;
-    const idf = (this.lexicalIndex && this.lexicalIndex.idf) || {};
-    const avgLen = (this.lexicalIndex && this.lexicalIndex.avgLen) || 1;
-    const N = (this.lexicalIndex && this.lexicalIndex.N) || this.items.length || 1;
-
-    // resolve alpha
     let alpha;
-    if (typeof this.alpha === 'number') alpha = Math.max(0, Math.min(1, this.alpha));
-    else if (typeof this.alpha === 'function') {
-      try { alpha = Number(this.alpha(queryTokens)); if (!Number.isFinite(alpha)) alpha = 0.3; alpha = Math.max(0, Math.min(1, alpha)); } catch (e) { alpha = 0.3; }
-    } else if (this.alpha === 'auto') {
+    if (typeof this.alpha === "number") alpha = Math.max(0, Math.min(1, this.alpha));
+    else if (typeof this.alpha === "function") {
+      try {
+        alpha = Number(this.alpha(queryTokens));
+        if (!Number.isFinite(alpha)) alpha = 0.35;
+        alpha = Math.max(0, Math.min(1, alpha));
+      } catch (error) {
+        alpha = 0.35;
+      }
+    } else if (this.alpha === "auto") {
       const qlen = queryTokens.length || 0;
-      if (qlen <= 2) alpha = 0.0;
-      else if (qlen <= 6) alpha = 0.05;
-      else alpha = 0.10;
-    } else alpha = 0.3;
+      if (qlen <= 2) alpha = 0.2;
+      else if (qlen <= 6) alpha = 0.35;
+      else alpha = 0.5;
+    } else {
+      alpha = 0.35;
+    }
 
-    // First stage: compute lexical scores for all docs
-    const allScores = this.items.map((item) => {
-      let lexicalScoreRaw = 0;
-      const docLen = item.length || (item.tokens || []).length || 1;
-      for (const t of queryTokens) {
-        const termIdf = idf[t] || Math.log((N + 1) / 1);
-        const tf = (item.tokenFreq && item.tokenFreq[t]) ? item.tokenFreq[t] : 0;
-        const denom = tf + k1 * (1 - b + b * (docLen / avgLen));
-        const scoreTerm = termIdf * ((tf * (k1 + 1)) / (denom || 1));
-        lexicalScoreRaw += scoreTerm;
-      }
-      return { item, lexicalScoreRaw };
-    });
+    const scored = this.items.map((item) => {
+      const lexicalScoreRaw = bm25Score(queryTokens, item, this.lexicalIndex);
+      const metadataItem = {
+        tokenFreq: item.metadataTokenFreq || {},
+        length: item.metadataLength || 0,
+      };
+      const metadataScoreRaw = bm25Score(metadataTokens, metadataItem, this.lexicalIndex);
+      const overlap = overlapScore(queryTokens, item.tokenSet || item.tokens || []);
 
-    // normalize lexical
-    let maxLex = 0; allScores.forEach((s) => { if (s.lexicalScoreRaw > maxLex) maxLex = s.lexicalScoreRaw; });
-    if (maxLex === 0) maxLex = 1;
-
-    // select top-N candidates by lexical
-    const candidates = allScores
-      .map((s) => ({ item: s.item, lexicalScore: s.lexicalScoreRaw / maxLex }))
-      .sort((a, b) => b.lexicalScore - a.lexicalScore)
-      .slice(0, Math.min(candidateCount, this.items.length));
-
-    // Second stage: if we have query embedding, compute embScore for candidates and mix
-    const scoredCandidates = candidates.map((c) => {
       let embScore = 0;
-      if (queryEmbedding && Array.isArray(c.item.embedding) && c.item.embedding.length === queryEmbedding.length) {
-        const dot = cosineSimilarity(queryEmbedding, c.item.embedding);
-        embScore = (dot + 1) / 2;
+      if (queryEmbedding && Array.isArray(item.embedding) && item.embedding.length === queryEmbedding.length) {
+        const dot = cosineSimilarity(queryEmbedding, item.embedding);
+        embScore = Math.max(0, Math.min(1, (dot + 1) / 2));
       }
-      const finalScore = alpha * embScore + (1 - alpha) * c.lexicalScore;
-      return { score: finalScore, doc: { pageContent: c.item.pageContent, metadata: c.item.metadata || {} } };
+
+      return {
+        item,
+        lexicalScoreRaw,
+        metadataScoreRaw,
+        overlap,
+        embScore,
+      };
     });
 
-    return scoredCandidates.sort((a, b) => b.score - a.score).slice(0, topK).map((e) => e.doc);
+    let maxLex = 0;
+    let maxMeta = 0;
+    scored.forEach((entry) => {
+      if (entry.lexicalScoreRaw > maxLex) maxLex = entry.lexicalScoreRaw;
+      if (entry.metadataScoreRaw > maxMeta) maxMeta = entry.metadataScoreRaw;
+    });
+    if (maxLex === 0) maxLex = 1;
+    if (maxMeta === 0) maxMeta = 1;
+
+    const candidates = scored
+      .map((entry) => {
+        const lexicalScore = entry.lexicalScoreRaw / maxLex;
+        const metadataScore = entry.metadataScoreRaw / maxMeta;
+        const lexicalBlend = Math.max(
+          lexicalScore,
+          lexicalScore * 0.75 + entry.overlap * 0.25,
+          lexicalScore * 0.7 + metadataScore * 0.2 + entry.overlap * 0.1
+        );
+        const finalScore = lexicalBlend * (1 - alpha) + entry.embScore * alpha;
+
+        return {
+          score: finalScore,
+          lexicalScore,
+          metadataScore,
+          overlap: entry.overlap,
+          embScore: entry.embScore,
+          doc: {
+            pageContent: entry.item.pageContent,
+            metadata: {
+              ...(entry.item.metadata || {}),
+              _score: Number(finalScore.toFixed(6)),
+              _debug: {
+                lexicalScore: Number(lexicalScore.toFixed(6)),
+                metadataScore: Number(metadataScore.toFixed(6)),
+                overlap: Number(entry.overlap.toFixed(6)),
+                embScore: Number(entry.embScore.toFixed(6)),
+              },
+            },
+          },
+        };
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, candidateCount);
+
+    return candidates.slice(0, topK).map((entry) => entry.doc);
   }
 
   asRetriever(options = {}) {
     const k = typeof options === "number" ? options : (options.k || 4);
+    const searchOptions = typeof options === "number" ? {} : options;
     return {
-      getRelevantDocuments: (query) => this.similaritySearch(query, k),
-      invoke: (query) => this.similaritySearch(query, k),
+      getRelevantDocuments: (query) => this.similaritySearch(query, k, searchOptions),
+      invoke: (query) => this.similaritySearch(query, k, searchOptions),
     };
   }
 }
