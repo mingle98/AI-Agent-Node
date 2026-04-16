@@ -54,9 +54,23 @@ test("buildSystemPrompt: compact mode should enforce KB-first for risky domains"
 
   assert.match(prompt, /必须先用 search_knowledge 检索相关 SOP\/guardrails\/support matrix/);
   assert.match(prompt, /search_knowledge 在单轮中通常调用 1 次就够了/);
-  assert.match(prompt, /避免围绕同一问题反复检索/);
+  assert.match(prompt, /不要围绕同一问题反复检索/);
+  assert.match(prompt, /组件类问题（如 SuspendedBallChat \/ ChatPanel 配置、接入、流式、回调、样式）应优先先用 search_knowledge 检索组件文档/);
+  assert.match(prompt, /禁止在没有文档上下文时直接调用 component_consulting/);
   assert.match(prompt, /component_consulting、ai_agent_teaching、generate_document、ai_agent_echart、analyze_chart/);
   assert.match(prompt, /如果知识库提示需要澄清，就先追问，不要直接执行/);
+});
+
+test("buildSystemPrompt: should include explicit component knowledge-to-consulting example", () => {
+  const prompt = buildSystemPrompt([], [{
+    name: "component_consulting",
+    description: "d",
+    functionality: "f",
+    params: [],
+    example: "e",
+  }], {});
+  assert.match(prompt, /search_knowledge\("SuspendedBallChat 流式响应 配置"\)/);
+  assert.match(prompt, /component_consulting\("如何配置流式响应", "SuspendedBallChat", "…检索结果…"\)/);
 });
 
 test("buildSystemPrompt: compact mode should trim examples and detail fields", () => {

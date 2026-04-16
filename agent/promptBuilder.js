@@ -126,24 +126,26 @@ function buildRulesSection(options = {}) {
     return `📋 使用规则：
 1. 优先选择最匹配用户意图的工具或技能，避免无关调用
 2. 对文件操作、Office处理、Python执行、图表生成、调试/代码审查、邮件发送这类高风险或多步骤场景，必须先用 search_knowledge 检索相关 SOP/guardrails/support matrix，再决定是否调用执行型工具
-3. search_knowledge 在单轮中通常调用 1 次就够了；拿到足够规则/边界后应优先直接回答、澄清或进入最相关的下一步，避免围绕同一问题反复检索
-4. component_consulting、ai_agent_teaching、generate_document、ai_agent_echart、analyze_chart 等能力只有在用户目标明确需要时再调用，不要为了补充信息而无关扩散调用
-5. 知识查询优先 search_knowledge；代码相关优先 analyze_code / code_review / debug_assistant
-6. 图表与流程梳理优先 mermaid_diagram 或 ai_agent_echart，必要时再调用 render_mermaid
-7. 文件、Office、压缩、图片、邮件等场景使用对应专用工具，但在执行前先参考相关知识库并确认边界/澄清点
-8. 涉及执行脚本可使用 exec_code 或 python_executor，但生成或执行 Python 前必须先参考相关 guardrails，优先确认是否只用标准库、是否需要补齐输入
-9. 文件操作遵循 sessionId 隔离；路径以用户 workspace 为根目录
-10. 参数要完整准确；如果知识库提示需要澄清，就先追问，不要直接执行
-11. 回答需准确、友好、专业`;
+3. search_knowledge 在单轮中通常调用 1 次就够了；如果已有足够规则、边界或组件说明，应优先直接回答、澄清或进入最相关的下一步，不要围绕同一问题反复检索
+4. 组件类问题（如 SuspendedBallChat / ChatPanel 配置、接入、流式、回调、样式）应优先先用 search_knowledge 检索组件文档；只有拿到文档片段后，才可调用 component_consulting 做总结，禁止在没有文档上下文时直接调用 component_consulting
+5. component_consulting、ai_agent_teaching、generate_document、ai_agent_echart、analyze_chart 等能力只有在用户目标明确需要时再调用，不要为了补充信息而无关扩散调用
+6. 知识查询优先 search_knowledge；代码相关优先 analyze_code / code_review / debug_assistant
+7. 图表与流程梳理优先 mermaid_diagram 或 ai_agent_echart，必要时再调用 render_mermaid
+8. 文件、Office、压缩、图片、邮件等场景使用对应专用工具，但在执行前先参考相关知识库并确认边界/澄清点
+9. 涉及执行脚本可使用 exec_code 或 python_executor，但生成或执行 Python 前必须先参考相关 guardrails，优先确认是否只用标准库、是否需要补齐输入
+10. 文件操作遵循 sessionId 隔离；路径以用户 workspace 为根目录
+11. 参数要完整准确；如果知识库提示需要澄清，就先追问，不要直接执行
+12. 回答需准确、友好、专业`;
   }
 
   return `📋 使用规则：
 1. 知识查询 → 使用 search_knowledge 工具（AI Agent资料、组件文档，以及文件/Office/Python/图表/调试/邮件等场景的 SOP、guardrails、support matrix）
 2. 对以下高风险或多步骤场景，不要直接调用执行型工具，必须先用 search_knowledge 检索相关知识库，再根据检索结果决定是否执行：文件操作、Office处理、Python脚本生成与执行、图表/Mermaid生成、调试/代码审查、邮件发送/通知/报告投递
 3. search_knowledge 在单轮中通常调用 1 次就够了；如果已有足够规则、边界或组件说明，应优先直接回答、澄清或进入最相关的下一步，不要围绕同一问题反复检索
-4. component_consulting、ai_agent_teaching、generate_document、ai_agent_echart、analyze_chart 等能力只有在用户目标明确需要时再调用；若当前任务只是排查、解释或给方案，不要为了补充信息而无关扩散调用
-5. 如果知识库提示该场景需要先澄清路径、输入、附件、格式、边界或保留原件，就必须先追问，不要直接执行
-6. 代码分析 → 使用 analyze_code 工具（解释逻辑、问题排查）
+4. 组件类问题（如 SuspendedBallChat / ChatPanel 配置、接入、流式、回调、样式）应优先先用 search_knowledge 检索组件文档；只有拿到文档片段后，才可调用 component_consulting 做总结，禁止在没有文档上下文时直接调用 component_consulting
+5. component_consulting、ai_agent_teaching、generate_document、ai_agent_echart、analyze_chart 等能力只有在用户目标明确需要时再调用；若当前任务只是排查、解释或给方案，不要为了补充信息而无关扩散调用
+6. 如果知识库提示该场景需要先澄清路径、输入、附件、格式、边界或保留原件，就必须先追问，不要直接执行
+7. 代码分析 → 使用 analyze_code 工具（解释逻辑、问题排查）
 7. 文档生成 → 使用 generate_document 工具（API文档、教程、README）
 8. 图表分析讲解 → 使用 analyze_chart 工具（Mermaid/ECharts 源码或配置解析、要点与总结）
 9. 数据搜索或可视化 → 使用ai_agent_echart技能(数据搜索和可视化)
@@ -256,7 +258,7 @@ ${finalExamples.join('\n')}`;
 function generateSkillExample(skill) {
   const exampleMap = {
     'ai_agent_teaching': '- "教我AI Agent架构" → 用 ai_agent_teaching 技能（自动完成教学流程）',
-    'component_consulting': '- "如何配置流式响应" → 用 component_consulting 技能（组件使用指导）',
+    'component_consulting': '- "如何配置流式响应" → 先用 search_knowledge("SuspendedBallChat 流式响应 配置") 检索组件文档，再用 component_consulting("如何配置流式响应", "SuspendedBallChat", "…检索结果…") 基于检索结果做总结',
     'code_explanation': '- "详细解释这段代码" → 用 code_explanation 技能（深度代码分析）',
     'mermaid_diagram': '- "把这段逻辑用流程图/时序图画出来" → 用 mermaid_diagram 技能（生成图表代码块）',
     'debug_assistant': '- "报错了：Cannot read property of undefined" → 用 debug_assistant 技能（错误诊断）',
