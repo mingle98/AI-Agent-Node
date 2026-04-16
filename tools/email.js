@@ -109,7 +109,7 @@ export async function sendEmail(options) {
     const mailOptions = {
       from: from 
         ? `"${from}" <${smtpConfig.auth.user}>` 
-        : smtpConfig.auth.user,
+        : `AI智能工作台邮件 <${smtpConfig.auth.user}>`,
       to,
       subject,
       text: html ? undefined : text,
