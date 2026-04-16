@@ -166,6 +166,10 @@ export class LocalVectorStore {
     return newItems;
   }
 
+  setEmbeddings(embeddings) {
+    this.embeddings = embeddings;
+  }
+
   _buildLexicalIndex() {
     // 构建简单的倒排/IDF 索引
     const df = {}; // document frequency per token
@@ -199,93 +203,74 @@ export class LocalVectorStore {
     await fs.promises.writeFile(filePath, JSON.stringify(payload), "utf-8");
   }
 
-  async similaritySearch(query, topK = 4) {
-    if (!query || this.items.length === 0) {
-      return [];
-    }
+  async similaritySearch(query, topK = 4, options = {}) {
+    if (!query || this.items.length === 0) return [];
 
+    const candidateCount = Number(options.candidateCount || options.topN || 50) || 50;
+
+    // compute query embedding if embeddings available
     let queryEmbedding = null;
     if (this.embeddings && typeof this.embeddings.embedQuery === 'function') {
       const queryEmbeddingRaw = await this.embeddings.embedQuery(query);
       queryEmbedding = normalizeVector(Array.isArray(queryEmbeddingRaw) ? queryEmbeddingRaw : []);
     }
+
     const queryTokens = tokenizeText(query);
 
     // BM25 参数
-    const k1 = 1.5;
-    const b = 0.75;
+    const k1 = 1.5; const b = 0.75;
     const idf = (this.lexicalIndex && this.lexicalIndex.idf) || {};
     const avgLen = (this.lexicalIndex && this.lexicalIndex.avgLen) || 1;
     const N = (this.lexicalIndex && this.lexicalIndex.N) || this.items.length || 1;
-    // 计算动态 alpha：支持数值、'auto'（基于查询长度）或自定义函数
+
+    // resolve alpha
     let alpha;
-    if (typeof this.alpha === 'number') {
-      alpha = Math.max(0, Math.min(1, this.alpha));
-    } else if (typeof this.alpha === 'function') {
-      try {
-        alpha = Number(this.alpha(queryTokens));
-        if (!Number.isFinite(alpha)) alpha = 0.3;
-        alpha = Math.max(0, Math.min(1, alpha));
-      } catch (e) {
-        alpha = 0.3;
-      }
+    if (typeof this.alpha === 'number') alpha = Math.max(0, Math.min(1, this.alpha));
+    else if (typeof this.alpha === 'function') {
+      try { alpha = Number(this.alpha(queryTokens)); if (!Number.isFinite(alpha)) alpha = 0.3; alpha = Math.max(0, Math.min(1, alpha)); } catch (e) { alpha = 0.3; }
     } else if (this.alpha === 'auto') {
-      // 自动规则：基于离线调参结果（utils/auto_tune_offline_results.json）
-      // 短查询（<=1 token）: alpha=0.0
-      // 中等查询（2..4 tokens）: alpha=0.1
-      // 长查询 (>=5 tokens): alpha=0.3
       const qlen = queryTokens.length || 0;
-      if (qlen <= 1) alpha = 0.0;
-      else if (qlen <= 4) alpha = 0.1;
-      else alpha = 0.3;
-    } else {
-      alpha = 0.3; // 默认值
-    }
+      if (qlen <= 2) alpha = 0.0;
+      else if (qlen <= 6) alpha = 0.05;
+      else alpha = 0.10;
+    } else alpha = 0.3;
 
-    // 先计算每个 doc 的原始 lexicalScore（BM25）和 embScore
-    const scored = this.items.map((item) => {
-      let embScore = 0;
-      if (queryEmbedding && Array.isArray(item.embedding) && item.embedding.length === queryEmbedding.length) {
-        const embScoreRaw = cosineSimilarity(queryEmbedding, item.embedding);
-        embScore = (embScoreRaw + 1) / 2;
-      }
-
-      // BM25-like lexical score
+    // First stage: compute lexical scores for all docs
+    const allScores = this.items.map((item) => {
       let lexicalScoreRaw = 0;
       const docLen = item.length || (item.tokens || []).length || 1;
       for (const t of queryTokens) {
-        const qtf = 1; // query term frequency (assume 1 for short queries)
-        const df = idf[t] ? ( ( (this.lexicalIndex && this.lexicalIndex.idf[t]) ? ( (N - Math.exp(this.lexicalIndex.idf[t]) + 0.5) ) : 1 ) ) : 0; // df not directly stored; fallback
         const termIdf = idf[t] || Math.log((N + 1) / 1);
         const tf = (item.tokenFreq && item.tokenFreq[t]) ? item.tokenFreq[t] : 0;
         const denom = tf + k1 * (1 - b + b * (docLen / avgLen));
         const scoreTerm = termIdf * ((tf * (k1 + 1)) / (denom || 1));
         lexicalScoreRaw += scoreTerm;
       }
-
-      return { item, embScore, lexicalScoreRaw };
+      return { item, lexicalScoreRaw };
     });
 
-    // 归一化 lexicalScoreRaw 到 [0,1]
-    let maxLex = 0;
-    scored.forEach((s) => { if (s.lexicalScoreRaw > maxLex) maxLex = s.lexicalScoreRaw; });
+    // normalize lexical
+    let maxLex = 0; allScores.forEach((s) => { if (s.lexicalScoreRaw > maxLex) maxLex = s.lexicalScoreRaw; });
     if (maxLex === 0) maxLex = 1;
 
-    return scored
-      .map((s) => {
-        const lexicalScore = s.lexicalScoreRaw / maxLex;
-        const finalScore = alpha * s.embScore + (1 - alpha) * lexicalScore;
-        return {
-          score: finalScore,
-          doc: {
-            pageContent: s.item.pageContent,
-            metadata: s.item.metadata || {},
-          },
-        };
-      })
-      .sort((a, b) => b.score - a.score)
-      .slice(0, topK)
-      .map((entry) => entry.doc);
+    // select top-N candidates by lexical
+    const candidates = allScores
+      .map((s) => ({ item: s.item, lexicalScore: s.lexicalScoreRaw / maxLex }))
+      .sort((a, b) => b.lexicalScore - a.lexicalScore)
+      .slice(0, Math.min(candidateCount, this.items.length));
+
+    // Second stage: if we have query embedding, compute embScore for candidates and mix
+    const scoredCandidates = candidates.map((c) => {
+      let embScore = 0;
+      if (queryEmbedding && Array.isArray(c.item.embedding) && c.item.embedding.length === queryEmbedding.length) {
+        const dot = cosineSimilarity(queryEmbedding, c.item.embedding);
+        embScore = (dot + 1) / 2;
+      }
+      const finalScore = alpha * embScore + (1 - alpha) * c.lexicalScore;
+      return { score: finalScore, doc: { pageContent: c.item.pageContent, metadata: c.item.metadata || {} } };
+    });
+
+    return scoredCandidates.sort((a, b) => b.score - a.score).slice(0, topK).map((e) => e.doc);
   }
 
   asRetriever(options = {}) {
@@ -322,7 +307,7 @@ export async function buildRAGKnowledgeBase(options) {
     knowledgeBasePath,
     vectorDbPath,
     embeddings,
-    chunkSize = 1000,
+    chunkSize = 2000,
     chunkOverlap = 200,
   } = options;
 

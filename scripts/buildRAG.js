@@ -73,7 +73,7 @@ async function main() {
       knowledgeBasePath,
       vectorDbPath,
       embeddings,
-      chunkSize: 1000,
+      chunkSize: 2000,
       chunkOverlap: 200,
     });
 
