@@ -209,6 +209,82 @@ test("ProductionAgent: should handle multimodal input", async () => {
   assert.equal(result, "image received");
 });
 
+test("ProductionAgent.getKnowledgeDecisionReminder: should return reminder for risky file scenario", () => {
+  const llm = new MockLLM([]);
+  const agent = createAgentWithMockLLM(llm);
+
+  const reminder = agent.getKnowledgeDecisionReminder("帮我整理 workspace 里的文件并删除没用的");
+
+  assert.match(reminder, /本轮工具决策提醒/);
+  assert.match(reminder, /search_knowledge/);
+  assert.match(reminder, /文件\/workspace 操作/);
+});
+
+test("ProductionAgent.getKnowledgeDecisionReminder: should return empty for general chat", () => {
+  const llm = new MockLLM([]);
+  const agent = createAgentWithMockLLM(llm);
+
+  const reminder = agent.getKnowledgeDecisionReminder("你好，介绍一下你自己");
+
+  assert.equal(reminder, "");
+});
+
+test("ProductionAgent.getKnowledgeDecisionReminder: should return empty when feature switch is disabled", () => {
+  const llm = new MockLLM([]);
+  const agent = createAgentWithMockLLM(llm, { knowledgeDecisionReminderEnabled: false });
+
+  const reminder = agent.getKnowledgeDecisionReminder("帮我整理 workspace 里的文件并删除没用的");
+
+  assert.equal(reminder, "");
+});
+
+test("ProductionAgent.chat: should append per-turn knowledge reminder for risky ReAct request", async () => {
+  const ai = new AIMessage({ content: "done" });
+  const llm = new MockLLM([{ chunks: [ai] }]);
+  const agent = createAgentWithMockLLM(llm, { streamEnabled: false });
+
+  const sessionId = "react-kb-reminder";
+  await agent.chat("帮我删除 workspace 里的无用文件", null, null, sessionId, { streamEnabled: false });
+
+  const session = agent.getOrCreateSession(sessionId);
+  const systemMessages = session.messages.filter((m) => m._getType() === "system");
+  assert.ok(systemMessages.length >= 2, "should keep original system prompt and per-turn reminder");
+  assert.ok(systemMessages.some((m) => String(m.content).includes("本轮工具决策提醒")));
+});
+
+test("ProductionAgent.chat: should not append per-turn knowledge reminder when feature switch is disabled", async () => {
+  const ai = new AIMessage({ content: "done" });
+  const llm = new MockLLM([{ chunks: [ai] }]);
+  const agent = createAgentWithMockLLM(llm, {
+    streamEnabled: false,
+    knowledgeDecisionReminderEnabled: false,
+  });
+
+  const sessionId = "react-kb-reminder-disabled";
+  await agent.chat("帮我删除 workspace 里的无用文件", null, null, sessionId, { streamEnabled: false });
+
+  const session = agent.getOrCreateSession(sessionId);
+  const reminderMessages = session.messages.filter(
+    (m) => m._getType() === "system" && String(m.content).includes("本轮工具决策提醒")
+  );
+  assert.equal(reminderMessages.length, 0);
+});
+
+test("ProductionAgent.chat: should not append per-turn knowledge reminder for general ReAct chat", async () => {
+  const ai = new AIMessage({ content: "hello" });
+  const llm = new MockLLM([{ chunks: [ai] }]);
+  const agent = createAgentWithMockLLM(llm, { streamEnabled: false });
+
+  const sessionId = "react-no-kb-reminder";
+  await agent.chat("你好", null, null, sessionId, { streamEnabled: false });
+
+  const session = agent.getOrCreateSession(sessionId);
+  const reminderMessages = session.messages.filter(
+    (m) => m._getType() === "system" && String(m.content).includes("本轮工具决策提醒")
+  );
+  assert.equal(reminderMessages.length, 0);
+});
+
 test("ProductionAgent.buildSystemPromptForCapabilities: should append domain KB guidance for file scenarios", () => {
   const llm = new MockLLM([]);
   const agent = createAgentWithMockLLM(llm, { capabilityRoutingEnabled: true, compactSystemPrompt: true });

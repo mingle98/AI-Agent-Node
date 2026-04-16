@@ -675,6 +675,73 @@ test("ProductionAgent: plan_exec mode handles plan fallback to react on invalid 
     return content.includes("无效计划测试");
   });
   assert.equal(userMessages.length, 1, "fallback to ReAct should not duplicate original user message");
+
+  const reminderMessages = session.messages.filter(
+    (m) => m._getType() === "system" && String(m.content).includes("本轮工具决策提醒")
+  );
+  assert.equal(reminderMessages.length, 0, "non-risky fallback should not inject reminder");
+});
+
+test("ProductionAgent: plan_exec mode appends knowledge reminder for risky request", async () => {
+  const planResponse = new AIMessage({
+    content: JSON.stringify({
+      task_summary: "Risky plan",
+      estimated_steps: 1,
+      steps: [{ step_id: 1, description: "Handle workspace files", depends_on: [], expected_output: "done" }],
+      final_goal: "Complete"
+    })
+  });
+
+  const stepResponse = new AIMessage({ content: "Plan done" });
+  const llm = new MockLLM([
+    { message: planResponse },
+    { message: stepResponse }
+  ]);
+
+  const agent = createAgentWithMockLLM(llm, {
+    taskMode: "plan_exec",
+    streamEnabled: false
+  });
+
+  const sessionId = "plan-kb-reminder";
+  await agent.chat("帮我整理 workspace 里的文件并删除无用内容", null, null, sessionId);
+
+  const session = agent.getOrCreateSession(sessionId);
+  const reminderMessages = session.messages.filter(
+    (m) => m._getType() === "system" && String(m.content).includes("本轮工具决策提醒")
+  );
+  assert.equal(reminderMessages.length, 1, "risky plan request should append one reminder");
+});
+
+test("ProductionAgent: plan_exec fallback keeps existing knowledge reminder for risky request", async () => {
+  const invalidPlanResponse = new AIMessage({ content: "not a valid json plan" });
+  const fallbackResponse = new AIMessage({ content: "Fallback response after plan failure" });
+
+  const llm = new MockLLM([
+    { message: invalidPlanResponse },
+    { message: fallbackResponse }
+  ]);
+
+  const agent = createAgentWithMockLLM(llm, {
+    taskMode: "plan_exec",
+    streamEnabled: false
+  });
+
+  const sessionId = "plan-risky-fallback-reminder";
+  await agent.chat("帮我删除 workspace 里的无用文件", null, null, sessionId);
+
+  const session = agent.getOrCreateSession(sessionId);
+  const humanMessages = session.messages.filter((m) => m._getType() === "human");
+  const userMessages = humanMessages.filter((m) => {
+    const content = typeof m.content === "string" ? m.content : JSON.stringify(m.content);
+    return content.includes("帮我删除 workspace 里的无用文件");
+  });
+  assert.equal(userMessages.length, 1, "fallback should still avoid duplicate user message");
+
+  const reminderMessages = session.messages.filter(
+    (m) => m._getType() === "system" && String(m.content).includes("本轮工具决策提醒")
+  );
+  assert.equal(reminderMessages.length, 1, "risky fallback request should preserve single reminder");
 });
 
 test("ProductionAgent: plan_exec mode respects maxStepIterations", async () => {

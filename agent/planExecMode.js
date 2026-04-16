@@ -464,10 +464,14 @@ export async function chatWithPlanExec(agent, userInput, chunkCallback, fullResp
 
       // 构建并记录用户消息（关键：保持与 chatWithReAct 一致的上下文处理）
       const addMessage = agent.buildHumanMessage(userInput);
+      const knowledgeDecisionReminder = agent.getKnowledgeDecisionReminder(userInput);
       if (agent.options.debug) {
         console.log(`👤 [${sessionId}] 用户消息:`, addMessage.toString());
       }
       session.messages.push(addMessage);
+      if (knowledgeDecisionReminder) {
+        session.messages.push(new SystemMessage(knowledgeDecisionReminder));
+      }
       await agent.manageContext(session);
 
       agent.ensureRequestActive(session, requestState, sessionId);

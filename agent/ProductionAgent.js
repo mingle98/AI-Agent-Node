@@ -50,6 +50,31 @@ function buildDomainKnowledgeGuidance(userInput = "") {
   return `\n\n【领域知识库前置提醒】\n${matched.map((item, idx) => `${idx + 1}. ${item}`).join("\n")}`;
 }
 
+function extractUserInputText(userInput) {
+  if (typeof userInput === "string") {
+    return userInput;
+  }
+  if (userInput && typeof userInput === "object") {
+    return typeof userInput.text === "string" ? userInput.text : String(userInput.text || "");
+  }
+  return String(userInput || "");
+}
+
+function buildKnowledgeDecisionReminder(userInput = "") {
+  const domainGuidance = buildDomainKnowledgeGuidance(userInput);
+  if (!domainGuidance) {
+    return "";
+  }
+
+  return [
+    "【本轮工具决策提醒】",
+    "如果当前请求命中了文件、Office、Python执行、图表/可视化、调试/代码审查、邮件/定时任务等场景，不要直接调用执行型工具。",
+    "你应该优先调用一次 search_knowledge，先确认 SOP、边界、缺失参数和澄清点。",
+    "如果不确定是直接执行还是先查规则，默认先查知识库，再继续后续动作。",
+    domainGuidance.trim(),
+  ].join("\n");
+}
+
 // ========== 会话中止错误类 ==========
 export class AbortError extends Error {
   constructor(message = "Session aborted by client") {
@@ -258,6 +283,10 @@ export class ProductionAgent {
       });
     }
 
+    this.knowledgeDecisionReminderEnabled =
+      options.knowledgeDecisionReminderEnabled !== undefined
+        ? options.knowledgeDecisionReminderEnabled === true
+        : CONFIG.knowledgeDecisionReminderEnabled !== false;
     this.capabilityRoutingEnabled = options.capabilityRoutingEnabled === true;
     this.compactSystemPrompt = options.compactSystemPrompt !== false;
     this.baseSystemPrompt = this.buildSystemPrompt();
@@ -926,6 +955,14 @@ export class ProductionAgent {
     return this.beginRequest(session);
   }
 
+  getKnowledgeDecisionReminder(userInput) {
+    if (!this.knowledgeDecisionReminderEnabled) {
+      return "";
+    }
+    const userInputText = extractUserInputText(userInput);
+    return buildKnowledgeDecisionReminder(userInputText);
+  }
+
   // ========== 任务入口 ==========
   async chat(
     userInput,
@@ -1019,6 +1056,7 @@ export class ProductionAgent {
         this.touchSession(session);
         const toolExcResults = [];
         const logText = typeof userInput === "string" ? userInput : (userInput?.text || "[多模态输入]");
+        const knowledgeDecisionReminder = this.getKnowledgeDecisionReminder(userInput);
         console.log(`👤 [${sessionId}] 用户: ${logText}`);
         if (!skipUserMessageAppend) {
           const addMessage = this.buildHumanMessage(userInput);
@@ -1026,6 +1064,9 @@ export class ProductionAgent {
             console.log(`👤 [${sessionId}] 用户消息:`, addMessage.toString());
           }
           session.messages.push(addMessage);
+          if (knowledgeDecisionReminder) {
+            session.messages.push(new SystemMessage(knowledgeDecisionReminder));
+          }
           await this.manageContext(session);
         }
 
