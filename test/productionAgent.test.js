@@ -211,7 +211,7 @@ test("ProductionAgent: should handle multimodal input", async () => {
 
 test("ProductionAgent.getKnowledgeDecisionReminder: should return reminder for risky file scenario", () => {
   const llm = new MockLLM([]);
-  const agent = createAgentWithMockLLM(llm);
+  const agent = createAgentWithMockLLM(llm, { knowledgeDecisionReminderEnabled: true });
 
   const reminder = agent.getKnowledgeDecisionReminder("帮我整理 workspace 里的文件并删除没用的");
 
@@ -222,7 +222,7 @@ test("ProductionAgent.getKnowledgeDecisionReminder: should return reminder for r
 
 test("ProductionAgent.getKnowledgeDecisionReminder: should return reminder for risky debug scenario", () => {
   const llm = new MockLLM([]);
-  const agent = createAgentWithMockLLM(llm);
+  const agent = createAgentWithMockLLM(llm, { knowledgeDecisionReminderEnabled: true });
 
   const reminder = agent.getKnowledgeDecisionReminder("帮我排查这个流式响应为什么没有增量输出");
 
@@ -252,7 +252,10 @@ test("ProductionAgent.getKnowledgeDecisionReminder: should return empty when fea
 test("ProductionAgent.chat: should append per-turn knowledge reminder for risky ReAct request", async () => {
   const ai = new AIMessage({ content: "done" });
   const llm = new MockLLM([{ chunks: [ai] }]);
-  const agent = createAgentWithMockLLM(llm, { streamEnabled: false });
+  const agent = createAgentWithMockLLM(llm, {
+    streamEnabled: false,
+    knowledgeDecisionReminderEnabled: true,
+  });
 
   const sessionId = "react-kb-reminder";
   await agent.chat("帮我排查这个流式响应为什么没有增量输出", null, null, sessionId, { streamEnabled: false });
@@ -301,7 +304,10 @@ test("ProductionAgent.chat: should clear stale knowledge reminder before next sa
     { chunks: [new AIMessage({ content: "first done" })] },
     { chunks: [new AIMessage({ content: "second done" })] },
   ]);
-  const agent = createAgentWithMockLLM(llm, { streamEnabled: false });
+  const agent = createAgentWithMockLLM(llm, {
+    streamEnabled: false,
+    knowledgeDecisionReminderEnabled: true,
+  });
 
   const sessionId = "react-reminder-reset";
   await agent.chat("帮我排查这个流式响应为什么没有增量输出", null, null, sessionId, { streamEnabled: false });
