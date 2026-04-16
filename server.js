@@ -4,7 +4,7 @@ import "dotenv/config";
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import { ProductionAgent } from "./agent/ProductionAgent.js";
+import { ProductionAgent, AbortError } from "./agent/ProductionAgent.js";
 import { createLLM, createEmbeddings, createFallbackLLM } from "./llm.js";
 import { loadOrBuildVectorStore } from "./utils/ragBuilder.js";
 import {
@@ -260,13 +260,37 @@ app.post("/api/chat", chatInfoCheckMiddleware, async (req, res, next) => {
     res.status(200);
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-transform");
-    res.setHeader("Connection", "close");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders?.();
 
     let clientAborted = false;
+    let hasSentEnd = false;
+    let heartbeatTimer = null;
+    const clearHeartbeat = () => {
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+      }
+    };
+    const emitTerminalEvent = (payload) => {
+      if (hasSentEnd || clientAborted || res.writableEnded) {
+        return false;
+      }
+      hasSentEnd = true;
+      return sendChunk({ ...payload, is_end: true });
+    };
     const onDisconnect = (reason) => {
       if (clientAborted) return;
+      const canNotifyClient = !hasSentEnd && !res.writableEnded;
+      if (canNotifyClient) {
+        emitTerminalEvent({
+          code: 1,
+          result: "连接已中断，请重试",
+        });
+      }
       clientAborted = true;
+      clearHeartbeat();
       console.log("⛓️‍💥 SSE 客户端断开:", reason);
       if (requestState) {
         agent.abortRequest(agent.getOrCreateSession(sessionId), requestState.id, reason);
@@ -283,15 +307,28 @@ app.post("/api/chat", chatInfoCheckMiddleware, async (req, res, next) => {
 
     const sendChunk = (payload) => {
       if (clientAborted || res.writableEnded) {
-        return;
+        return false;
       }
       try {
         res.write(`data: ${JSON.stringify(payload)}\n\n`);
+        return true;
       } catch (e) {
         onDisconnect("res.write.error");
+        return false;
       }
     };
-    let hasSentEnd = false;
+
+    const sendHeartbeat = () => {
+      if (clientAborted || res.writableEnded || hasSentEnd) {
+        return;
+      }
+      try {
+        res.write(`\n`);
+      } catch (e) {
+        onDisconnect("heartbeat.write.error");
+      }
+    };
+    heartbeatTimer = setInterval(sendHeartbeat, 15000);
     const toolExcResults = [];
     let pending = Promise.resolve();
     // 是否正在思考中
@@ -322,8 +359,7 @@ app.post("/api/chat", chatInfoCheckMiddleware, async (req, res, next) => {
                   isThinking = false;
                 }
                 await renderCustomComponents(toolExcResults, sendChunk, { sleepMs: 1000 });
-                hasSentEnd = true;
-                sendChunk({ code: 0, result: chunk.content || "", is_end: true });
+                emitTerminalEvent({ code: 0, result: chunk.content || "" });
                 return;
               }
               if (chunk.type === "error") {
@@ -331,8 +367,10 @@ app.post("/api/chat", chatInfoCheckMiddleware, async (req, res, next) => {
                   sendChunk({ code: 0, result: wrapThinkingClose(), is_end: false });
                   isThinking = false;
                 }
-                hasSentEnd = true;
-                sendChunk({ code: 1, result: chunk.message || "未知错误", is_end: true });
+                emitTerminalEvent({
+                  code: 1,
+                  result: chunk.message || "未知错误",
+                });
                 return;
               }
               if (chunk?.content) {
@@ -371,15 +409,20 @@ app.post("/api/chat", chatInfoCheckMiddleware, async (req, res, next) => {
           sendChunk({ code: 0, result: wrapThinkingClose(), is_end: false });
           isThinking = false;
         }
-        sendChunk({ code: 0, result: '', is_end: true });
+        emitTerminalEvent({ code: 0, result: '' });
       }
     } catch (error) {
       if (isThinking) {
         sendChunk({ code: 0, result: wrapThinkingClose(), is_end: false });
         isThinking = false;
       }
-      sendChunk({ code: 1, result: error.message || "未知错误", is_end: true });
+      const isAbortError = error instanceof AbortError;
+      emitTerminalEvent({
+        code: 1,
+        result: isAbortError ? '连接已中断，请重试' : (error.message || "未知错误"),
+      });
     } finally {
+      clearHeartbeat();
       res.end();
     }
   } catch (error) {
