@@ -27,6 +27,19 @@ test("skillAIAgentTeaching: should support all levels", async () => {
   assert.ok(advanced.includes("advanced"));
 });
 
+test("skillComponentConsulting: should generate generic focus guidance", async () => {
+  const result = await skillComponentConsulting("如何配置流式响应", "SuspendedBallChat");
+  assert.ok(result.includes("请求模式"));
+  assert.ok(result.includes("custom-request-config"));
+  assert.ok(result.includes("基于 SuspendedBallChat 和你当前的问题直接给出对应的组件示例配置"));
+});
+
+test("skillComponentConsulting: should use dynamic component title", async () => {
+  const result = await skillComponentConsulting("如何关闭面板", "ChatPanel");
+  assert.ok(result.includes("ChatPanel 组件咨询"));
+  assert.ok(result.includes("组件: ChatPanel"));
+});
+
 test("skillComponentConsulting: should generate consulting content", async () => {
   const result = await skillComponentConsulting("如何配置流式响应", "SuspendedBallChat");
   assert.ok(result.includes("SuspendedBallChat"));
