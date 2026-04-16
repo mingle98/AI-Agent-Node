@@ -700,7 +700,8 @@ test("ProductionAgent: plan_exec mode appends knowledge reminder for risky reque
 
   const agent = createAgentWithMockLLM(llm, {
     taskMode: "plan_exec",
-    streamEnabled: false
+    streamEnabled: false,
+    knowledgeDecisionReminderEnabled: true,
   });
 
   const sessionId = "plan-kb-reminder";
@@ -724,7 +725,8 @@ test("ProductionAgent: plan_exec fallback keeps existing knowledge reminder for 
 
   const agent = createAgentWithMockLLM(llm, {
     taskMode: "plan_exec",
-    streamEnabled: false
+    streamEnabled: false,
+    knowledgeDecisionReminderEnabled: true,
   });
 
   const sessionId = "plan-risky-fallback-reminder";
@@ -774,7 +776,8 @@ test("ProductionAgent: plan_exec should remove stale knowledge reminder before n
 
   const agent = createAgentWithMockLLM(llm, {
     taskMode: "plan_exec",
-    streamEnabled: false
+    streamEnabled: false,
+    knowledgeDecisionReminderEnabled: true,
   });
 
   const sessionId = "plan-reminder-reset";
