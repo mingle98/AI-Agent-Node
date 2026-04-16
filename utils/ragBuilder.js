@@ -24,30 +24,59 @@ function getVectorDbFilePath(vectorDbPath) {
 }
 
 function cosineSimilarity(a = [], b = []) {
+  // 保留兼容性：如果输入不是数组或长度不匹配，返回 -1
   if (!Array.isArray(a) || !Array.isArray(b) || a.length === 0 || b.length === 0 || a.length !== b.length) {
     return -1;
   }
 
+  // 假设向量已被归一化（调用者会归一化），直接返回点积作为 cosine
   let dot = 0;
-  let normA = 0;
-  let normB = 0;
-
   for (let i = 0; i < a.length; i += 1) {
-    const valueA = Number(a[i]) || 0;
-    const valueB = Number(b[i]) || 0;
-    dot += valueA * valueB;
-    normA += valueA * valueA;
-    normB += valueB * valueB;
+    dot += (Number(a[i]) || 0) * (Number(b[i]) || 0);
   }
-
-  if (normA === 0 || normB === 0) {
-    return -1;
-  }
-
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+  return dot;
 }
 
-class LocalVectorStore {
+function normalizeVector(v = []) {
+  let norm = 0;
+  for (let i = 0; i < v.length; i += 1) {
+    const val = Number(v[i]) || 0;
+    norm += val * val;
+  }
+  norm = Math.sqrt(norm) || 1;
+  return v.map((x) => (Number(x) || 0) / norm);
+}
+
+function tokenizeText(text = "") {
+  const s = String(text || "").toLowerCase();
+  const parts = s.split(/[^a-z0-9\u4e00-\u9fff]+/).filter((w) => w && w.length > 0);
+  const tokens = new Set();
+  parts.forEach((p) => {
+    if (/[\u4e00-\u9fff]/.test(p)) {
+      // 对中文，生成字符二元组（bigram）以提升匹配
+      for (let i = 0; i < p.length - 1; i += 1) {
+        tokens.add(p.slice(i, i + 2));
+      }
+      // 也保留原片段
+      tokens.add(p);
+    } else {
+      if (p.length > 1) tokens.add(p);
+    }
+  });
+  return Array.from(tokens);
+}
+
+function jaccardSimilarity(setA, setB) {
+  if (!setA || !setB) return 0;
+  const a = new Set(setA);
+  const b = new Set(setB);
+  let inter = 0;
+  for (const v of a) if (b.has(v)) inter += 1;
+  const union = new Set([...a, ...b]).size || 1;
+  return inter / union;
+}
+
+export class LocalVectorStore {
   constructor(embeddings, items = []) {
     this.embeddings = embeddings;
     this.items = items;
@@ -56,31 +85,106 @@ class LocalVectorStore {
   static async fromDocuments(documents, embeddings) {
     const texts = documents.map((doc) => doc.pageContent || "");
     const vectors = await embeddings.embedDocuments(texts);
-    const items = documents.map((doc, index) => ({
-      pageContent: doc.pageContent,
-      metadata: doc.metadata || {},
-      embedding: vectors[index],
-    }));
-    return new LocalVectorStore(embeddings, items);
+    const items = documents.map((doc, index) => {
+      const rawEmb = Array.isArray(vectors[index]) ? vectors[index] : [];
+      const emb = normalizeVector(rawEmb);
+      const tokens = tokenizeText(doc.pageContent || "");
+      // 计算 token 频次
+      const tokenFreq = {};
+      tokens.forEach((t) => {
+        tokenFreq[t] = (tokenFreq[t] || 0) + 1;
+      });
+      const length = tokens.length;
+      return {
+        pageContent: doc.pageContent,
+        metadata: doc.metadata || {},
+        embedding: emb,
+        tokens,
+        tokenFreq,
+        length,
+      };
+    });
+    const store = new LocalVectorStore(embeddings, items);
+    // 默认启用动态权重 'auto'（可被调用者覆盖为数值或自定义函数）
+    store.alpha = 'auto';
+    store._buildLexicalIndex();
+    return store;
   }
 
   static async load(vectorDbPath, embeddings) {
     const filePath = getVectorDbFilePath(vectorDbPath);
     const raw = await fs.promises.readFile(filePath, "utf-8");
     const parsed = JSON.parse(raw);
-    return new LocalVectorStore(embeddings, Array.isArray(parsed.items) ? parsed.items : []);
+    const items = Array.isArray(parsed.items)
+      ? parsed.items.map((item) => {
+          const emb = Array.isArray(item.embedding) ? normalizeVector(item.embedding) : [];
+          const tokens = Array.isArray(item.tokens) ? item.tokens : tokenizeText(item.pageContent || "");
+          const tokenFreq = item.tokenFreq || (() => {
+            const tf = {};
+            tokens.forEach((t) => { tf[t] = (tf[t] || 0) + 1; });
+            return tf;
+          })();
+          const length = item.length || tokens.length;
+          return {
+            pageContent: item.pageContent,
+            metadata: item.metadata || {},
+            embedding: emb,
+            tokens,
+            tokenFreq,
+            length,
+          };
+        })
+      : [];
+    const store = new LocalVectorStore(embeddings, items);
+    // 默认启用动态权重 'auto'（可被调用者覆盖为数值或自定义函数）
+    store.alpha = 'auto';
+    store._buildLexicalIndex();
+    return store;
   }
 
   async addDocuments(documents) {
     const texts = documents.map((doc) => doc.pageContent || "");
     const vectors = await this.embeddings.embedDocuments(texts);
-    const newItems = documents.map((doc, index) => ({
-      pageContent: doc.pageContent,
-      metadata: doc.metadata || {},
-      embedding: vectors[index],
-    }));
+    const newItems = documents.map((doc, index) => {
+      const rawEmb = Array.isArray(vectors[index]) ? vectors[index] : [];
+      const emb = normalizeVector(rawEmb);
+      const tokens = tokenizeText(doc.pageContent || "");
+      const tokenFreq = {};
+      tokens.forEach((t) => { tokenFreq[t] = (tokenFreq[t] || 0) + 1; });
+      const length = tokens.length;
+      return {
+        pageContent: doc.pageContent,
+        metadata: doc.metadata || {},
+        embedding: emb,
+        tokens,
+        tokenFreq,
+        length,
+      };
+    });
     this.items.push(...newItems);
+    this._buildLexicalIndex();
     return newItems;
+  }
+
+  _buildLexicalIndex() {
+    // 构建简单的倒排/IDF 索引
+    const df = {}; // document frequency per token
+    let totalLen = 0;
+    this.items.forEach((item) => {
+      totalLen += (item.length || 0);
+      const seen = new Set(item.tokens || []);
+      seen.forEach((t) => { df[t] = (df[t] || 0) + 1; });
+    });
+    const N = this.items.length || 1;
+    const idf = {};
+    Object.keys(df).forEach((t) => {
+      idf[t] = Math.log((N - df[t] + 0.5) / (df[t] + 0.5) + 1);
+    });
+    this.lexicalIndex = {
+      idf,
+      avgLen: this.items.length ? totalLen / this.items.length : 1,
+      N,
+    };
   }
 
   async save(vectorDbPath) {
@@ -100,15 +204,85 @@ class LocalVectorStore {
       return [];
     }
 
-    const queryEmbedding = await this.embeddings.embedQuery(query);
-    return this.items
-      .map((item) => ({
-        score: cosineSimilarity(queryEmbedding, item.embedding),
-        doc: {
-          pageContent: item.pageContent,
-          metadata: item.metadata || {},
-        },
-      }))
+    let queryEmbedding = null;
+    if (this.embeddings && typeof this.embeddings.embedQuery === 'function') {
+      const queryEmbeddingRaw = await this.embeddings.embedQuery(query);
+      queryEmbedding = normalizeVector(Array.isArray(queryEmbeddingRaw) ? queryEmbeddingRaw : []);
+    }
+    const queryTokens = tokenizeText(query);
+
+    // BM25 参数
+    const k1 = 1.5;
+    const b = 0.75;
+    const idf = (this.lexicalIndex && this.lexicalIndex.idf) || {};
+    const avgLen = (this.lexicalIndex && this.lexicalIndex.avgLen) || 1;
+    const N = (this.lexicalIndex && this.lexicalIndex.N) || this.items.length || 1;
+    // 计算动态 alpha：支持数值、'auto'（基于查询长度）或自定义函数
+    let alpha;
+    if (typeof this.alpha === 'number') {
+      alpha = Math.max(0, Math.min(1, this.alpha));
+    } else if (typeof this.alpha === 'function') {
+      try {
+        alpha = Number(this.alpha(queryTokens));
+        if (!Number.isFinite(alpha)) alpha = 0.3;
+        alpha = Math.max(0, Math.min(1, alpha));
+      } catch (e) {
+        alpha = 0.3;
+      }
+    } else if (this.alpha === 'auto') {
+      // 自动规则：基于离线调参结果（utils/auto_tune_offline_results.json）
+      // 短查询（<=1 token）: alpha=0.0
+      // 中等查询（2..4 tokens）: alpha=0.1
+      // 长查询 (>=5 tokens): alpha=0.3
+      const qlen = queryTokens.length || 0;
+      if (qlen <= 1) alpha = 0.0;
+      else if (qlen <= 4) alpha = 0.1;
+      else alpha = 0.3;
+    } else {
+      alpha = 0.3; // 默认值
+    }
+
+    // 先计算每个 doc 的原始 lexicalScore（BM25）和 embScore
+    const scored = this.items.map((item) => {
+      let embScore = 0;
+      if (queryEmbedding && Array.isArray(item.embedding) && item.embedding.length === queryEmbedding.length) {
+        const embScoreRaw = cosineSimilarity(queryEmbedding, item.embedding);
+        embScore = (embScoreRaw + 1) / 2;
+      }
+
+      // BM25-like lexical score
+      let lexicalScoreRaw = 0;
+      const docLen = item.length || (item.tokens || []).length || 1;
+      for (const t of queryTokens) {
+        const qtf = 1; // query term frequency (assume 1 for short queries)
+        const df = idf[t] ? ( ( (this.lexicalIndex && this.lexicalIndex.idf[t]) ? ( (N - Math.exp(this.lexicalIndex.idf[t]) + 0.5) ) : 1 ) ) : 0; // df not directly stored; fallback
+        const termIdf = idf[t] || Math.log((N + 1) / 1);
+        const tf = (item.tokenFreq && item.tokenFreq[t]) ? item.tokenFreq[t] : 0;
+        const denom = tf + k1 * (1 - b + b * (docLen / avgLen));
+        const scoreTerm = termIdf * ((tf * (k1 + 1)) / (denom || 1));
+        lexicalScoreRaw += scoreTerm;
+      }
+
+      return { item, embScore, lexicalScoreRaw };
+    });
+
+    // 归一化 lexicalScoreRaw 到 [0,1]
+    let maxLex = 0;
+    scored.forEach((s) => { if (s.lexicalScoreRaw > maxLex) maxLex = s.lexicalScoreRaw; });
+    if (maxLex === 0) maxLex = 1;
+
+    return scored
+      .map((s) => {
+        const lexicalScore = s.lexicalScoreRaw / maxLex;
+        const finalScore = alpha * s.embScore + (1 - alpha) * lexicalScore;
+        return {
+          score: finalScore,
+          doc: {
+            pageContent: s.item.pageContent,
+            metadata: s.item.metadata || {},
+          },
+        };
+      })
       .sort((a, b) => b.score - a.score)
       .slice(0, topK)
       .map((entry) => entry.doc);
@@ -191,13 +365,48 @@ export async function buildRAGKnowledgeBase(options) {
     const splitDocs = await textSplitter.splitDocuments(docs);
     console.log(`   ✅ 切分成 ${splitDocs.length} 个文本块\n`);
 
+    // 后处理：合并过小片段并去重近似片段（基于 token Jaccard）
+    const dedupThreshold = options.dedupThreshold || 0.75; // Jaccard 阈值
+    const minChunkTokens = options.minChunkTokens || 5; // 过小片段合并阈值
+
+    const processed = [];
+    for (const chunk of splitDocs) {
+      const text = String(chunk.pageContent || "");
+      const tokens = tokenizeText(text);
+      // 如果太短，合并到上一个
+      if (tokens.length < minChunkTokens && processed.length > 0) {
+        const last = processed[processed.length - 1];
+        last.pageContent += "\n" + text;
+        // 重新计算 tokens
+        last.tokens = tokenizeText(last.pageContent);
+        continue;
+      }
+
+      // 检查与已处理片段的相似度，若超过阈值则合并到相似的那条
+      let merged = false;
+      for (const existing of processed) {
+        const sim = jaccardSimilarity(tokens, existing.tokens || tokenizeText(existing.pageContent || ""));
+        if (sim >= dedupThreshold) {
+          existing.pageContent += "\n" + text;
+          existing.tokens = tokenizeText(existing.pageContent);
+          merged = true;
+          break;
+        }
+      }
+      if (!merged) {
+        processed.push({ pageContent: text, metadata: chunk.metadata || {}, tokens });
+      }
+    }
+
+    console.log(`   ✅ 处理后剩余 ${processed.length} 个文本块（去重/合并）\n`);
+
     // 步骤3: 向量化（Embedding嵌入）
     console.log("🔢 步骤3/4: 向量化文本...");
     console.log("   📡 使用 text-embedding-v4 模型\n");
 
     // 步骤4: 存储到本地向量数据库
     console.log("💾 步骤4/4: 存储到本地向量数据库...");
-    const vectorStore = await LocalVectorStore.fromDocuments(splitDocs, embeddings);
+    const vectorStore = await LocalVectorStore.fromDocuments(processed, embeddings);
     await vectorStore.save(vectorDbPath);
     console.log(`   ✅ 向量数据库已保存到: ${getVectorDbFilePath(vectorDbPath)}\n`);
 
