@@ -101,6 +101,11 @@ const DOMAIN_PATTERNS = [
     skills: [],
   },
   {
+    test: /(组件|控件|SuspendedBallChat|AISuspendedBallChat|ChatPanel|欢迎界面|欢迎语|开场白|流式|sse|回调|props|参数配置|组件配置|前端组件|接入组件|聊天组件|悬浮球|面板配置|样式配置|AI组件|ai组件|聊天组件)/i,
+    tools: ["search_knowledge"],
+    skills: ["component_consulting"],
+  },
+  {
     test: /(教学|学习|讲解|教程|入门|原理|是什么|怎么用|如何使用|架构|概念|对比|区别|ai\s*agent|智能体)/i,
     tools: ["search_knowledge"],
     skills: ["ai_agent_teaching", "component_consulting", "code_explanation"],

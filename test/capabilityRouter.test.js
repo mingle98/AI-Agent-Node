@@ -132,6 +132,28 @@ test("selectActiveCapabilities: should activate file content search for content-
   assert.ok(result.toolNames.includes("file_content_search"));
 });
 
+test("selectActiveCapabilities: should route component consultation queries to knowledge and component consulting", () => {
+  const toolDefinitions = [
+    tool("search_knowledge", "知识查询"),
+    tool("analyze_code", "代码分析"),
+  ];
+  const skillDefinitions = [
+    skill("component_consulting", "组件咨询"),
+    skill("code_explanation", "代码解释"),
+  ];
+
+  const result = selectActiveCapabilities({
+    userInput: "组件怎么欢迎界面配置？",
+    toolDefinitions,
+    skillDefinitions,
+    alwaysOnTools: ["search_knowledge"],
+    alwaysOnSkills: [],
+  });
+
+  assert.ok(result.toolNames.includes("search_knowledge"));
+  assert.ok(result.skillNames.includes("component_consulting"));
+});
+
 test("selectActiveCapabilities: should respect max limits", () => {
   const toolDefinitions = [tool("t1", "测试"), tool("t2", "测试"), tool("t3", "测试")];
   const skillDefinitions = [skill("s1", "测试"), skill("s2", "测试")];

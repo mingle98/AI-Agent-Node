@@ -36,6 +36,10 @@ const DOMAIN_KNOWLEDGE_PREFLIGHTS = [
     guidance: "当前请求属于【调试 / 代码审查】场景。在直接下结论或给修复方案前，先用 search_knowledge 检索相关 playbook（如 debugging_playbook、code_review_checklist），确认排查顺序、问题分级和哪些信息还需要先向用户补齐。"
   },
   {
+    test: /(组件|控件|SuspendedBallChat|AISuspendedBallChat|ChatPanel|欢迎界面|欢迎语|开场白|流式|sse|回调|props|参数配置|组件配置|前端组件|接入组件|聊天组件|悬浮球|面板配置|样式配置)/i,
+    guidance: "当前请求属于【前端组件咨询 / 配置说明】场景。遇到 SuspendedBallChat、AISuspendedBallChat、ChatPanel 等组件的配置、接入、欢迎界面、回调、流式、样式问题时，先用 search_knowledge 检索组件文档（如 AISuspendedBallChat、ChatPanel、组件 props/示例），确认具体配置项、示例代码和限制，再回答或调用 component_consulting 做总结。"
+  },
+  {
     test: /(邮件|邮箱|发送|发信|mail|smtp|定时|schedule|通知|提醒|群发|定时任务|延时发送|邮件模板|报告投递)/i,
     guidance: "当前请求属于【邮件 / 通知 / 报告投递】场景。在调用 email_sender、email_send 或 schedule_task 前，先用 search_knowledge 检索相关手册（如 email_scenarios_playbook、notification_and_report_delivery_guide），确认这是写邮件、发邮件、定时发还是带附件发，并检查是否缺少收件人、主题、附件路径或场景类型。"
   }
