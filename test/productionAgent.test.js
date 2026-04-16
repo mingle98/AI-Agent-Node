@@ -240,6 +240,7 @@ test("ProductionAgent.chat: should inject proactive knowledge context using firs
   assert.equal(injectedMessages.length, 1);
   assert.match(String(injectedMessages[0].content), /前端组件咨询/);
   assert.match(String(injectedMessages[0].content), /欢迎界面/);
+  assert.match(String(injectedMessages[0].content), /不要再次调用 search_knowledge/);
 });
 
 test("ProductionAgent.chat: should not inject knowledge context when feature switch is disabled", async () => {

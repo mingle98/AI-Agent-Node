@@ -38,7 +38,7 @@ const DOMAIN_KNOWLEDGE_PREFLIGHTS = [
     scene: "调试 / 代码审查",
   },
   {
-    test: /(组件|ai组件|控件|SuspendedBallChat|AISuspendedBallChat|ChatPanel|欢迎界面|欢迎语|开场白|流式|sse|回调|props|参数配置|组件配置|前端组件|接入组件|聊天组件|悬浮球|面板配置|样式配置)/i,
+    test: /(组件|ai组件|控件|SuspendedBallChat|AISuspendedBallChat|ChatPanel|欢迎界面|欢迎语|开场白|流式|sse|回调|props|参数配置|组件配置|前端组件|接入组件|聊天组件|悬浮球|面板配置|样式配置|AI组件|AI聊天组件|聊天组件|助手|AI助手)/i,
     scene: "前端组件咨询 / 配置说明",
   },
   {
@@ -68,7 +68,8 @@ function buildInjectedKnowledgeContextMessage(preflight, knowledgeContext = "") 
   return [
     KNOWLEDGE_CONTEXT_PREFIX,
     `以下内容是系统已主动检索到的【${preflight.scene}】知识，请优先基于这些内容回答当前问题。`,
-    "如果知识片段已足够，直接回答:",
+    "这份知识库内容已经由系统检索完成，本轮不要再次调用 search_knowledge；只有当用户明确要求继续深挖文档、当前片段明显不足以回答，或需要检索其他主题时，才允许再次调用。",
+    "如果当前片段已足够，直接回答。",
     normalized,
   ].join("\n");
 }
