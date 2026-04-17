@@ -10,6 +10,6 @@ export async function searchKnowledgeBase(vectorStore, query) {
     return "知识库中未找到相关信息";
   }
   return docs.map((doc, i) => 
-    `[${i + 1}] ${doc.pageContent.substring(0, 150)}...\n来源: ${path.basename(doc.metadata.source)}`
+    `[${i + 1}] ${doc.pageContent}\n来源: ${path.basename(doc.metadata.source)}`
   ).join("\n\n");
 }
