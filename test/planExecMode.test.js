@@ -36,6 +36,37 @@ class MockLLM {
     this.callCount = 0;
   }
 
+  stream = async function* () {
+    this.callCount++;
+    const next = this.script.shift() || {};
+    if (next.error) {
+      throw next.error;
+    }
+    if (Array.isArray(next.chunks)) {
+      for (const c of next.chunks) {
+        yield c;
+      }
+      return;
+    }
+    if (next.message) {
+      yield next.message;
+      return;
+    }
+    yield new AIMessage({ content: "" });
+  }.bind(this);
+
+  invoke = async function() {
+    this.callCount++;
+    const next = this.script.shift() || {};
+    if (next.error) {
+      throw next.error;
+    }
+    if (next.message) {
+      return next.message;
+    }
+    return new AIMessage({ content: "" });
+  }.bind(this);
+
   bindTools() {
     const script = this.script;
     const self = this;
@@ -395,6 +426,48 @@ test("ProductionAgent: plan_exec should hide search_tools from frontend tool eve
 
   assert.ok(!events.some((item) => item.type === "tool_event" && item.toolName === "search_tools"));
   assert.ok(!events.some((item) => item.type === "status" && typeof item.content === "string" && item.content.includes("search_tools")));
+});
+
+test("ProductionAgent: plan_exec should generate plan without tool calls during planning phase", async () => {
+  const llm = new MockLLM([
+    {
+      message: new AIMessage({
+        content: JSON.stringify({
+          task_summary: "整理文件并发送报告",
+          estimated_steps: 1,
+          steps: [
+            {
+              step_id: 1,
+              description: "输出整理方案说明",
+              depends_on: [],
+              expected_output: "方案说明",
+            },
+          ],
+          final_goal: "完成规划并回复",
+        }),
+      }),
+    },
+    {
+      message: new AIMessage({ content: "已完成整理方案说明。" }),
+    },
+  ]);
+
+  const agent = createAgentWithMockLLM(llm, {
+    taskMode: "plan_exec",
+    maxPlanSteps: 5,
+    maxStepIterations: 2,
+    streamEnabled: false,
+  });
+
+  const result = await agent.chat(
+    "帮我全面梳理我的所有文件并输出报告",
+    null,
+    null,
+    "plan-no-tools-test",
+    { taskMode: "plan_exec", streamEnabled: false }
+  );
+
+  assert.match(result, /整理方案说明/);
 });
 
 test("ProductionAgent: plan_exec configuration options", () => {

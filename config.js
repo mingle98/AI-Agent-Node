@@ -20,7 +20,7 @@ export const CONFIG = {
   // ========== 能力路由配置 ==========
   // 重要提示: 如果配置开始,请保证capabilityRouter.js中的DOMAIN_PATTERNS关键词匹配尽量覆盖全面,因为他会直接影响召回准确性
   // 但工具或技能非常多，所以建议先通过能力路由配置文件capabilityRouter.js进行配置，再开启此功能
-  capabilityRoutingEnabled: false, // 默认关闭动态能力路由，保持全量能力注入
+  capabilityRoutingEnabled: true, // 默认关闭动态能力路由，保持全量能力注入
 
   // ========== 知识库决策提醒配置 ==========
   knowledgeDecisionReminderEnabled: true, // 默认关闭：高风险场景追加“先查知识库”提醒

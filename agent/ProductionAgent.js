@@ -829,45 +829,76 @@ export class ProductionAgent {
   }
 
   async invokeLLMWithResilience(session, messages, options = {}) {
-    const { onChunk = null, streamEnabled = true, enableThinking, capabilityNames = null, requestState = null } = options || {};
-    const tools = this.getStructuredTools(capabilityNames || session?.activeCapabilityNames);
+    const {
+      onChunk = null,
+      streamEnabled = true,
+      enableThinking,
+      capabilityNames = null,
+      requestState = null,
+      allowTools = true,
+    } = options || {};
+    const tools = allowTools ? this.getStructuredTools(capabilityNames || session?.activeCapabilityNames) : [];
 
     if (this.options.debug) {
       console.log(`🧰 [${session?.id || "unknown"}] 本轮绑定工具/技能数量: ${tools.length}`);
     }
 
     const invokePrimary = async (targetMessages = messages) => {
-      if (!this.llm?.bindTools) {
-        throw new Error("LLM does not support bindTools");
-      }
       const baseLlm =
         streamEnabled && enableThinking === true && this.thinkingLlm
           ? this.thinkingLlm
           : this.llm;
-      const model = baseLlm.bindTools(tools, { tool_choice: "auto" });
-      if (streamEnabled) {
-        return withTimeout(this.collectFromStream(model, targetMessages, onChunk, session, requestState), this.resilience.llmTimeoutMs, "LLM stream");
+
+      if (allowTools) {
+        if (!baseLlm?.bindTools) {
+          throw new Error("LLM does not support bindTools");
+        }
+        const model = baseLlm.bindTools(tools, { tool_choice: "auto" });
+        if (streamEnabled) {
+          return withTimeout(this.collectFromStream(model, targetMessages, onChunk, session, requestState), this.resilience.llmTimeoutMs, "LLM stream");
+        }
+        return withTimeout(this.collectFromInvoke(model, targetMessages, session, requestState), this.resilience.llmTimeoutMs, "LLM invoke");
       }
-      return withTimeout(this.collectFromInvoke(model, targetMessages, session, requestState), this.resilience.llmTimeoutMs, "LLM invoke");
+
+      if (streamEnabled) {
+        return withTimeout(this.collectFromStream(baseLlm, targetMessages, onChunk, session, requestState), this.resilience.llmTimeoutMs, "LLM stream");
+      }
+      return withTimeout(this.collectFromInvoke(baseLlm, targetMessages, session, requestState), this.resilience.llmTimeoutMs, "LLM invoke");
     };
 
     const invokeFallback = async (targetMessages = messages) => {
       if (!this.fallbackLlm) {
         return { message: new AIMessage("抱歉，服务暂时繁忙，请稍后重试。"), streamedText: false };
       }
-      if (!this.fallbackLlm?.bindTools) {
-        return { message: new AIMessage("抱歉，服务暂时繁忙，请稍后重试。"), streamedText: false };
+
+      if (allowTools) {
+        if (!this.fallbackLlm?.bindTools) {
+          return { message: new AIMessage("抱歉，服务暂时繁忙，请稍后重试。"), streamedText: false };
+        }
+        const fallbackModel = this.fallbackLlm.bindTools(tools, { tool_choice: "auto" });
+        if (streamEnabled) {
+          return withTimeout(
+            this.collectFromStream(fallbackModel, targetMessages, onChunk, session, requestState),
+            this.resilience.llmTimeoutMs,
+            "Fallback LLM stream"
+          );
+        }
+        return withTimeout(
+          this.collectFromInvoke(fallbackModel, targetMessages, session, requestState),
+          this.resilience.llmTimeoutMs,
+          "Fallback LLM invoke"
+        );
       }
-      const fallbackModel = this.fallbackLlm.bindTools(tools, { tool_choice: "auto" });
+
       if (streamEnabled) {
         return withTimeout(
-          this.collectFromStream(fallbackModel, targetMessages, onChunk, session, requestState),
+          this.collectFromStream(this.fallbackLlm, targetMessages, onChunk, session, requestState),
           this.resilience.llmTimeoutMs,
           "Fallback LLM stream"
         );
       }
       return withTimeout(
-        this.collectFromInvoke(fallbackModel, targetMessages, session, requestState),
+        this.collectFromInvoke(this.fallbackLlm, targetMessages, session, requestState),
         this.resilience.llmTimeoutMs,
         "Fallback LLM invoke"
       );
