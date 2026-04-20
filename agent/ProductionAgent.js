@@ -1195,9 +1195,9 @@ export class ProductionAgent {
 
           session.messages.push(normalizedAiResponse);
 
-          if (streamEnabled && !isInternalToolCall) {
-            emitStreamEvent(chunkCallback, { type: "status", content: getToolDivBox('⌛️ 【TOOL】正在调用工具/技能...', 'start') });
-          }
+          // if (streamEnabled) {
+          //   emitStreamEvent(chunkCallback, { type: "status", content: getToolDivBox('⌛️ 【TOOL】正在调用工具/技能...', 'start') });
+          // }
 
           for (const toolCall of toolCalls) {
             this.ensureRequestActive(session, requestState, sessionId);
