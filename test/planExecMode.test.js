@@ -241,6 +241,51 @@ test("selectTaskMode: empty requestOptions object", async () => {
   assert.equal(mode, "plan_exec", "Should handle empty requestOptions object");
 });
 
+test("ProductionAgent: plan_exec should hide search_tools from frontend tool events", async () => {
+  const planResponse = new AIMessage({
+    content: JSON.stringify({
+      task_summary: "Tool discovery task",
+      estimated_steps: 1,
+      steps: [{ step_id: 1, description: "先搜索能力再执行", depends_on: [], expected_output: "done" }],
+      final_goal: "Complete"
+    })
+  });
+
+  const searchToolResponse = new AIMessage({ content: "" });
+  searchToolResponse.tool_calls = [{ name: "search_tools", id: "plan-search-1", args: { arg1: "画一个流程图", arg2: "all", arg3: 4 } }];
+
+  const finalResponse = new AIMessage({ content: "步骤完成" });
+
+  const llm = new MockLLM([
+    { message: planResponse },
+    { message: searchToolResponse },
+    { message: finalResponse }
+  ]);
+
+  const agent = createAgentWithMockLLM(llm, {
+    taskMode: "plan_exec",
+    capabilityRoutingEnabled: true,
+    streamEnabled: true,
+    maxActiveTools: 4,
+    alwaysOnTools: ["search_knowledge", "analyze_code", "exec_code", "search_tools"],
+  });
+
+  const events = [];
+  await agent.chat(
+    "帮我画一个流程图",
+    (event, toolEvent) => {
+      if (event) events.push(event);
+      if (toolEvent) events.push({ type: "tool_event", ...toolEvent });
+    },
+    null,
+    "plan-hide-search-tools-test",
+    { taskMode: "plan_exec", streamEnabled: true }
+  );
+
+  assert.ok(!events.some((item) => item.type === "tool_event" && item.toolName === "search_tools"));
+  assert.ok(!events.some((item) => item.type === "status" && typeof item.content === "string" && item.content.includes("search_tools")));
+});
+
 // ========== Plan+Exec Configuration Tests ==========
 
 test("ProductionAgent: plan_exec configuration options", () => {

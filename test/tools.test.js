@@ -18,6 +18,24 @@ test("TOOL_DEFINITIONS: each tool should have required fields", () => {
   }
 });
 
+test("ProductionAgent callable definitions: should include search_tools only when routing enabled", async () => {
+  const { ProductionAgent } = await import("../agent/ProductionAgent.js");
+  const mockLlm = {
+    bindTools() {
+      return {
+        stream: async function* () {},
+        invoke: async () => ({ content: "" }),
+      };
+    },
+  };
+
+  const agentWithRouting = new ProductionAgent(mockLlm, null, null, { debug: false, capabilityRoutingEnabled: true });
+  const agentWithoutRouting = new ProductionAgent(mockLlm, null, null, { debug: false, capabilityRoutingEnabled: false });
+
+  assert.ok(agentWithRouting.callableDefinitions.has("search_tools"));
+  assert.ok(!agentWithoutRouting.callableDefinitions.has("search_tools"));
+});
+
 test("TOOLS: should map tool names to functions", () => {
   assert.equal(typeof TOOLS.search_knowledge, "function");
   assert.equal(typeof TOOLS.analyze_code, "function");

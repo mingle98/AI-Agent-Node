@@ -12,6 +12,7 @@ export function buildSystemPrompt(toolDefinitions, skillDefinitions, options = {
     roleName = "智能客服助手",
     roleDescription = "可以帮助用户解决问题",
     compact = false,
+    capabilityRoutingEnabled = false,
   } = options;
 
   // 构建工具列表
@@ -21,7 +22,7 @@ export function buildSystemPrompt(toolDefinitions, skillDefinitions, options = {
   const skillsSection = buildSkillsSection(skillDefinitions, { compact });
   
   // 构建使用规则
-  const rulesSection = buildRulesSection({ compact });
+  const rulesSection = buildRulesSection({ compact, capabilityRoutingEnabled });
   
   // 构建决策示例
   const examplesSection = buildExamplesSection(skillDefinitions, { compact });
@@ -120,7 +121,7 @@ ${skillsList}`;
  * 构建使用规则部分
  */
 function buildRulesSection(options = {}) {
-  const { compact = false } = options;
+  const { compact = false, capabilityRoutingEnabled = false } = options;
 
   if (compact) {
     return `📋 使用规则：
@@ -135,7 +136,9 @@ function buildRulesSection(options = {}) {
 9. 涉及执行脚本可使用 exec_code 或 python_executor，但生成或执行 Python 前必须先参考相关 guardrails，优先确认是否只用标准库、是否需要补齐输入
 10. 文件操作遵循 sessionId 隔离；路径以用户 workspace 为根目录
 11. 参数要完整准确；如果知识库提示需要澄清，就先追问，不要直接执行
-12. 回答需准确、友好、专业`;
+12. 回答需准确、友好、专业
+${capabilityRoutingEnabled ? '13. 当当前已注入能力不足、工具不存在，或你不确定该用哪个工具/技能时，优先调用 search_tools 搜索并激活匹配能力，再继续执行' : ''}
+`;
   }
 
   return `📋 使用规则：

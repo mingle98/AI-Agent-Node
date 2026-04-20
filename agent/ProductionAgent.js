@@ -12,7 +12,9 @@ import { CircuitBreaker, retryWithBackoff, withSessionLock, withTimeout } from "
 import { selectTaskMode, chatWithPlanExec } from "./planExecMode.js";
 import { getToolDivBox } from "../utils/streamRenderer.js";
 import { LongTermMemory, LTM_INJECT_START, LTM_INJECT_END } from "./longTermMemory.js";
-import { selectActiveCapabilities, expandCapabilitiesToAll } from "./capabilityRouter.js";
+import { selectActiveCapabilities, expandCapabilitiesToAll, searchCapabilities } from "./capabilityRouter.js";
+
+const SEARCH_TOOLS_NAME = "search_tools";
 
 // ========== 会话中止错误类 ==========
 export class AbortError extends Error {
@@ -162,6 +164,18 @@ function extractMemoryBlock(systemPrompt = "") {
   return systemPrompt.substring(startIdx, endIdx);
 }
 
+const SEARCH_TOOLS_DEFINITION = {
+  name: "search_tools",
+  description: "搜索当前系统中可用的工具和技能，并激活匹配到的能力供后续调用",
+  params: [
+    { name: "查询内容", type: "string", example: "处理 Excel 并发送邮件报告" },
+    { name: "搜索类型", type: "string", example: "all", options: ["all", "tool", "skill"], required: false },
+    { name: "返回数量", type: "number", example: 8, required: false },
+  ],
+  example: 'search_tools("处理 Excel 并发送邮件报告", "all", 8)',
+  special: true,
+};
+
 export class ProductionAgent {
   constructor(llm, vectorStore, embeddings, options = {}) {
     this.llm = llm;
@@ -201,7 +215,7 @@ export class ProductionAgent {
     }
 
     this.capabilityRoutingEnabled = options.capabilityRoutingEnabled === true;
-    this.compactSystemPrompt = options.compactSystemPrompt !== false;
+    this.compactSystemPrompt = this.capabilityRoutingEnabled || false;
     this.baseSystemPrompt = this.buildSystemPrompt();
     this.systemPrompt = this.baseSystemPrompt;
     this.callableDefinitions = this.buildCallableDefinitions();
@@ -220,11 +234,12 @@ export class ProductionAgent {
 
   buildSystemPrompt() {
     const systemPrompt = buildSystemPrompt(
-      TOOL_DEFINITIONS,
+      this.capabilityRoutingEnabled ? [...TOOL_DEFINITIONS, SEARCH_TOOLS_DEFINITION] : TOOL_DEFINITIONS,
       SKILL_DEFINITIONS,
       {
         roleName: this.options.roleName || "智能问答助手",
         roleDescription: this.options.roleDescription || "可以帮助用户解决问题",
+        capabilityRoutingEnabled: this.capabilityRoutingEnabled,
       }
     );
 
@@ -243,6 +258,7 @@ export class ProductionAgent {
     const allDefs = [
       ...TOOL_DEFINITIONS.map((def) => ({ ...def, kind: "tool" })),
       ...SKILL_DEFINITIONS.map((def) => ({ ...def, kind: "skill" })),
+      ...(this.capabilityRoutingEnabled ? [{ ...SEARCH_TOOLS_DEFINITION, kind: "tool" }] : []),
     ];
     // console.log('🧧buildCallableDefinitions 所有定义:', allDefs);
 
@@ -299,15 +315,25 @@ export class ProductionAgent {
       return expandCapabilitiesToAll(TOOL_DEFINITIONS, SKILL_DEFINITIONS);
     }
 
-    return selectActiveCapabilities({
+    const routingToolDefinitions = [...TOOL_DEFINITIONS, SEARCH_TOOLS_DEFINITION];
+    const selection = selectActiveCapabilities({
       userInput,
-      toolDefinitions: TOOL_DEFINITIONS,
+      toolDefinitions: routingToolDefinitions,
       skillDefinitions: SKILL_DEFINITIONS,
-      alwaysOnTools: this.options.alwaysOnTools || ["search_knowledge", "analyze_code", "exec_code"],
+      alwaysOnTools: this.options.alwaysOnTools || ["search_knowledge", "analyze_code", "exec_code", "search_tools"],
       alwaysOnSkills: this.options.alwaysOnSkills || [],
       maxTools: this.options.maxActiveTools || 14,
       maxSkills: this.options.maxActiveSkills || 8,
     });
+
+    if (this.options.debug) {
+      const preview = String(typeof userInput === "string" ? userInput : (userInput?.text || "")).slice(0, 120);
+      console.log(`🧭 [capability-routing] 初始路由完成: tools=${selection.toolNames.length}, skills=${selection.skillNames.length}, total=${selection.capabilityNames.length}`);
+      console.log(`🧭 [capability-routing] 用户意图预览: ${preview}`);
+      console.log(`🧭 [capability-routing] 初始能力: ${selection.capabilityNames.join(", ")}`);
+    }
+
+    return selection;
   }
 
   buildSystemPromptForCapabilities(capabilitySelection) {
@@ -318,16 +344,21 @@ export class ProductionAgent {
     const skillSet = new Set(skillNames);
 
     const activeTools = TOOL_DEFINITIONS.filter((d) => toolSet.has(d.name));
+    if (toolSet.has(SEARCH_TOOLS_DEFINITION.name)) {
+      activeTools.push(SEARCH_TOOLS_DEFINITION);
+    }
     const activeSkills = SKILL_DEFINITIONS.filter((d) => skillSet.has(d.name));
 
     return buildSystemPrompt(activeTools, activeSkills, {
       roleName: this.options.roleName || "智能问答助手",
       roleDescription: this.options.roleDescription || "可以帮助用户解决问题",
       compact: this.compactSystemPrompt,
+      capabilityRoutingEnabled: this.capabilityRoutingEnabled,
     });
   }
 
   applyCapabilitySelectionToSession(session, capabilitySelection) {
+    const previousCapabilities = new Set(session.activeCapabilityNames || []);
     const selected = capabilitySelection || expandCapabilitiesToAll(TOOL_DEFINITIONS, SKILL_DEFINITIONS);
     session.activeCapabilities = selected;
     session.activeCapabilityNames = selected.capabilityNames || [];
@@ -344,9 +375,12 @@ export class ProductionAgent {
       : rebuiltPrompt;
 
     if (this.options.debug) {
+      const addedCapabilities = session.activeCapabilityNames.filter((name) => !previousCapabilities.has(name));
+      const removedCapabilities = [...previousCapabilities].filter((name) => !session.activeCapabilityNames.includes(name));
       console.log(
         `🧭 [${session.id}] 激活能力: tools=${selected.toolNames?.length || 0}, skills=${selected.skillNames?.length || 0}, total=${session.activeCapabilityNames.length}/${this.callableDefinitions.size}`
       );
+      console.log(`🧭 [${session.id}] 能力变化: +[${addedCapabilities.join(", ") || "无"}] -[${removedCapabilities.join(", ") || "无"}]`);
       console.log(`🧭 [${session.id}] 能力清单: ${session.activeCapabilityNames.join(", ")}`);
       console.log(`🧠 [${session.id}] 记忆块保留: ${existingMemoryBlock ? "是" : "否"}`);
       console.log("\n" + "=".repeat(70));
@@ -363,6 +397,75 @@ export class ProductionAgent {
     } else {
       session.messages.unshift(nextSystemMessage);
     }
+  }
+
+  mergeCapabilitySelections(baseSelection, nextSelection) {
+    const mergedToolNames = Array.from(new Set([
+      ...(baseSelection?.toolNames || []),
+      ...(nextSelection?.toolNames || []),
+    ]));
+    const mergedSkillNames = Array.from(new Set([
+      ...(baseSelection?.skillNames || []),
+      ...(nextSelection?.skillNames || []),
+    ]));
+
+    return {
+      toolNames: mergedToolNames,
+      skillNames: mergedSkillNames,
+      capabilityNames: [...mergedToolNames, ...mergedSkillNames],
+    };
+  }
+
+  searchAndActivateCapabilities(session, query, options = {}) {
+    if (!this.capabilityRoutingEnabled) {
+      if (this.options.debug) {
+        console.log(`🔎 [${session?.id || "unknown"}] search_tools 跳过：capability routing 未开启`);
+      }
+      return {
+        query: String(query || ""),
+        kind: options?.kind || "all",
+        matches: [],
+        activated: [],
+      };
+    }
+
+    const { kind = "all", limit = 4 } = options || {};
+    const result = searchCapabilities({
+      query,
+      toolDefinitions: TOOL_DEFINITIONS,
+      skillDefinitions: SKILL_DEFINITIONS,
+      kind,
+      limit,
+    });
+
+    const currentSelection = session?.activeCapabilities || {
+      toolNames: session?.activeCapabilityNames?.filter((name) => TOOL_DEFINITIONS.some((def) => def.name === name) || name === SEARCH_TOOLS_DEFINITION.name) || [],
+      skillNames: session?.activeCapabilityNames?.filter((name) => SKILL_DEFINITIONS.some((def) => def.name === name)) || [],
+      capabilityNames: session?.activeCapabilityNames || [],
+    };
+    const withSearchTool = this.mergeCapabilitySelections(currentSelection, {
+      toolNames: [SEARCH_TOOLS_DEFINITION.name],
+      skillNames: [],
+      capabilityNames: [SEARCH_TOOLS_DEFINITION.name],
+    });
+    const mergedSelection = this.mergeCapabilitySelections(withSearchTool, result);
+
+    const activated = mergedSelection.capabilityNames.filter((name) => !(session?.activeCapabilityNames || []).includes(name));
+    if (this.options.debug) {
+      console.log(`🔎 [${session?.id || "unknown"}] search_tools 查询: query="${String(query || "").slice(0, 120)}", kind=${kind}, limit=${limit}`);
+      console.log(`🔎 [${session?.id || "unknown"}] search_tools 命中: ${result.matches.map((item) => `${item.kind}:${item.name}`).join(", ") || "无"}`);
+      console.log(`🔎 [${session?.id || "unknown"}] search_tools 新激活: ${activated.join(", ") || "无"}`);
+    }
+    if (activated.length > 0 && session) {
+      this.applyCapabilitySelectionToSession(session, mergedSelection);
+    }
+
+    return {
+      query: result.query,
+      kind,
+      activated,
+      matches: result.matches,
+    };
   }
 
   createSession(sessionId) {
@@ -556,6 +659,17 @@ export class ProductionAgent {
   }
 
   async runToolCall(toolName, args, sessionId) {
+    if (this.options.debug && toolName === SEARCH_TOOLS_DEFINITION.name) {
+      console.log(`🛠️ [${sessionId}] 调用常驻工具 search_tools: args=${JSON.stringify(args)}`);
+    }
+    if (toolName === "search_tools") {
+      const session = this.getOrCreateSession(sessionId);
+      return this.searchAndActivateCapabilities(session, args[0], {
+        kind: args[1] || "all",
+        limit: typeof args[2] === "number" ? args[2] : 4,
+      });
+    }
+
     // 检查工具是否需要 sessionId 进行用户隔离
     if (toolNeedsSessionId(toolName)) {
       console.log(`[DEBUG] ${toolName}: sessionId=${sessionId}, args=`, args);
@@ -1057,7 +1171,9 @@ export class ProductionAgent {
           for (const toolCall of toolCalls) {
             this.ensureRequestActive(session, requestState, sessionId);
 
-            if (streamEnabled) {
+            const isInternalToolCall = toolCall?.name === SEARCH_TOOLS_NAME;
+
+            if (streamEnabled && !isInternalToolCall) {
               emitStreamEvent(chunkCallback, {
                 type: "status",
                 content: getToolDivBox(`🚀  【TOOL】执行 ${toolCall.name}...`),
@@ -1083,11 +1199,13 @@ export class ProductionAgent {
               durationMs: endAt - startAt,
               ok: !(typeof result === "string" && result.includes("执行失败")),
             };
-            toolExcResults.push(toolExcResult);
-            emitToolEvent(chunkCallback, toolExcResult);
+            if (!isInternalToolCall) {
+              toolExcResults.push(toolExcResult);
+              emitToolEvent(chunkCallback, toolExcResult);
+            }
             console.log(`【TOOL】执行 ${toolCall.name}结果:${JSON.stringify(result)}`)
             const content = typeof result === "string" ? result : JSON.stringify(result, null, 2);
-            if (streamEnabled) {
+            if (streamEnabled && !isInternalToolCall) {
               emitStreamEvent(chunkCallback, {
                 type: "status",
                 content: getToolDivBox(`✅  【TOOL】执行 ${toolCall.name} 完成`, 'end'),

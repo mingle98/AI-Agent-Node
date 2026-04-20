@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { expandCapabilitiesToAll, selectActiveCapabilities } from "../agent/capabilityRouter.js";
+import { expandCapabilitiesToAll, searchCapabilities, selectActiveCapabilities } from "../agent/capabilityRouter.js";
 
 function tool(name, description = "") {
   return { name, description, params: [], example: `${name}()` };
@@ -146,6 +146,51 @@ test("selectActiveCapabilities: should fallback to minimal tools when no match",
 
   assert.deepEqual(result.toolNames, ["a", "b", "c"]);
   assert.deepEqual(result.skillNames, []);
+});
+
+test("selectActiveCapabilities: should include always-on search_tools when routing enabled", () => {
+  const toolDefinitions = [
+    tool("search_knowledge", "知识查询"),
+    tool("analyze_code", "代码分析"),
+    tool("exec_code", "脚本执行"),
+    tool("search_tools", "搜索工具和技能"),
+  ];
+
+  const result = selectActiveCapabilities({
+    userInput: "你好",
+    toolDefinitions,
+    skillDefinitions: [],
+    alwaysOnTools: ["search_knowledge", "analyze_code", "exec_code", "search_tools"],
+    alwaysOnSkills: [],
+  });
+
+  assert.ok(result.toolNames.includes("search_tools"));
+});
+
+test("searchCapabilities: should find compact matching capabilities", () => {
+  const toolDefinitions = [
+    tool("excel_read", "读取 Excel 文件"),
+    tool("email_send", "发送邮件"),
+  ];
+  const skillDefinitions = [
+    skill("email_sender", "邮件发送助手"),
+    skill("excel_helper", "Excel 助手"),
+  ];
+
+  const result = searchCapabilities({
+    query: "处理 Excel 并发送邮件报告",
+    toolDefinitions,
+    skillDefinitions,
+    limit: 3,
+    kind: "all",
+  });
+
+  assert.ok(result.toolNames.includes("excel_read") || result.toolNames.includes("email_send"));
+  assert.ok(result.skillNames.includes("email_sender") || result.skillNames.includes("excel_helper"));
+  assert.ok(result.matches.some((item) => item.name === "excel_read" || item.name === "email_send" || item.name === "email_sender"));
+  assert.ok(result.matches.every((item) => !Object.hasOwn(item, "functionality")));
+  assert.ok(result.matches.every((item) => !Object.hasOwn(item, "example")));
+  assert.ok(result.matches.length <= 3);
 });
 
 test("expandCapabilitiesToAll: should include all tool and skill names", () => {

@@ -6,6 +6,8 @@ import { SystemMessage, HumanMessage, ToolMessage } from "@langchain/core/messag
 import { getPlanPhaseDivBox, getPlanStepDivBox, getToolDivBox } from "../utils/streamRenderer.js";
 import { AbortError } from "./ProductionAgent.js";
 
+const INTERNAL_TOOL_NAMES = new Set(["search_tools"]);
+
 // 评估与模式选择实现见 complexityEvaluator.js；此处仅重导出，避免 import + export 同名导致重复导出
 export {
   selectTaskMode,
@@ -147,6 +149,9 @@ function parsePlan(planText) {
  */
 async function generatePlan(agent, userInput, session, chunkCallback, streamEnabled, requestState) {
   const text = typeof userInput === "string" ? userInput : (userInput?.text || "");
+  if (agent.options?.debug) {
+    console.log(`📋 [Plan+Exec][${session?.id || "unknown"}] 计划生成前激活能力: ${session?.activeCapabilityNames?.join(", ") || "无"}`);
+  }
   const planSystemPrompt = buildPlanSystemPrompt(
     () => agent.getStructuredTools(session?.activeCapabilityNames),
     agent.maxPlanSteps
@@ -212,6 +217,10 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
   const description = step.description || "";
   const stepMaxIterations = agent.maxStepIterations;
 
+  if (agent.options?.debug) {
+    console.log(`🪜 [Plan+Exec][${session.id}] 步骤 ${stepId} 开始前能力: ${session.activeCapabilityNames?.join(", ") || "无"}`);
+  }
+
   console.log(`\n${'='.repeat(50)}`);
   console.log(`📌 [Plan+Exec] 执行步骤 ${stepId}: ${description}`);
   console.log(`${'='.repeat(50)}\n`);
@@ -260,6 +269,10 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
     const toolCalls = aiResponse.tool_calls || [];
     const aiText = normalizeTextContent(aiResponse.content);
 
+    if (agent.options?.debug && toolCalls.length > 0) {
+      console.log(`🪜 [Plan+Exec][${session.id}] 步骤 ${stepId} 第 ${iterations} 轮工具调用: ${toolCalls.map((call) => call.name).join(", ")}`);
+    }
+
     session.messages.push(aiResponse);
 
     if (toolCalls.length === 0) {
@@ -270,7 +283,9 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
     for (const toolCall of toolCalls) {
       agent.ensureRequestActive(session, requestState, session.id);
 
-      if (streamEnabled) {
+      const isInternalToolCall = INTERNAL_TOOL_NAMES.has(toolCall?.name);
+
+      if (streamEnabled && !isInternalToolCall) {
         emitStreamEvent(chunkCallback, {
           type: "status",
           content: getToolDivBox(`🚀 【步骤 ${stepId}】执行 ${toolCall.name}...`)
@@ -299,12 +314,18 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
         ok: !(typeof result === "string" && result.includes("执行失败")),
         stepId
       };
-      toolExcResults.push(toolExcResult);
-      emitToolEvent(chunkCallback, toolExcResult);
+      if (!isInternalToolCall) {
+        toolExcResults.push(toolExcResult);
+        emitToolEvent(chunkCallback, toolExcResult);
+      }
 
       const content = typeof result === "string" ? result : JSON.stringify(result, null, 2);
 
-      if (streamEnabled) {
+      if (agent.options?.debug && toolCall.name === "search_tools") {
+        console.log(`🪜 [Plan+Exec][${session.id}] 步骤 ${stepId} 通过 search_tools 后能力: ${session.activeCapabilityNames?.join(", ") || "无"}`);
+      }
+
+      if (streamEnabled && !isInternalToolCall) {
         emitStreamEvent(chunkCallback, {
           type: "status",
           content: getToolDivBox(`✅ 【步骤 ${stepId}】${toolCall.name} 完成`, 'end')

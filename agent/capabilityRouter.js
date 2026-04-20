@@ -29,6 +29,20 @@ function matchDefinition(def, text) {
   return regex.test(text);
 }
 
+function collectMatches(definitions = [], text = "", limit = Infinity) {
+  if (!Array.isArray(definitions) || !text) {
+    return [];
+  }
+
+  const matches = [];
+  for (const def of definitions) {
+    if (!matchDefinition(def, text)) continue;
+    matches.push(def);
+    if (matches.length >= limit) break;
+  }
+  return matches;
+}
+
 const DOMAIN_PATTERNS = [
   {
     test: /(流程图|时序图|类图|状态图|架构图|泳道图|甘特图|思维导图|脑图|ER图|实体关系图|mermaid|diagram|graph|图示|示意图|关系图|画图|画个图|梳理流程|流程梳理)/i,
@@ -111,7 +125,7 @@ export function selectActiveCapabilities({
   userInput,
   toolDefinitions = [],
   skillDefinitions = [],
-  alwaysOnTools = ["search_knowledge", "analyze_code", "exec_code"],
+  alwaysOnTools = ["search_knowledge", "analyze_code", "exec_code", "search_tools"],
   alwaysOnSkills = [],
   maxTools = 14,
   maxSkills = 8,
@@ -161,5 +175,67 @@ export function expandCapabilitiesToAll(toolDefinitions = [], skillDefinitions =
     toolNames,
     skillNames,
     capabilityNames: [...toolNames, ...skillNames],
+  };
+}
+
+export function searchCapabilities({
+  query,
+  toolDefinitions = [],
+  skillDefinitions = [],
+  limit = 4,
+  kind = "all",
+} = {}) {
+  const text = normalizeText(query);
+  const normalizedKind = typeof kind === "string" ? kind.toLowerCase() : "all";
+  const includeTools = normalizedKind === "all" || normalizedKind === "tool" || normalizedKind === "tools";
+  const includeSkills = normalizedKind === "all" || normalizedKind === "skill" || normalizedKind === "skills";
+
+  const toolMap = new Map((toolDefinitions || []).map((def) => [def.name, def]));
+  const skillMap = new Map((skillDefinitions || []).map((def) => [def.name, def]));
+  const toolNameSet = new Set();
+  const skillNameSet = new Set();
+
+  for (const rule of DOMAIN_PATTERNS) {
+    if (!rule.test.test(text)) continue;
+    if (includeTools) {
+      for (const name of rule.tools || []) {
+        if (toolMap.has(name)) toolNameSet.add(name);
+      }
+    }
+    if (includeSkills) {
+      for (const name of rule.skills || []) {
+        if (skillMap.has(name)) skillNameSet.add(name);
+      }
+    }
+  }
+
+  const metadataToolMatches = includeTools ? collectMatches(toolDefinitions, text, limit) : [];
+  for (const def of metadataToolMatches) toolNameSet.add(def.name);
+
+  const remaining = Math.max(limit - toolNameSet.size, 0);
+  const metadataSkillMatches = includeSkills ? collectMatches(skillDefinitions, text, remaining > 0 ? remaining : limit) : [];
+  for (const def of metadataSkillMatches) skillNameSet.add(def.name);
+
+  const toolMatches = [...toolNameSet].map((name) => toolMap.get(name)).filter(Boolean).slice(0, limit);
+  const skillRemaining = Math.max(limit - toolMatches.length, 0);
+  const skillMatches = [...skillNameSet].map((name) => skillMap.get(name)).filter(Boolean).slice(0, skillRemaining);
+
+  return {
+    query: text,
+    toolNames: toolMatches.map((def) => def.name),
+    skillNames: skillMatches.map((def) => def.name),
+    capabilityNames: [...toolMatches.map((def) => def.name), ...skillMatches.map((def) => def.name)],
+    matches: [
+      ...toolMatches.map((def) => ({
+        name: def.name,
+        kind: "tool",
+        description: String(def.description || ""),
+      })),
+      ...skillMatches.map((def) => ({
+        name: def.name,
+        kind: "skill",
+        description: String(def.description || ""),
+      })),
+    ].slice(0, limit),
   };
 }
