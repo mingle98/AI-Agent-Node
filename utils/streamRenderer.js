@@ -42,7 +42,7 @@ export function getPlanPhaseDivBox(text, stType = 'content') {
       `${_planRow}${margin}` +
       'font-weight:600;' +
       'color:#0f172a;background:#f1f5f9;border-left:3px solid #2563eb;';
-    return `<div data-plan-phase="true" data-tool="true" style="${style}">${text}</div>\n`;
+    return `<div data-plan-phase="true" data-tool="true" style="${style}">${text}</div>\n\n`;
   } catch (error) {
     return '';
   }
@@ -61,7 +61,7 @@ export function getPlanStepDivBox(text, stType = 'content') {
       `${_stepRow}${margin}` +
       'font-weight:400;' +
       'color:#64748b;background:#f8fafc;border-left:2px solid #cbd5e1;';
-    return `<div data-plan-step="true" data-tool="true" style="${style}">${text}</div>\n`;
+    return `<div data-plan-step="true" data-tool="true" style="${style}">${text}</div>\n\n`;
   } catch (error) {
     return '';
   }
@@ -81,7 +81,7 @@ export function getToolDivBox(text, stType = 'content') {
           ? 'margin-bottom:10px;'
           : '';
     const style = `${_toolBranch}${margin}`;
-    return `<div data-tool="true" data-tool-muted="true" style="${style}">${text}</div>\n`;
+    return `<div data-tool="true" data-tool-muted="true" style="${style}">${text}</div>\n\n`;
   } catch (error) {
     return '';
   }
