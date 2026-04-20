@@ -25,7 +25,7 @@ export function buildSystemPrompt(toolDefinitions, skillDefinitions, options = {
   const rulesSection = buildRulesSection({ compact, capabilityRoutingEnabled });
   
   // 构建决策示例
-  const examplesSection = buildExamplesSection(skillDefinitions, { compact });
+  const examplesSection = buildExamplesSection(toolDefinitions, skillDefinitions, { compact, capabilityRoutingEnabled });
 
   return `你是一个${roleName}，${roleDescription}
 
@@ -198,48 +198,67 @@ ${capabilityRoutingEnabled ? '13. 当当前已注入能力不足、工具不存�
 /**
  * 构建智能决策示例部分
  */
-function buildExamplesSection(skillDefinitions, options = {}) {
-  const { compact = false } = options;
-  // 可以根据技能定义自动生成示例
-  const examples = [
-    '- "AI Agent是什么？" → 用 search_knowledge 工具查询',
-    '- "解释这段代码" → 用 analyze_code 工具分析',
-    '- "生成API文档" → 用 generate_document 工具创建',
-    '- "今年的房价走势怎么样?" → 用 ai_agent_echart 进行数据搜索和可视化',
-    '- "帮我画个流程图梳理登录逻辑" → 用 mermaid_diagram 技能（生成可渲染的图）',
-    '- "这段代码报错了帮我看看" → 用 debug_assistant 技能诊断',
-    '- "帮我review下这段代码" → 用 code_review 技能检查质量',
-    '- "Excel怎么统计销售额" → 用 excel_helper 技能获取公式',
-    '- "纠结选哪个offer" → 用 decision_helper 技能分析',
-    '- "帮我写封邮件跟进客户" → 用 email_writer 技能生成',
-    '- "发送邮件通知给xxx@example.com" → 优先用 email_sender 技能（自动完成全流程），报告类邮件请附带附件（第5个参数传文件路径）',
-    '- "发送系统告警邮件给管理员" → 用 email_sender 技能（自动完成发送流程）',
-    '- "定时任务完成后发邮件" → 用 schedule_task 定时执行邮件发送，多步请用 Plan 模式',
-    '- "2分钟后执行Python算平均值并发邮箱" → 先用 Plan 模式编排步骤，再分别用 schedule_task 定时各步骤',
-    '- "查看我有哪些定时任务" → 用 schedule_list 工具查询',
-    '- "取消那个定时任务" → 用 schedule_cancel 工具取消（需要任务ID）',
-    '- "执行这段js代码看看结果" → 用 exec_code 工具沙箱执行',
-    '- "这是上周数据：访问=50000, 加购=3500, 下单=800, 支付=210。帮我计算每步转化率，并找出最大流失环节" → 用 python_executor 技能自动生成脚本执行分析',
-    '- "列出workspace里的文件" → 用 file_list 工具查看目录',
-    '- "我还剩多少存储空间?" → 用 file_quota 工具查询',
-    '- "帮我创建一个叫report.txt的文件，内容是XXX" → 用 file_write 工具创建',
-    '- "读取data/report.xlsx的内容" → 用 excel_read 工具读取',
-    '- "把这几个PDF合并成一个" → 用 pdf_merge 工具合并',
-    '- "解压这个zip文件" → 用 zip_extract 工具解压',
-    '- "把这几个文件打包成zip" → 用 zip_compress 工具压缩',
-    '- "压缩这张图片/帮我把图片变小" → 用 image_compress 工具（支持 jpg/png/gif/webp，可调质量和尺寸）',
-    '- "批量压缩这些图片" → 用 image_compress_batch 工具（多张图片一次性压缩到指定目录）',
-    '- "把图片转成 webp 格式" → 用 image_compress 工具（设置 format: webp）',
+function buildExamplesSection(toolDefinitions, skillDefinitions, options = {}) {
+  const { compact = false, capabilityRoutingEnabled = false } = options;
+  const toolNames = new Set((toolDefinitions || []).map((tool) => tool?.name).filter(Boolean));
+  const skillNames = new Set((skillDefinitions || []).map((skill) => skill?.name).filter(Boolean));
+
+  const baseExamples = [
+    { key: "search_knowledge", text: '- "AI Agent是什么？" → 用 search_knowledge 工具查询' },
+    { key: "analyze_code", text: '- "解释这段代码" → 用 analyze_code 工具分析' },
+    { key: "generate_document", text: '- "生成API文档" → 用 generate_document 工具创建' },
+    { key: "ai_agent_echart", text: '- "今年的房价走势怎么样?" → 用 ai_agent_echart 进行数据搜索和可视化' },
+    { key: "mermaid_diagram", text: '- "帮我画个流程图梳理登录逻辑" → 用 mermaid_diagram 技能（生成可渲染的图）' },
+    { key: "debug_assistant", text: '- "这段代码报错了帮我看看" → 用 debug_assistant 技能诊断' },
+    { key: "code_review", text: '- "帮我review下这段代码" → 用 code_review 技能检查质量' },
+    { key: "excel_helper", text: '- "Excel怎么统计销售额" → 用 excel_helper 技能获取公式' },
+    { key: "decision_helper", text: '- "纠结选哪个offer" → 用 decision_helper 技能分析' },
+    { key: "email_writer", text: '- "帮我写封邮件跟进客户" → 用 email_writer 技能生成' },
+    { key: "email_sender", text: '- "发送邮件通知给xxx@example.com" → 优先用 email_sender 技能（自动完成全流程），报告类邮件请附带附件（第5个参数传文件路径）' },
+    { key: "email_sender", text: '- "发送系统告警邮件给管理员" → 用 email_sender 技能（自动完成发送流程）' },
+    { key: "schedule_task", text: '- "定时任务完成后发邮件" → 用 schedule_task 定时执行邮件发送，多步请用 Plan 模式' },
+    { key: "schedule_task", text: '- "2分钟后执行Python算平均值并发邮箱" → 先用 Plan 模式编排步骤，再分别用 schedule_task 定时各步骤' },
+    { key: "schedule_list", text: '- "查看我有哪些定时任务" → 用 schedule_list 工具查询' },
+    { key: "schedule_cancel", text: '- "取消那个定时任务" → 用 schedule_cancel 工具取消（需要任务ID）' },
+    { key: "exec_code", text: '- "执行这段js代码看看结果" → 用 exec_code 工具沙箱执行' },
+    { key: "python_executor", text: '- "这是上周数据：访问=50000, 加购=3500, 下单=800, 支付=210。帮我计算每步转化率，并找出最大流失环节" → 用 python_executor 技能自动生成脚本执行分析' },
+    { key: "file_list", text: '- "列出workspace里的文件" → 用 file_list 工具查看目录' },
+    { key: "file_quota", text: '- "我还剩多少存储空间?" → 用 file_quota 工具查询' },
+    { key: "file_write", text: '- "帮我创建一个叫report.txt的文件，内容是XXX" → 用 file_write 工具创建' },
+    { key: "excel_read", text: '- "读取data/report.xlsx的内容" → 用 excel_read 工具读取' },
+    { key: "pdf_merge", text: '- "把这几个PDF合并成一个" → 用 pdf_merge 工具合并' },
+    { key: "zip_extract", text: '- "解压这个zip文件" → 用 zip_extract 工具解压' },
+    { key: "zip_compress", text: '- "把这几个文件打包成zip" → 用 zip_compress 工具压缩' },
+    { key: "image_compress", text: '- "压缩这张图片/帮我把图片变小" → 用 image_compress 工具（支持 jpg/png/gif/webp，可调质量和尺寸）' },
+    { key: "image_compress_batch", text: '- "批量压缩这些图片" → 用 image_compress_batch 工具（多张图片一次性压缩到指定目录）' },
+    { key: "image_compress", text: '- "把图片转成 webp 格式" → 用 image_compress 工具（设置 format: webp）' },
   ];
+
+  const shouldIncludeExample = (key) => {
+    if (!capabilityRoutingEnabled) {
+      return true;
+    }
+    return toolNames.has(key) || skillNames.has(key);
+  };
+
+  const examples = baseExamples
+    .filter((item) => shouldIncludeExample(item.key))
+    .map((item) => item.text);
   
-  // 从技能中提取示例
   if (skillDefinitions && skillDefinitions.length > 0) {
-    skillDefinitions.slice(0, 3).forEach(skill => {
+    skillDefinitions.forEach((skill) => {
       const example = generateSkillExample(skill);
-      if (example) {
+      if (example && !examples.includes(example)) {
         examples.push(example);
       }
     });
+  }
+
+  if (capabilityRoutingEnabled && examples.length === 0) {
+    examples.push(
+      '- "需要更多可用能力时" → 用 search_tools 搜索并激活匹配工具/技能后再继续执行',
+      '- "当前能力不足时" → 优先 search_tools，再基于激活后的能力继续处理'
+    );
   }
 
   const finalExamples = compact ? examples.slice(0, 8) : examples;
