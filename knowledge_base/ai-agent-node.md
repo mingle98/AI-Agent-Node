@@ -1,0 +1,781 @@
+# AI Agent Node Production Framework
+
+<div align="center">
+
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![License](https://img.shields.io/github/license/mingle98/AI-Agent-Node)](./LICENSE)
+[![CI](https://github.com/mingle98/AI-Agent-Node/actions/workflows/ci.yml/badge.svg)](https://github.com/mingle98/AI-Agent-Node/actions/workflows/ci.yml)
+[![Coverage](https://github.com/mingle98/AI-Agent-Node/actions/workflows/coverage.yml/badge.svg)](https://github.com/mingle98/AI-Agent-Node/actions/workflows/coverage.yml)
+[![GitHub issues](https://img.shields.io/github/issues/mingle98/AI-Agent-Node)](https://github.com/mingle98/AI-Agent-Node/issues)
+[![Top Language](https://img.shields.io/github/languages/top/mingle98/AI-Agent-Node)](https://github.com/mingle98/AI-Agent-Node)
+[![Code Size](https://img.shields.io/github/languages/code-size/mingle98/AI-Agent-Node)](https://github.com/mingle98/AI-Agent-Node)
+
+</div>
+
+<p align="center">
+  一个生产级的 AI Agent Node.js 脚手架，提供模块化架构、RAG 知识库检索、工具调用和技能管理等功能。
+</p>
+
+---
+
+##  特性
+
+| 特性 | 描述 |
+|------|------|
+| 🤖 **智能对话** | 基于 LangChain 的 AI 对话能力 |
+| 📚 **RAG 知识库** | 支持本地知识库检索，可处理 PDF、MD、EPUB 等格式 |
+| 🛠️ **工具系统** | 模块化工具架构，支持代码分析、文档生成、网络搜索等 |
+| 🎯 **技能管理** | 内置多种 AI 技能，支持教学、咨询、问答等场景 |
+| 🌊 **流式响应** | 支持实时流式输出，提升用户体验 |
+| 🔄 **会话管理** | 多会话支持，自动上下文管理 |
+| 🧠 **长期记忆** | 基于 sessionId 的用户画像持久化，自动提取关键信息并注入上下文 |
+| 🛡️ **容错机制** | 熔断器、重试机制、降级策略 |
+| 🧠 **双执行模式** | 支持 ReAct 快速响应和 Plan+Exec 计划执行两种模式，智能切换 |
+| 🧭 **动态能力路由** | 支持按用户请求动态裁剪工具/技能能力面，降低无关能力干扰（可通过 `capabilityRoutingEnabled` 开关控制） |
+| 📁 **用户文件隔离** | 基于 sessionId 的独立工作空间，自动目录初始化，支持文件数量限制（100个/用户） |
+| 📧 **邮件发送** | 支持 SMTP 发送，内置多种精美模板（通知/告警/报告/感谢信/验证码/邀请函/营销） |
+| 🎨 **AISuspendedBallChat 兼容** | 完全符合 AISuspendedBallChat 组件接口规范 |
+
+<div align="center">
+  <img src="./imgs/ai-agent-node.png" alt="AI Agent Node 界面预览" width="92%" />
+  <br />
+  <strong>在线体验：<a href="https://luckycola.com.cn/public/dist/aiAgent.html">AI智能体工作台</a></strong>
+</div>
+
+---
+
+## 📋 系统要求
+
+### 基础环境
+
+| 需求 | 版本/规格 |
+|------|----------|
+| **Node.js** | >= 22 (推荐使用最新 LTS 版本) |
+| **Python** | >= 3.7 (用于执行 python_executor 生成的脚本) |
+| **内存** | 最少 2GB RAM |
+| **存储** | 至少 1GB 可用空间（用于向量数据库） |
+
+### Python 环境要求
+
+`python_executor` 技能和 `exec_code` 工具需要 Python 3 环境。请确保已安装：
+
+```bash
+# 检查 Python 版本
+python3 --version
+
+# 如未安装，macOS 可通过 Homebrew 安装
+brew install python3
+
+# Ubuntu/Debian
+sudo apt-get install python3
+
+# CentOS/RHEL
+sudo yum install python3
+```
+
+---
+
+## 🛠️ 安装与配置
+
+### 1. 克隆项目
+
+```bash
+git clone git@github.com:mingle98/AI-Agent-Node.git
+cd AI-Agent-Node
+```
+
+### 2. 安装依赖
+
+```bash
+npm install
+# 或
+yarn install
+```
+
+### 3. 配置环境变量
+
+复制并编辑 `.env` 文件：
+
+> ⚠️ **安全提示**：请勿将真实的 API Key（例如 DashScope/OpenAI）提交到 Git 仓库。建议仅提交 `.env.example`，本地使用 `.env`。
+
+```bash
+cp .env.example .env
+```
+
+如果使用阿里云的模型，请前往 [阿里云官网](https://bailian.console.aliyun.com/cn-beijing/?tab=model#/api-key) 获取 API_KEY。
+
+```bash
+# 选择 Embedding 提供商: openai 或 aliyun
+EMBEDDING_PROVIDER=aliyun
+
+# 选择 LLM 提供商: openai 或 aliyun
+LLM_PROVIDER=aliyun
+
+# 阿里云 DashScope API配置
+DASHSCOPE_API_KEY=your_dashscope_api_key_here
+
+# OpenAI API配置（如果使用 OpenAI 则取消注释并设置）
+# OPENAI_API_KEY=your_openai_api_key_here
+
+# SMTP 邮件发送配置（可选，用于邮件发送功能）
+# SMTP_HOST=smtp.qq.com          # QQ邮箱: smtp.qq.com, 163邮箱: smtp.163.com
+# SMTP_PORT=465                  # QQ/163邮箱用465，Gmail用587
+# SMTP_SECURE=true               # 端口465用true，587用false
+# SMTP_USER=your_email@qq.com    # 发件人邮箱
+# SMTP_PASS=your_auth_code       # 邮箱授权码（非登录密码！）
+```
+
+**获取授权码方法：**
+- **QQ邮箱**: 设置 → 账户 → 开启POP3/SMTP服务 → 生成授权码
+- **163邮箱**: 设置 → POP3/SMTP/IMAP → 开启服务 → 生成授权码
+
+### 4. 启动服务
+
+```bash
+npm run dev
+```
+
+服务启动后将在 `http://localhost:3600` 提供服务。
+
+---
+
+## 📡 API 接口
+
+### 对话接口
+
+```http
+POST /api/chat
+Content-Type: application/json
+
+{
+  "query": "你好，请介绍一下 AI Agent",
+  "session_id": "user123",
+  "isStream": true
+}
+```
+
+**参数说明：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `query` | string | 是 | 用户消息 |
+| `session_id` | string | 否 | 会话标识（默认 "default"） |
+| `isStream` | boolean | 否 | 是否使用流式响应（默认 false） |
+| `taskMode` | string | 否 | 任务执行模式（默认 "auto"） |
+
+**taskMode 选项：**
+- `auto`: 根据任务复杂度自动选择
+- `react`: 强制使用 ReAct 快速响应模式
+- `plan_exec`: 强制使用 Plan+Exec 计划执行模式
+
+**流式响应示例：**
+
+```
+data: {"code":0,"result":"AI Agent","is_end":false}
+
+data: {"code":0,"result":" 是一种","is_end":false}
+
+data: {"code":0,"result":"能够自主感知环境","is_end":false}
+
+data: {"code":0,"result":"、做出决策并执行行动的智能系统。","is_end":true}
+```
+
+### 文件上传接口
+
+```http
+POST /api/files/upload
+Content-Type: multipart/form-data
+```
+
+**表单字段：**
+- `files`: 文件（支持多文件，最多10个）
+- `session_id`: 用户会话ID（可选，也可通过 X-Session-Id 请求头传递）
+
+**响应示例：**
+
+```json
+{
+  "success": true,
+  "sessionId": "user123",
+  "uploadedCount": 2,
+  "files": [
+    {
+      "originalName": "document.pdf",
+      "savedName": "1710881234567_document.pdf",
+      "size": 1024567,
+      "sizeFormatted": "1001.53 KB",
+      "path": "uploadFile/1710881234567_document.pdf",
+      "url": "http://localhost:3600/workspace/user123/uploadFile/1710881234567_document.pdf"
+    }
+  ]
+}
+```
+
+### 存储配额查询接口
+
+```http
+GET /api/files/quota?session_id=user123
+```
+
+**响应示例：**
+
+```json
+{
+  "success": true,
+  "sessionId": "user123",
+  "usedSize": 52428800,
+  "usedSizeFormatted": "50 MB",
+  "maxSize": 209715200,
+  "maxSizeFormatted": "100 MB",
+  "remainingSize": 157286400,
+  "remainingSizeFormatted": "150 MB",
+  "usedPercent": "25.00",
+  "fileCount": 25,
+  "directoryCount": 5
+}
+```
+
+### 批量下载/压缩接口
+
+```http
+POST /api/files/download
+Content-Type: application/json
+
+{
+  "session_id": "user123",
+  "files": ["uploadFile/doc1.pdf", "uploadFile/doc2.pdf", "projects/data.xlsx"],
+  "zipName": "my_files.zip"
+}
+```
+
+**说明：**
+- 最多支持 100 个文件批量下载
+- 自动打包为 ZIP 格式
+- 只下载存在的文件，不存在的文件自动跳过
+- 响应头包含 `Content-Disposition: attachment`，浏览器会自动触发下载
+
+---
+
+## 🧭 架构与目录结构
+
+### 目录结构（核心）
+
+```
+AI-Agent-Node/
+  agent/                 # Agent 核心：会话、上下文、工具/技能调用编排
+  tools/                 # 工具：单一能力（如 daily_news、analyze_chart 等）
+  skills/                # 技能：组合能力（多步骤流程）
+  utils/                 # 通用工具（如 RAG 构建、custom component 渲染）
+  knowledge_base/        # 本地知识库源文件（md/pdf/epub/...）
+  vector_db/             # 向量数据库（运行时生成/加载）
+  public/                # 调试页面（如 aisbc-debug.html）
+  public/workspace/      # 用户工作空间（按 sessionId 隔离，含记忆文件）
+  server.js              # Express API 入口
+```
+
+### 运行时数据流（高层）
+
+```mermaid
+flowchart TD
+  U[Client / AISuspendedBallChat] -->|POST /api/chat| S[Express server.js]
+  S --> A[ProductionAgent.chat]
+  A -->|RAG| VS[(Vector Store)]
+  A -->|Tools| T[tools/*]
+  A -->|Skills| K[skills/*]
+  A -->|LLM| L[LLM Provider]
+  A -->|tool results| R[customComponentRenderer]
+  R -->|stream: SSE custom-component| U
+  A -->|answer| S
+  S -->|JSON or SSE| U
+```
+
+---
+
+## 🎯 与 AISuspendedBallChat 组件集成
+
+> AISuspendedBallChat 是一个 Vue3 的前端组件，详细使用文档请查看 [npm 页面](https://www.npmjs.com/package/ai-suspended-ball-chat)。
+
+### 基础集成
+
+```vue
+<template>
+  <div>
+    <SuspendedBallChat 
+      app-name="app.test.com" 
+      domain-name="juhkff" 
+      url="http://localhost:3600/api/chat"
+      :custom-request-config="{
+        headers: {
+          'X-Custom-Header': 'custom-value',
+          'Authorization': 'Bearer your-token'
+        },
+        customParams: {
+          model: 'gpt-3.5-turbo',
+          temperature: 0.7,
+          max_tokens: 1000,
+          business_type: 'chat'
+        },
+        timeout: 30000,
+        retry: {
+          maxRetries: 3,
+          retryDelay: 1000
+        },
+        requestParamProcessor: (baseParams, customParams) => {
+          // 生成会话ID-每个用户唯一的,不能变,通过这个id管理每个用户的上下文记忆
+          const sessionId = 'session_123456'
+          
+          // 添加时间戳
+          const timestamp = Date.now()
+          
+          // 合并基础参数和自定义参数
+          const processedParams = {
+            ...baseParams,
+            ...customParams,
+            isStream: true,  // 启用流式响应
+            session_id: sessionId,
+            timestamp: timestamp,
+            request_id: 'req_' + timestamp + '_' + Math.random().toString(36).substr(2, 6),
+            // 添加用户信息
+            user_info: {
+              app_name: 'app.test.com',
+              domain_name: 'juhkff',
+              user_agent: 'web-browser'
+            },
+            // 添加业务相关参数
+            business_context: {
+              source: 'suspended_ball_chat',
+              version: '1.0.0',
+              platform: 'web'
+            }
+          }
+          console.log('处理后的请求参数:', processedParams)
+          return processedParams
+        }
+      }"
+    />
+  </div>
+</template>
+
+<script setup>
+import { SuspendedBallChat } from 'ai-suspended-ball-chat'
+</script>
+```
+
+---
+
+## 🔧 功能特性详解
+
+### 已支持的工具
+
+| 工具名称 | 功能描述 | 参数 | 示例 |
+|----------|----------|------|------|
+| `search_knowledge` | 搜索本地知识库 | 查询内容 | `search_knowledge("AI Agent架构设计")` |
+| `analyze_code` | 代码分析 | 代码内容, 编程语言 | `analyze_code("function add(a,b){return a+b}", "javascript")` |
+| `analyze_chart` | 图表分析讲解 | 图表类型, 图表源码/配置, 分析目标(可选) | `analyze_chart("mermaid", "graph TD\nA-->B", "解释流程")` |
+| `generate_document` | 文档生成 | 文档主题, 文档类型, 大纲 | `generate_document("AI Agent快速入门", "tutorial", "1.简介 2.安装")` |
+| `daily_news` | 今日热点 | 平台(可选), 返回条数(可选) | `daily_news("tenxunwang", 10)` |
+| `exec_code` | 代码执行 | 代码内容, 编程语言(可选) | `exec_code("console.log(2+3)", "javascript")` |
+| `render_mermaid` | Mermaid渲染 | Mermaid源码或图表类型, 图表内容 | `render_mermaid("sequence", "participant A\nA->>B: msg")` |
+| `script_generator` | Python脚本生成 | 任务描述, 输入数据(可选), 输出格式(可选) | `script_generator("计算平均值", "10,20,30", "auto")` |
+| `email_send` | 邮件发送 | 收件人, 主题, 内容, 选项(可选) | `email_send("user@example.com", "通知", "内容", "{}")` |
+| `email_template` | 模板邮件发送 | 收件人, 模板类型, 主题, 变量(可选) | `email_template("user@example.com", "alert", "告警", "{}")` |
+| `email_verify` | 验证SMTP配置 | 无 | `email_verify()` |
+| `schedule_task` | 定时任务调度 | 延迟分钟数, 任务类型, 参数, 描述(可选) | `schedule_task(2, "email_send", "{\"to\":\"...\"}", "2分钟后发送")` |
+| `schedule_list` | 查询定时任务 | 状态过滤(可选) | `schedule_list("pending")` |
+| `schedule_cancel` | 取消定时任务 | 任务ID | `schedule_cancel("task-uuid")` |
+
+### 用户文件管理
+
+系统提供基于 `sessionId` 的用户文件隔离机制，每个用户拥有独立的工作空间。
+
+#### 核心特性
+
+| 特性 | 说明 |
+|------|------|
+| **用户隔离** | 每个 `sessionId` 对应独立的目录 `/public/workspace/{sessionId}/`，用户间文件完全隔离 |
+| **自动初始化** | 新用户首次访问文件操作时自动创建用户目录 |
+| **数量限制** | 每个用户最多拥有 **100** 个文件 |
+| **存储配额** | 每个用户最多 **100MB** 存储空间 |
+| **安全限制** | 50MB 单文件大小限制，防止路径遍历攻击 |
+| **文件上传** | 支持通过 `/api/files/upload` 接口上传文件到 `uploadFile` 目录 |
+| **批量下载** | 支持打包多个文件为 ZIP 下载 |
+
+#### 文件管理工具
+
+| 工具名称 | 功能描述 | 示例 |
+|----------|----------|------|
+| `file_list` | 列出目录文件 | `file_list("docs", true)` |
+| `file_read` | 读取文件内容 | `file_read("readme.md")` |
+| `file_write` | 创建/写入文件 | `file_write("test.txt", "内容")` |
+| `file_delete` | 删除文件/目录 | `file_delete("old.txt")` |
+| `file_mkdir` | 创建目录 | `file_mkdir("projects")` |
+| `file_move` | 移动/重命名 | `file_move("a.txt", "b.txt")` |
+| `file_copy` | 复制文件 | `file_copy("a.txt", "backup/a.txt")` |
+| `file_info` | 获取文件信息 | `file_info("data.json")` |
+| `file_search` | 搜索文件 | `file_search("report")` |
+| `file_quota` | 查询存储配额/剩余空间 | `file_quota()` |
+| `excel_read/write` | Excel 操作 | `excel_read("data.xlsx")` |
+| `word_read` | Word 读取 | `word_read("doc.docx")` |
+| `pdf_read/merge` | PDF 操作 | `pdf_read("doc.pdf")` |
+| `csv_read/write` | CSV 操作 | `csv_read("data.csv")` |
+| `json_read/write` | JSON 操作 | `json_read("config.json")` |
+| `image_info` | 图片信息 | `image_info("photo.jpg")` |
+| `image_compress` | 压缩图片（jpg/png/gif/webp/avif），可调质量、尺寸、格式，GIF 保留动画帧 | `image_compress("photo.jpg", "photo_small.jpg", "{\"quality\":75,\"width\":1280}")` |
+| `image_compress_batch` | 批量压缩图片到指定目录 | `image_compress_batch("[\"a.jpg\",\"b.png\"]", "out", "{\"quality\":75}")` |
+| `svg_write` | SVG 创建 | `svg_write("icon.svg", "<svg>...</svg>")` |
+| `zip_compress` | 压缩为 ZIP | `zip_compress("docs", "backup.zip")` |
+| `zip_extract` | 解压 ZIP | `zip_extract("data.zip", "output")` |
+| `zip_info` | 压缩包信息 | `zip_info("archive.zip")` |
+| `zip_list` | 列出 ZIP 内容 | `zip_list("archive.zip", 50)` |
+
+**文件访问 URL：**
+
+文件创建后会返回可访问的 URL，格式为：`http://{host}/workspace/{sessionId}/{filePath}`
+
+### 已支持的技能
+
+| 技能名称 | 功能描述 | 参数 | 示例 |
+|----------|----------|------|------|
+| `ai_agent_teaching` | AI Agent 知识教学 | 教学主题, 难度级别 | `ai_agent_teaching("ReAct架构", "beginner")` |
+| `component_consulting` | AISuspendedBallChat 组件咨询 | 咨询问题, 组件名称 | `component_consulting("如何配置流式响应", "SuspendedBallChat")` |
+| `code_explanation` | 代码解释与教学 | 代码内容, 详细程度 | `code_explanation("async function fetchData()", "detailed")` |
+| `mermaid_diagram` | 画流程/时序/类关系/架构图 | 图表需求描述, 图表类型 | `mermaid_diagram("帮我把登录逻辑梳理成流程图", "auto")` |
+| `ai_agent_echart` | 数据查询与可视化 | 相关数据需求 | `ai_agent_echart("今年的金价走势怎么样?")` |
+| `python_executor` | Python脚本生成+执行+分析 | 任务描述, 输入数据(可选), 输出格式(可选) | `python_executor("计算漏斗转化率", "exposure=1000,click=100", "auto")` |
+| `debug_assistant` | Debug 调试助手 | 错误信息, 上下文环境 | `debug_assistant("TypeError: Cannot read property...", "React")` |
+| `code_review` | 代码审查助手 | 代码内容, 审查重点 | `code_review("function add(a,b){...}", "all")` |
+| `excel_helper` | Excel 助手 | 需求描述, 数据类型 | `excel_helper("计算A列平均值", "numbers")` |
+| `decision_helper` | 决策助手 | 决策场景, 可选方案 | `decision_helper("是否换工作", "接受, 拒绝, 再谈条件")` |
+| `email_writer` | 邮件写作助手 | 邮件目的, 背景信息, 语气风格 | `email_writer("跟进", "上周会议方案", "formal")` |
+| `email_sender` | 邮件发送助手（完整流程） | 收件人, 主题, 内容, 场景类型 | `email_sender("user@example.com", "告警", "CPU使用率过高", "alert")` |
+
+### 配置选项
+
+在 `config.js` 中可以调整以下配置：
+
+```javascript
+export const CONFIG = {
+  maxHistoryMessages: 20,        // 最大历史消息数
+  maxContextLength: 8000,        // 最大上下文 token 数
+  ragTopK: 3,                    // RAG 检索返回数量
+  streamEnabled: true,           // 是否启用流式输出
+  capabilityRoutingEnabled: false, // 是否启用动态能力路由（建议先完善 capabilityRouter.js 再开启）
+};
+```
+
+### 长期记忆
+
+系统提供基于 `sessionId` 的用户长期记忆能力，自动从对话中提取用户关键信息并持久化，实现跨会话的个性化服务。
+
+#### 核心特性
+
+| 特性 | 说明 |
+|------|------|
+| **自动提取** | 使用 LLM 自动从对话中提取用户身份、职业、目标、偏好等信息 |
+| **持久化存储** | 记忆文件存储于 `/public/workspace/{sessionId}/memory/memory.md` |
+| **智能注入** | 首次对话自动将记忆注入系统提示词，后续每 N 轮对话自动刷新 |
+| **标记块机制** | 使用 HTML 注释标记块包裹注入内容，支持整块替换避免内容锁死 |
+| **增量更新** | 与旧记忆智能合并，保留有效信息、删除过时信息 |
+
+#### 记忆内容结构
+
+```markdown
+# 用户要点
+- 用户姓名、职业、公司、技术栈等
+
+# 最近关键事件
+- 近期重要的对话内容摘要
+
+# 可能感兴趣的话题
+- 根据对话内容推测的兴趣方向
+
+# 一句话画像
+- 用一句话概括用户画像
+```
+
+#### 配置选项
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `maxMemoryLength` | 1000 | 最大记忆字数 |
+| `updateInterval` | 5 | 记忆更新间隔（对话轮数） |
+| `memoryDir` | memory | 记忆目录名 |
+| `memoryFile` | memory.md | 记忆文件名 |
+
+#### 使用方式
+
+系统自动管理，无需手动调用。首次对话后自动建立记忆，后续对话自动加载并注入上下文。
+
+**清除记忆：**
+
+通过 `LongTermMemory.clearMemory(sessionId)` 方法可清除指定用户的记忆。
+
+### 任务执行模式
+
+系统支持两种任务执行模式，智能切换以平衡响应速度与执行质量。
+
+```mermaid
+flowchart TD
+    Start[用户输入] --> ModeSelect{模式选择}
+    ModeSelect -->|taskMode=react| React[ReAct 模式]
+    ModeSelect -->|taskMode=plan_exec| PlanExec[Plan+Exec 模式]
+    ModeSelect -->|taskMode=auto| Auto{复杂度评估}
+    Auto -->|复杂度 < 阈值| React
+    Auto -->|复杂度 >= 阈值| PlanExec
+
+    React --> ReactLoop[LLM → 工具调用 → 结果]
+    ReactLoop -->|无工具调用| ReactResult[返回结果]
+
+    PlanExec --> GeneratePlan[生成执行计划]
+    GeneratePlan -->|成功| ExecutePlan[按步骤执行计划]
+    ExecutePlan -->|全部完成| PlanResult[汇总结果]
+    GeneratePlan -->|失败| React
+```
+
+#### ReAct 模式（默认）
+
+适合简单问答和单步工具调用场景。
+
+| 特点 | 说明 |
+|------|------|
+| **快速响应** | 无需计划生成开销 |
+| **迭代决策** | 每次迭代 LLM 决定是否调用工具 |
+| **迭代控制** | 最大迭代次数由 `maxIterations` 控制（默认 20 次） |
+
+**适用场景：**
+- 简单问答
+- 单个工具调用
+- 快速查询
+
+#### Plan+Exec 模式
+
+适合复杂多步骤任务，系统先分析任务并生成执行计划，再按步骤执行。
+
+| 特点 | 说明 |
+|------|------|
+| **计划驱动** | 任务分析 → 计划生成 → 分步执行 |
+| **步骤依赖** | 支持步骤依赖关系 |
+| **失败回退** | 失败时支持降级回退到 ReAct 模式 |
+
+**适用场景：**
+- 多步骤复杂任务（如：查资料 → 整理 → 生成报告）
+- 需要协调多个工具的任务
+- 批量处理场景
+
+#### 复杂度评估指标
+
+系统采用多维度加权评估，分数范围 0-1，阈值 0.5 决定是否启用 Plan+Exec 模式。
+
+| 维度 | 权重 | 高复杂度信号 |
+|------|------|-------------|
+| 步骤序列 | 0.40 | 含动作密度的多步骤句式（先...再...最后）、4+ 个步骤指示词 |
+| 工具估算 | 0.30 | 动作密度驱动（加权当量≥4 或 5+ 动作词）、批量/全部/遍历关键词 |
+| 操作类型 | 0.15 | 文件批量处理、报告生成、多文档对比、代码分析 |
+| 长度因子 | 0.05 | 文本长度（权重已降低，不再是主要信号） |
+| 上下文依赖 | 0.10 | 指代词（它/这个/上面）、延续性动作（继续/接着） |
+
+#### 动作权重体系
+
+| 权重 | 动作示例 |
+|------|----------|
+| 1.5x（高） | 扫描、遍历、清理、整理、分析、生成、发送、删除、重命名、部署 |
+| 1.0x（中） | 查找、搜索、读取、写入、编辑、查询、验证、转换、下载 |
+| 0.3x（低） | 打开、显示、展示、告诉、解释、说明、回答、提供 |
+
+#### 分数→复杂度级别映射
+
+| 分数区间 | 级别 | 推荐模式 |
+|----------|------|----------|
+| 0 - 0.15 | LOW | ReAct |
+| 0.15 - 0.35 | MEDIUM | ReAct/Plan |
+| 0.35 - 0.55 | HIGH | Plan+Exec |
+| ≥0.55 | CRITICAL | Plan+Exec（强制计划） |
+
+#### 快速规则
+
+| 规则 | 复杂度分数 |
+|------|-----------|
+| 简单问答模式（什么是/请问/怎么） | LOW（0.1分） |
+| 加权动作密度 ≥4 当量 或 原始动作数 ≥5 | HIGH（0.65分） |
+| 逗号分隔动作段 ≥3 段 | HIGH（0.9分） |
+| 固定高复杂度模式（全部分析/生成完整报告/先...然后...最后） | HIGH（0.95分） |
+| 文件治理+报告/邮件（整理/去重/删除+发送报告） | HIGH（0.88分） |
+
+#### 长文本优先语义评估
+
+- 输入 ≥100 字符且配置了 LLM 时，跳过关键词 HIGH 通道，强制使用 LLM 语义评估
+- 避免长提示词被关键词模式误判，提升评估准确性
+- 超时时自动回退到规则评估
+
+#### 执行流程
+
+1. **计划生成**：分析用户需求，生成可执行步骤
+2. **步骤执行**：按顺序执行每个计划步骤
+3. **上下文传递**：前一步骤结果自动传入后续步骤
+4. **结果汇总**：所有步骤完成后生成总结
+
+#### 流式输出事件
+
+| 事件类型 | 说明 |
+|----------|------|
+| `status` + `data-plan-phase` | 计划阶段（生成计划、开始执行、完成） |
+| `status` + `data-plan-step` | 步骤边界（步骤开始、完成） |
+| `status` + `data-tool` | 工具执行（工具调用开始、完成） |
+| `chunk` | 文本内容块 |
+| `reasoning` | 思考过程（需开启 `enableThinking`） |
+| `done` | 最终结果 |
+
+---
+
+## 🎨 自定义扩展
+
+### 添加新工具
+
+**1. 在 `tools/` 目录下创建新工具文件：**
+
+```javascript
+// tools/myTool.js
+export function myCustomTool(param1, param2) {
+  // 工具逻辑实现
+  return `工具执行结果: ${param1} - ${param2}`;
+}
+```
+
+**2. 在 `tools/index.js` 中注册：**
+
+```javascript
+import { myCustomTool } from './myTool.js';
+
+export const TOOL_DEFINITIONS = [
+  // ... 现有工具
+  {
+    name: "my_custom_tool",
+    func: myCustomTool,
+    description: "我的自定义工具",
+    params: [
+      { name: "参数1", type: "string", example: "示例值1" },
+      { name: "参数2", type: "string", example: "示例值2" }
+    ],
+    example: 'my_custom_tool("值1", "值2")',
+  },
+];
+```
+
+### 添加新技能
+
+**1. 在 `skills/` 目录下创建新技能文件：**
+
+```javascript
+// skills/mySkill.js
+export function skillMyCustomSkill(topic, level) {
+  // 技能逻辑实现
+  return `针对 ${topic} 的 ${level} 级别教学内容...`;
+}
+```
+
+**2. 在 `skills/index.js` 中注册：**
+
+```javascript
+import { skillMyCustomSkill } from './mySkill.js';
+
+export const SKILL_DEFINITIONS = [
+  // ... 现有技能
+  {
+    name: "my_custom_skill",
+    func: skillMyCustomSkill,
+    description: "我的自定义技能",
+    functionality: "技能功能描述",
+    params: [
+      { name: "主题", type: "string", example: "AI Agent" },
+      { name: "级别", type: "string", example: "beginner", options: ["beginner", "advanced"] }
+    ],
+    example: 'my_custom_skill("AI Agent", "beginner")',
+  },
+];
+```
+
+### 扩展知识库
+
+1. 将文档文件放入 `knowledge_base/` 目录
+2. 支持的格式：
+   - `.txt` - 纯文本文件
+   - `.md` - Markdown 文件
+   - `.pdf` - PDF 文件
+   - `.epub` - EPUB 电子书
+
+### 自定义提示词
+
+编辑 `agent/promptBuilder.js` 文件来自定义系统提示词：
+
+```javascript
+export function buildSystemPrompt(toolDefinitions, skillDefinitions, options) {
+  const { roleName, roleDescription } = options;
+  
+  return `你是一个${roleName}，${roleDescription}。
+
+你可以使用以下工具：
+${toolDefinitions.map(tool => `- ${tool.name}: ${tool.description}`).join('\n')}
+
+你可以使用以下技能：
+${skillDefinitions.map(skill => `- ${skill.name}: ${skill.description}`).join('\n')}
+
+请根据用户需求选择合适的工具或技能来回答问题。`;
+}
+```
+
+---
+
+## 🔧 高级配置
+
+### Agent 配置选项
+
+在 `server.js` 的 `initAgent` 函数中可以配置：
+
+```javascript
+const agent = new ProductionAgent(llm, vectorStore, embeddings, {
+  contextStrategy: "trim",           // 上下文策略: trim, summarize, vector, hybrid
+  fallbackLlm: fallbackLlm,           // 降级模型
+  llmTimeoutMs: 5 * 60 * 1000,               // LLM 超时时间
+  toolTimeoutMs: 5 * 60 * 1000,                 // 工具执行超时时间
+  llmRetries: 2,                     // LLM 重试次数
+  toolRetries: 2,                    // 工具重试次数
+  debug: true,                       // 调试模式
+  roleName: "自定义助手",             // 角色名称
+  roleDescription: "功能描述",        // 角色描述
+  maxIterations: 10,                  // ReAct 模式最大迭代次数
+  sessionTtlMs: 30 * 60 * 1000,     // 会话过期时间
+  maxSessions: 300,                  // 最大会话数
+
+  // ========== 任务执行模式配置 ==========
+  taskMode: "auto",                 // 模式选择: auto（自动）, react（快速响应）, plan_exec（计划执行）
+  complexityThreshold: 0.5,           // 复杂度阈值 (0-1)，auto 模式下高于此值切换 Plan+Exec
+  maxPlanSteps: 10,                 // Plan+Exec 模式最大计划步骤数
+  maxStepIterations: 3,             // Plan+Exec 单步骤最大迭代次数
+
+  // ========== 动态能力路由配置 ==========
+  capabilityRoutingEnabled: false,  // 启用后按请求动态选择工具/技能；关闭则保持全量能力注入
+});
+```
+
+### 上下文策略
+
+| 策略 | 说明 |
+|------|------|
+| `trim` | 直接裁剪历史消息 |
+| `summarize` | 总结历史对话 |
+| `vector` | 基于向量相似度选择相关上下文 |
+| `hybrid` | 混合策略 |
+
+---
+
+## 📄 许可证
+
+本项目采用 ISC 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
+
+---
+
+## 🙏 致谢
+
+- [LangChain](https://langchain.com/) - AI 应用开发框架
+- [AISuspendedBallChat](https://github.com/your-repo/ai-suspended-ball-chat) - 前端聊天组件
+- [阿里云 DashScope](https://dashscope.aliyun.com/) - AI 模型服务
