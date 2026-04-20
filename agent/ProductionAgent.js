@@ -1342,7 +1342,7 @@ export class ProductionAgent {
             if (streamEnabled && !isInternalToolCall) {
               emitStreamEvent(chunkCallback, {
                 type: "status",
-                content: getToolDivBox(`🚀  【TOOL】执行 ${toolCall.name}...`),
+                content: getToolDivBox(`🚀 【TOOL】执行 ${toolCall.name} 工具`),
               });
             }
             const callable = this.callableDefinitions.get(toolCall.name);
@@ -1374,7 +1374,7 @@ export class ProductionAgent {
             if (streamEnabled && !isInternalToolCall) {
               emitStreamEvent(chunkCallback, {
                 type: "status",
-                content: getToolDivBox(`✅  【TOOL】执行 ${toolCall.name} 完成`, 'end'),
+                content: getToolDivBox(`✅ 【TOOL】执行 ${toolCall.name} 完成`, 'end'),
               });
             }
             session.messages.push(new ToolMessage({

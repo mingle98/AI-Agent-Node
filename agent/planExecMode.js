@@ -277,7 +277,7 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
       if (streamEnabled && !isInternalToolCall) {
         emitStreamEvent(chunkCallback, {
           type: "status",
-          content: getToolDivBox(`🚀 【步骤 ${stepId}】执行 ${toolCall.name}...`)
+          content: getToolDivBox(`🚀 【步骤 ${stepId}】执行 ${toolCall.name} 工具`)
         });
       }
 
