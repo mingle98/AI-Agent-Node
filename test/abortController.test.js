@@ -44,70 +44,77 @@ class MockLLM {
     return this;
   }
 
+  stream = async function* (_messages, options = {}) {
+    this._onStreamStart?.(options);
+    this.callCount++;
+    const next = this.script.shift() || {};
+    if (this._delay > 0) {
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(resolve, this._delay);
+        const abortHandler = () => {
+          clearTimeout(timer);
+          reject(options?.signal?.reason || new Error("aborted"));
+        };
+        if (options?.signal?.aborted) {
+          abortHandler();
+          return;
+        }
+        options?.signal?.addEventListener?.("abort", abortHandler, { once: true });
+      });
+    }
+    if (next.error) {
+      throw next.error;
+    }
+    if (Array.isArray(next.chunks)) {
+      for (const c of next.chunks) {
+        if (options?.signal?.aborted) {
+          throw options.signal.reason || new Error("aborted");
+        }
+        yield c;
+      }
+      return;
+    }
+    if (next.message) {
+      yield next.message;
+      return;
+    }
+    yield new AIMessage({ content: "" });
+  }.bind(this);
+
+  invoke = async function(_messages, options = {}) {
+    this.callCount++;
+    const next = this.script.shift() || {};
+    if (this._delay > 0) {
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(resolve, this._delay);
+        const abortHandler = () => {
+          clearTimeout(timer);
+          reject(options?.signal?.reason || new Error("aborted"));
+        };
+        if (options?.signal?.aborted) {
+          abortHandler();
+          return;
+        }
+        options?.signal?.addEventListener?.("abort", abortHandler, { once: true });
+      });
+    }
+    if (next.error) {
+      throw next.error;
+    }
+    if (next.message) {
+      return next.message;
+    }
+    return new AIMessage({ content: "" });
+  }.bind(this);
+
   bindTools() {
-    const script = this.script;
     const self = this;
     return {
-      stream: async function* (_messages, options = {}) {
-        self._onStreamStart?.(options);
-        self.callCount++;
-        const next = script.shift() || {};
-        if (self._delay > 0) {
-          await new Promise((resolve, reject) => {
-            const timer = setTimeout(resolve, self._delay);
-            const abortHandler = () => {
-              clearTimeout(timer);
-              reject(options?.signal?.reason || new Error("aborted"));
-            };
-            if (options?.signal?.aborted) {
-              abortHandler();
-              return;
-            }
-            options?.signal?.addEventListener?.("abort", abortHandler, { once: true });
-          });
-        }
-        if (next.error) {
-          throw next.error;
-        }
-        if (Array.isArray(next.chunks)) {
-          for (const c of next.chunks) {
-            if (options?.signal?.aborted) {
-              throw options.signal.reason || new Error("aborted");
-            }
-            yield c;
-          }
-          return;
-        }
-        if (next.message) {
-          yield next.message;
-          return;
-        }
-        yield new AIMessage({ content: "" });
+      stream: async function (_messages, options = {}) {
+        return self.stream(_messages, options);
       },
       invoke: async function(_messages, options = {}) {
-        self.callCount++;
-        const next = script.shift() || {};
-        if (self._delay > 0) {
-          await new Promise((resolve, reject) => {
-            const timer = setTimeout(resolve, self._delay);
-            const abortHandler = () => {
-              clearTimeout(timer);
-              reject(options?.signal?.reason || new Error("aborted"));
-            };
-            if (options?.signal?.aborted) {
-              abortHandler();
-              return;
-            }
-            options?.signal?.addEventListener?.("abort", abortHandler, { once: true });
-          });
-        }
-        if (next.error) {
-          throw next.error;
-        }
-        if (next.message) {
-          return next.message;
-        }
-        return new AIMessage({ content: "" });
+        return self.invoke(_messages, options);
       },
     };
   }

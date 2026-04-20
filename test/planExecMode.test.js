@@ -36,38 +36,45 @@ class MockLLM {
     this.callCount = 0;
   }
 
+  stream = async function* () {
+    this.callCount++;
+    const next = this.script.shift() || {};
+    if (next.error) {
+      throw next.error;
+    }
+    if (Array.isArray(next.chunks)) {
+      for (const c of next.chunks) {
+        yield c;
+      }
+      return;
+    }
+    if (next.message) {
+      yield next.message;
+      return;
+    }
+    yield new AIMessage({ content: "" });
+  }.bind(this);
+
+  invoke = async function() {
+    this.callCount++;
+    const next = this.script.shift() || {};
+    if (next.error) {
+      throw next.error;
+    }
+    if (next.message) {
+      return next.message;
+    }
+    return new AIMessage({ content: "" });
+  }.bind(this);
+
   bindTools() {
-    const script = this.script;
     const self = this;
     return {
-      stream: async function* () {
-        self.callCount++;
-        const next = script.shift() || {};
-        if (next.error) {
-          throw next.error;
-        }
-        if (Array.isArray(next.chunks)) {
-          for (const c of next.chunks) {
-            yield c;
-          }
-          return;
-        }
-        if (next.message) {
-          yield next.message;
-          return;
-        }
-        yield new AIMessage({ content: "" });
+      stream: async function () {
+        return self.stream();
       },
       invoke: async function() {
-        self.callCount++;
-        const next = script.shift() || {};
-        if (next.error) {
-          throw next.error;
-        }
-        if (next.message) {
-          return next.message;
-        }
-        return new AIMessage({ content: "" });
+        return self.invoke();
       },
     };
   }

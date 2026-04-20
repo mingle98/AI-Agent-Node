@@ -175,7 +175,7 @@ async function generatePlan(agent, userInput, session, chunkCallback, streamEnab
     const { message: planResponse } = await agent.invokeLLMWithResilience(
       session,
       planMessages,
-      { streamEnabled: false, requestState }
+      { streamEnabled: false, requestState, allowTools: false }
     );
 
     const planText = normalizeTextContent(planResponse.content);
