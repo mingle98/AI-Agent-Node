@@ -32,17 +32,18 @@ test("searchKnowledgeBase: should handle empty results", async () => {
   assert.equal(result, "知识库中未找到相关信息");
 });
 
-test("searchKnowledgeBase: should truncate long content", async () => {
+test("searchKnowledgeBase: should preserve long content when returned by vector search", async () => {
+  const longContent = "a".repeat(200);
   const mockVectorStore = {
     similaritySearch: async () => [
       {
-        pageContent: "a".repeat(200),
+        pageContent: longContent,
         metadata: { source: "/long/doc.md" },
       },
     ],
   };
 
   const result = await searchKnowledgeBase(mockVectorStore, "query");
-  assert.ok(result.includes("..."));
-  assert.ok(!result.includes("a".repeat(200)));
+  assert.ok(result.includes(longContent));
+  assert.ok(result.includes("doc.md"));
 });

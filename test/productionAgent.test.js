@@ -789,6 +789,92 @@ test("ProductionAgent.getStructuredTools: should filter by capability names", ()
   assert.deepEqual(names.sort(), ["mermaid_diagram", "render_mermaid"]);
 });
 
+test("ProductionAgent.getStructuredTools: should filter by capability names", () => {
+  const llm = new MockLLM([]);
+  const agent = createAgentWithMockLLM(llm);
+
+  const tools = agent.getStructuredTools(["render_mermaid", "mermaid_diagram"]);
+  const names = tools.map((t) => t.function?.name).filter(Boolean);
+
+  assert.deepEqual(names.sort(), ["mermaid_diagram", "render_mermaid"]);
+});
+
+test("ProductionAgent.resolveCapabilitySelection: should keep search_tools in initial routing when enabled", () => {
+  const llm = new MockLLM([]);
+  const agent = createAgentWithMockLLM(llm, { capabilityRoutingEnabled: true });
+
+  const selection = agent.resolveCapabilitySelection("帮我处理 Excel 并发送邮件报告");
+
+  assert.ok(selection.toolNames.includes("search_tools"));
+  assert.ok(selection.capabilityNames.includes("search_tools"));
+});
+
+test("ProductionAgent.chat: capability routing should allow multi-turn tool discovery via search_tools", async () => {
+  const firstAi = new AIMessage({ content: "" });
+  firstAi.tool_calls = [{ name: "search_tools", id: "search-1", args: { arg1: "画一个流程图", arg2: "all", arg3: 4 } }];
+
+  const secondAi = new AIMessage({ content: "" });
+  secondAi.tool_calls = [{ name: "render_mermaid", id: "render-1", args: { arg1: "flowchart", arg2: "A-->B" } }];
+
+  const finalAi = new AIMessage({ content: "已经为你生成流程图。" });
+
+  const llm = new MockLLM([
+    { chunks: [firstAi] },
+    { chunks: [secondAi] },
+    { chunks: [finalAi] },
+  ]);
+  const agent = createAgentWithMockLLM(llm, {
+    capabilityRoutingEnabled: true,
+    streamEnabled: false,
+    maxActiveTools: 4,
+    alwaysOnTools: ["search_knowledge", "analyze_code", "exec_code", "search_tools"],
+  });
+
+  const result = await agent.chat("帮我画一个流程图", null, null, "routing-search-tools-e2e");
+
+  assert.equal(result, "已经为你生成流程图。");
+  assert.ok(llm.boundToolsHistory.length >= 3);
+
+  const firstBoundNames = llm.boundToolsHistory[0].map((tool) => tool.function?.name).filter(Boolean);
+  const secondBoundNames = llm.boundToolsHistory[1].map((tool) => tool.function?.name).filter(Boolean);
+
+  assert.ok(firstBoundNames.includes("search_tools"), "first round should expose search_tools for recovery");
+  assert.ok(!firstBoundNames.includes("render_mermaid"), "initial routing should keep newly discovered tool out under constrained tool budget");
+  assert.ok(secondBoundNames.includes("search_tools"), "search_tools should remain available after activation");
+  assert.ok(secondBoundNames.includes("render_mermaid"), "second round should expose discovered tool");
+
+  const session = agent.getOrCreateSession("routing-search-tools-e2e");
+  assert.ok(session.activeCapabilityNames.includes("search_tools"));
+  assert.ok(session.activeCapabilityNames.includes("render_mermaid"));
+});
+
+test("ProductionAgent.chat: should hide search_tools from frontend tool events in ReAct mode", async () => {
+  const firstAi = new AIMessage({ content: "" });
+  firstAi.tool_calls = [{ name: "search_tools", id: "search-hidden-1", args: { arg1: "画一个流程图", arg2: "all", arg3: 4 } }];
+
+  const secondAi = new AIMessage({ content: "done" });
+
+  const llm = new MockLLM([
+    { chunks: [firstAi] },
+    { chunks: [secondAi] },
+  ]);
+  const agent = createAgentWithMockLLM(llm, {
+    capabilityRoutingEnabled: true,
+    streamEnabled: true,
+    maxActiveTools: 4,
+    alwaysOnTools: ["search_knowledge", "analyze_code", "exec_code", "search_tools"],
+  });
+
+  const events = [];
+  await agent.chat("帮我画一个流程图", (event, toolEvent) => {
+    if (event) events.push(event);
+    if (toolEvent) events.push({ type: "tool_event", ...toolEvent });
+  }, null, "react-hide-search-tools-test");
+
+  assert.ok(!events.some((item) => item.type === "tool_event" && item.toolName === "search_tools"));
+  assert.ok(!events.some((item) => item.type === "status" && typeof item.content === "string" && item.content.includes("search_tools")));
+});
+
 test("ProductionAgent.resolveCapabilitySelection: should expand to all when routing disabled", () => {
   const llm = new MockLLM([]);
   const agent = createAgentWithMockLLM(llm, { capabilityRoutingEnabled: false });
@@ -807,7 +893,7 @@ test("ProductionAgent.chat: should expand capabilities and retry when first roun
     capabilityRoutingEnabled: true,
   });
 
-  const totalCapabilities = agent.callableDefinitions.size;
+  const totalCapabilities = agent.callableDefinitions.size - 1;
   const initialSelected = agent.resolveCapabilitySelection("你好").capabilityNames.length;
   assert.ok(initialSelected < totalCapabilities, "initial selected capabilities should be a subset");
 

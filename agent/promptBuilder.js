@@ -12,6 +12,7 @@ export function buildSystemPrompt(toolDefinitions, skillDefinitions, options = {
     roleName = "智能客服助手",
     roleDescription = "可以帮助用户解决问题",
     compact = false,
+    capabilityRoutingEnabled = false,
   } = options;
 
   // 构建工具列表
@@ -21,10 +22,10 @@ export function buildSystemPrompt(toolDefinitions, skillDefinitions, options = {
   const skillsSection = buildSkillsSection(skillDefinitions, { compact });
   
   // 构建使用规则
-  const rulesSection = buildRulesSection({ compact });
+  const rulesSection = buildRulesSection({ compact, capabilityRoutingEnabled });
   
   // 构建决策示例
-  const examplesSection = buildExamplesSection(skillDefinitions, { compact });
+  const examplesSection = buildExamplesSection(toolDefinitions, skillDefinitions, { compact, capabilityRoutingEnabled });
 
   return `你是一个${roleName}，${roleDescription}
 
@@ -120,7 +121,7 @@ ${skillsList}`;
  * 构建使用规则部分
  */
 function buildRulesSection(options = {}) {
-  const { compact = false } = options;
+  const { compact = false, capabilityRoutingEnabled = false } = options;
 
   if (compact) {
     return `📋 使用规则：
@@ -135,7 +136,9 @@ function buildRulesSection(options = {}) {
 9. 涉及执行脚本可使用 exec_code 或 python_executor，但生成或执行 Python 前必须先参考相关 guardrails，优先确认是否只用标准库、是否需要补齐输入
 10. 文件操作遵循 sessionId 隔离；路径以用户 workspace 为根目录
 11. 参数要完整准确；如果知识库提示需要澄清，就先追问，不要直接执行
-12. 回答需准确、友好、专业`;
+12. 回答需准确、友好、专业
+${capabilityRoutingEnabled ? '13. 当当前已注入能力不足、工具不存在，或你不确定该用哪个工具/技能时，优先调用 search_tools 搜索并激活匹配能力，再继续执行' : ''}
+`;
   }
 
   return `📋 使用规则：
@@ -195,55 +198,74 @@ function buildRulesSection(options = {}) {
 /**
  * 构建智能决策示例部分
  */
-function buildExamplesSection(skillDefinitions, options = {}) {
-  const { compact = false } = options;
-  // 可以根据技能定义自动生成示例
-  const examples = [
-    '- "AI Agent是什么？" → 用 search_knowledge 工具查询',
-    '- "解释这段代码" → 用 analyze_code 工具分析',
-    '- "生成API文档" → 用 generate_document 工具创建',
-    '- "今年的房价走势怎么样?" → 用 ai_agent_echart 进行数据搜索和可视化',
-    '- "帮我画个流程图梳理登录逻辑" → 用 mermaid_diagram 技能（生成可渲染的图）',
-    '- "这段代码报错了帮我看看" → 用 debug_assistant 技能诊断',
-    '- "帮我review下这段代码" → 用 code_review 技能检查质量',
-    '- "Excel怎么统计销售额" → 用 excel_helper 技能获取公式',
-    '- "纠结选哪个offer" → 用 decision_helper 技能分析',
-    '- "帮我写封邮件跟进客户" → 用 email_writer 技能生成',
-    '- "发送邮件通知给xxx@example.com" → 优先用 email_sender 技能（自动完成全流程），报告类邮件请附带附件（第5个参数传文件路径）',
-    '- "发送系统告警邮件给管理员" → 用 email_sender 技能（自动完成发送流程）',
-    '- "定时任务完成后发邮件" → 用 schedule_task 定时执行邮件发送，多步请用 Plan 模式',
-    '- "2分钟后执行Python算平均值并发邮箱" → 先用 Plan 模式编排步骤，再分别用 schedule_task 定时各步骤',
-    '- "查看我有哪些定时任务" → 用 schedule_list 工具查询',
-    '- "取消那个定时任务" → 用 schedule_cancel 工具取消（需要任务ID）',
-    '- "执行这段js代码看看结果" → 用 exec_code 工具沙箱执行',
-    '- "这是上周数据：访问=50000, 加购=3500, 下单=800, 支付=210。帮我计算每步转化率，并找出最大流失环节" → 用 python_executor 技能自动生成脚本执行分析',
-    '- "列出workspace里的文件" → 用 file_list 工具查看目录',
-    '- "读取src/app.js第120到160行" → 用 file_read_lines 工具按行读取文件片段',
-    '- "把src/app.js第120到125行替换成新逻辑" → 用 file_edit_lines 工具按行编辑文件片段',
-    '- "删除文件里的 TODO remove 文本" → 用 file_replace_text 工具按文本替换，newText 传空字符串即可删除',
-    '- "按文件名找 report 相关文件" → 用 file_search 工具搜索文件名或目录名',
-    '- "在项目文件内容里搜索 TODO / 某段文本" → 用 file_content_search 工具搜索文件内容',
-    '- "我还剩多少存储空间?" → 用 file_quota 工具查询',
-    '- "帮我创建一个叫report.txt的文件，内容是XXX" → 用 file_write 工具创建',
-    '- "读取data/report.xlsx的内容" → 用 excel_read 工具读取',
-    '- "帮我生成一个季度汇报PPT" → 用 ppt_write 工具创建基础演示文稿',
-    '- "读取这个演示稿都有哪些页" → 用 ppt_read 工具提取幻灯片标题和摘要',
-    '- "把这几个PDF合并成一个" → 用 pdf_merge 工具合并',
-    '- "解压这个zip文件" → 用 zip_extract 工具解压',
-    '- "把这几个文件打包成zip" → 用 zip_compress 工具压缩',
-    '- "压缩这张图片/帮我把图片变小" → 用 image_compress 工具（支持 jpg/png/gif/webp，可调质量和尺寸）',
-    '- "批量压缩这些图片" → 用 image_compress_batch 工具（多张图片一次性压缩到指定目录）',
-    '- "把图片转成 webp 格式" → 用 image_compress 工具（设置 format: webp）',
+function buildExamplesSection(toolDefinitions, skillDefinitions, options = {}) {
+  const { compact = false, capabilityRoutingEnabled = false } = options;
+  const toolNames = new Set((toolDefinitions || []).map((tool) => tool?.name).filter(Boolean));
+  const skillNames = new Set((skillDefinitions || []).map((skill) => skill?.name).filter(Boolean));
+
+  const baseExamples = [
+    { key: "search_knowledge", text: '- "AI Agent是什么？" → 用 search_knowledge 工具查询' },
+    { key: "analyze_code", text: '- "解释这段代码" → 用 analyze_code 工具分析' },
+    { key: "generate_document", text: '- "生成API文档" → 用 generate_document 工具创建' },
+    { key: "ai_agent_echart", text: '- "今年的房价走势怎么样?" → 用 ai_agent_echart 进行数据搜索和可视化' },
+    { key: "mermaid_diagram", text: '- "帮我画个流程图梳理登录逻辑" → 用 mermaid_diagram 技能（生成可渲染的图）' },
+    { key: "debug_assistant", text: '- "这段代码报错了帮我看看" → 用 debug_assistant 技能诊断' },
+    { key: "code_review", text: '- "帮我review下这段代码" → 用 code_review 技能检查质量' },
+    { key: "excel_helper", text: '- "Excel怎么统计销售额" → 用 excel_helper 技能获取公式' },
+    { key: "decision_helper", text: '- "纠结选哪个offer" → 用 decision_helper 技能分析' },
+    { key: "email_writer", text: '- "帮我写封邮件跟进客户" → 用 email_writer 技能生成' },
+    { key: "email_sender", text: '- "发送邮件通知给xxx@example.com" → 优先用 email_sender 技能（自动完成全流程），报告类邮件请附带附件（第5个参数传文件路径）' },
+    { key: "email_sender", text: '- "发送系统告警邮件给管理员" → 用 email_sender 技能（自动完成发送流程）' },
+    { key: "schedule_task", text: '- "定时任务完成后发邮件" → 用 schedule_task 定时执行邮件发送，多步请用 Plan 模式' },
+    { key: "schedule_task", text: '- "2分钟后执行Python算平均值并发邮箱" → 先用 Plan 模式编排步骤，再分别用 schedule_task 定时各步骤' },
+    { key: "schedule_list", text: '- "查看我有哪些定时任务" → 用 schedule_list 工具查询' },
+    { key: "schedule_cancel", text: '- "取消那个定时任务" → 用 schedule_cancel 工具取消（需要任务ID）' },
+    { key: "exec_code", text: '- "执行这段js代码看看结果" → 用 exec_code 工具沙箱执行' },
+    { key: "python_executor", text: '- "这是上周数据：访问=50000, 加购=3500, 下单=800, 支付=210。帮我计算每步转化率，并找出最大流失环节" → 用 python_executor 技能自动生成脚本执行分析' },
+    { key: "file_list", text: '- "列出workspace里的文件" → 用 file_list 工具查看目录' },
+    { key: "file_read_lines", text: '- "读取src/app.js第120到160行" → 用 file_read_lines 工具按行读取文件片段' },
+    { key: "file_edit_lines", text: '- "把src/app.js第120到125行替换成新逻辑" → 用 file_edit_lines 工具按行编辑文件片段' },
+    { key: "file_replace_text", text: '- "删除文件里的 TODO remove 文本" → 用 file_replace_text 工具按文本替换，newText 传空字符串即可删除' },
+    { key: "file_search", text: '- "按文件名找 report 相关文件" → 用 file_search 工具搜索文件名或目录名' },
+    { key: "file_content_search", text: '- "在项目文件内容里搜索 TODO / 某段文本" → 用 file_content_search 工具搜索文件内容' },
+    { key: "file_quota", text: '- "我还剩多少存储空间?" → 用 file_quota 工具查询' },
+    { key: "file_write", text: '- "帮我创建一个叫report.txt的文件，内容是XXX" → 用 file_write 工具创建' },
+    { key: "excel_read", text: '- "读取data/report.xlsx的内容" → 用 excel_read 工具读取' },
+    { key: "ppt_write", text: '- "帮我生成一个季度汇报PPT" → 用 ppt_write 工具创建基础演示文稿' },
+    { key: "ppt_read", text: '- "读取这个演示稿都有哪些页" → 用 ppt_read 工具提取幻灯片标题和摘要' },
+    { key: "pdf_merge", text: '- "把这几个PDF合并成一个" → 用 pdf_merge 工具合并' },
+    { key: "zip_extract", text: '- "解压这个zip文件" → 用 zip_extract 工具解压' },
+    { key: "zip_compress", text: '- "把这几个文件打包成zip" → 用 zip_compress 工具压缩' },
+    { key: "image_compress", text: '- "压缩这张图片/帮我把图片变小" → 用 image_compress 工具（支持 jpg/png/gif/webp，可调质量和尺寸）' },
+    { key: "image_compress_batch", text: '- "批量压缩这些图片" → 用 image_compress_batch 工具（多张图片一次性压缩到指定目录）' },
+    { key: "image_compress", text: '- "把图片转成 webp 格式" → 用 image_compress 工具（设置 format: webp）' },
   ];
+
+  const shouldIncludeExample = (key) => {
+    if (!capabilityRoutingEnabled) {
+      return true;
+    }
+    return toolNames.has(key) || skillNames.has(key);
+  };
+
+  const examples = baseExamples
+    .filter((item) => shouldIncludeExample(item.key))
+    .map((item) => item.text);
   
-  // 从技能中提取示例
   if (skillDefinitions && skillDefinitions.length > 0) {
-    skillDefinitions.slice(0, 3).forEach(skill => {
+    skillDefinitions.forEach((skill) => {
       const example = generateSkillExample(skill);
-      if (example) {
+      if (example && !examples.includes(example)) {
         examples.push(example);
       }
     });
+  }
+
+  if (capabilityRoutingEnabled && examples.length === 0) {
+    examples.push(
+      '- "需要更多可用能力时" → 用 search_tools 搜索并激活匹配工具/技能后再继续执行',
+      '- "当前能力不足时" → 优先 search_tools，再基于激活后的能力继续处理'
+    );
   }
 
   const finalExamples = compact ? examples.slice(0, 8) : examples;

@@ -104,3 +104,55 @@ test("buildSystemPrompt: compact mode should trim examples and detail fields", (
   assert.match(prompt, /优先选择最匹配用户意图/);
   assert.doesNotMatch(prompt, /批量压缩这些图片/);
 });
+
+test("buildSystemPrompt: capability routing should align examples with active capabilities", () => {
+  const prompt = buildSystemPrompt([
+    {
+      name: "search_knowledge",
+      description: "知识查询",
+      params: [],
+      example: 'search_knowledge("AI Agent")',
+    },
+    {
+      name: "search_tools",
+      description: "能力搜索",
+      params: [],
+      example: 'search_tools("画流程图")',
+    },
+  ], [
+    {
+      name: "component_consulting",
+      description: "组件咨询",
+      functionality: "组件配置与集成说明",
+      params: [],
+      example: 'component_consulting("如何配置流式响应")',
+    },
+  ], {
+    compact: true,
+    capabilityRoutingEnabled: true,
+  });
+
+  assert.match(prompt, /优先调用 search_tools 搜索并激活匹配能力/);
+  assert.match(prompt, /AI Agent是什么？/);
+  assert.match(prompt, /如何配置流式响应/);
+  assert.doesNotMatch(prompt, /执行这段js代码看看结果/);
+  assert.doesNotMatch(prompt, /批量压缩这些图片/);
+});
+
+test("buildSystemPrompt: capability routing should keep search_tools fallback examples when no mapped capability examples exist", () => {
+  const prompt = buildSystemPrompt([
+    {
+      name: "search_tools",
+      description: "能力搜索",
+      params: [],
+      example: 'search_tools("未知任务")',
+    },
+  ], [], {
+    compact: true,
+    capabilityRoutingEnabled: true,
+  });
+
+  assert.match(prompt, /需要更多可用能力时/);
+  assert.match(prompt, /当前能力不足时/);
+  assert.match(prompt, /search_tools/);
+});
