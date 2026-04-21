@@ -5,8 +5,10 @@ import path from "path";
 import { createHash } from "crypto";
 import { DirectoryLoader } from "@langchain/classic/document_loaders/fs/directory";
 import { TextLoader } from "@langchain/classic/document_loaders/fs/text";
+import { JSONLoader } from "@langchain/classic/document_loaders/fs/json";
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { EPubLoader } from "@langchain/community/document_loaders/fs/epub";
+import { DocxLoader } from "@langchain/community/document_loaders/fs/docx";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { FaissStore } from "@langchain/community/vectorstores/faiss";
 import { Document } from "@langchain/core/documents";
@@ -236,13 +238,15 @@ async function loadKnowledgeDocuments(knowledgeBasePath) {
   const loader = new DirectoryLoader(knowledgeBasePath, {
     ".txt": (filePath) => new TextLoader(filePath),
     ".md": (filePath) => new TextLoader(filePath),
+    ".json": (filePath) => new JSONLoader(filePath),
     ".pdf": (filePath) => new PDFLoader(filePath),
     ".epub": (filePath) => new EPubLoader(filePath, { splitChapters: true }),
+    ".docx": (filePath) => new DocxLoader(filePath),
   });
 
   const docs = await loader.load();
   if (!docs.length) {
-    throw new Error(`知识库目录为空: ${knowledgeBasePath}\n请添加 .txt/.md/.pdf/.epub 文件`);
+    throw new Error(`知识库目录为空: ${knowledgeBasePath}\n请添加 .txt/.md/.json/.pdf/.epub/.docx 文件`);
   }
 
   return docs;

@@ -2,16 +2,14 @@
 
 import { DirectoryLoader } from "@langchain/classic/document_loaders/fs/directory";
 import { TextLoader } from "@langchain/classic/document_loaders/fs/text";
+import { JSONLoader } from "@langchain/classic/document_loaders/fs/json";
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { EPubLoader } from "@langchain/community/document_loaders/fs/epub";
+import { DocxLoader } from "@langchain/community/document_loaders/fs/docx";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { FaissStore } from "@langchain/community/vectorstores/faiss";
 import path from "path";
-import { fileURLToPath } from "url";
 import fs from "fs";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 /**
  * 检查向量数据库是否存在
@@ -61,10 +59,12 @@ export async function buildRAGKnowledgeBase(options) {
       {
         ".txt": (filePath) => new TextLoader(filePath),
         ".md": (filePath) => new TextLoader(filePath),
+        ".json": (filePath) => new JSONLoader(filePath),
         ".pdf": (filePath) => new PDFLoader(filePath),
         ".epub": (filePath) => new EPubLoader(filePath, {
           splitChapters: true,
         }),
+        ".docx": (filePath) => new DocxLoader(filePath),
       }
     );
     
@@ -72,7 +72,7 @@ export async function buildRAGKnowledgeBase(options) {
     console.log(`   ✅ 加载了 ${docs.length} 个文档\n`);
 
     if (docs.length === 0) {
-      throw new Error(`知识库目录为空: ${knowledgeBasePath}\n   请添加 .txt、.md、.pdf 或 .epub 文件`);
+      throw new Error(`知识库目录为空: ${knowledgeBasePath}\n   请添加 .txt、.md、.json、.pdf、.epub 或 .docx 文件`);
     }
 
     // 步骤2: 内容切分（滑动窗口策略）
