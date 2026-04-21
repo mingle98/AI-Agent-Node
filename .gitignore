@@ -4,9 +4,9 @@ node_modules
 .env.*
 !.env.example
 
-vector_db
+/vector_db/
 
-llm_wiki
+/llm_wiki/
 
 dist
 build
