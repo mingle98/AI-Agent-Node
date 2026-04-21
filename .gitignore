@@ -24,3 +24,6 @@ workspace/**
 
 data/scheduled_tasks.json
 .vscode
+
+/vector_db/
+/llm_wiki/

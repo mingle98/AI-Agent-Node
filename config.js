@@ -1,4 +1,8 @@
 // ========== 配置 ==========
+import dotenv from "dotenv";
+
+dotenv.config();
+
 
 // 服务器配置
 const PORT = Number(process.env.PORT || 3600);
