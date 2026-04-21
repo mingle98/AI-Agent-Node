@@ -1028,7 +1028,7 @@ export async function promoteLearningCandidates(options) {
   learningConfig.writeEnabled = true;
   learningConfig.mode = "direct";
 
-  const learningState = loadLearningState(learningStatePath);
+  let learningState = loadLearningState(learningStatePath);
   const results = [];
   let written = 0;
   let skipped = 0;
@@ -1085,6 +1085,7 @@ export async function promoteLearningCandidates(options) {
       learningConfig,
       learningState,
     });
+    learningState = loadLearningState(learningStatePath);
     written += 1;
     const result = {
       status: "written",

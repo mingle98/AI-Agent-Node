@@ -5,8 +5,10 @@ import path from "node:path";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 
 import {
+  buildLLMWiki,
   processLLMWikiLearning,
   listLearningCandidates,
+  promoteLearningCandidates,
 } from "../utils/llmWikiBuilder.js";
 
 function createTempWikiPath(prefix = "llmwiki-test-") {
@@ -147,4 +149,99 @@ test("processLLMWikiLearning: should write candidate file content", async () => 
   const raw = await readFile(path.join(wikiPath, "learning-candidates.jsonl"), "utf-8");
   assert.ok(raw.includes("能力路由"));
   assert.ok(raw.includes("capability-routing"));
+});
+
+test("promoteLearningCandidates: should refresh learningState during batch publish and skip duplicate fingerprints", async () => {
+  const wikiPath = await createTempWikiPath();
+
+  class MockEmbeddings {
+    async embedQuery(text) {
+      return [String(text || "").length || 1, 0.1, 0.2];
+    }
+
+    async embedDocuments(texts) {
+      return texts.map((text) => [String(text || "").length || 1, 0.1, 0.2]);
+    }
+  }
+
+  const mockLlm = {
+    async invoke() {
+      return {
+        content: JSON.stringify({
+          concepts: [
+            {
+              title: "能力路由",
+              summary: "能力路由负责根据用户意图选择合适的工具和技能。",
+              related: ["执行层"],
+              keywords: ["路由", "能力选择"],
+            },
+          ],
+        }),
+      };
+    },
+  };
+
+  await buildLLMWiki({
+    knowledgeBasePath: path.join(process.cwd(), "knowledge_base"),
+    wikiPath,
+    llm: mockLlm,
+    embeddings: new MockEmbeddings(),
+    maxChunks: 1,
+    maxConceptsPerChunk: 1,
+  });
+
+  const duplicateCandidate = {
+    ts: new Date().toISOString(),
+    question: "什么是能力路由？",
+    answer: "能力路由负责根据用户意图动态选择工具和技能，从而减少无关能力暴露，并提升整体执行准确率与路径命中率。",
+    references: [{ title: "能力路由", slug: "capability-routing" }],
+    concept: {
+      title: "能力路由",
+      summary: "能力路由负责根据用户意图动态选择工具和技能。",
+      related: ["能力路由"],
+      keywords: ["能力路由", "路由"],
+    },
+    fingerprint: "fp-duplicate-batch",
+  };
+
+  await writeFile(
+    path.join(wikiPath, "learning-candidates.jsonl"),
+    `${JSON.stringify(duplicateCandidate)}\n${JSON.stringify(duplicateCandidate)}\n`,
+    "utf-8"
+  );
+
+  await writeFile(
+    path.join(wikiPath, "learning-state.json"),
+    JSON.stringify({
+      version: 1,
+      events: [],
+      fingerprints: [],
+      writeStats: {
+        date: "",
+        count: 0,
+        lastWriteAt: "",
+      },
+    }, null, 2),
+    "utf-8"
+  );
+
+  const result = await promoteLearningCandidates({
+    wikiPath,
+    embeddings: new MockEmbeddings(),
+    approveAll: true,
+    dryRun: false,
+    learningConfig: {
+      minSecondsBetweenWrites: 0,
+      extractor: {
+        useHeuristicFirst: true,
+        enableLLMExtractor: false,
+      },
+    },
+  });
+
+  assert.equal(result.selected, 2);
+  assert.equal(result.written, 1);
+  assert.equal(result.skipped, 1);
+  assert.equal(result.results[1].status, "skipped");
+  assert.equal(result.results[1].reason, "duplicate-fingerprint");
 });
