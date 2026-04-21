@@ -13,6 +13,7 @@ import { selectTaskMode, chatWithPlanExec } from "./planExecMode.js";
 import { getToolDivBox } from "../utils/streamRenderer.js";
 import { LongTermMemory, LTM_INJECT_START, LTM_INJECT_END } from "./longTermMemory.js";
 import { selectActiveCapabilities, expandCapabilitiesToAll, searchCapabilities } from "./capabilityRouter.js";
+import { processLLMWikiLearning } from "../utils/llmWikiBuilder.js";
 
 const SEARCH_TOOLS_NAME = "search_tools";
 
@@ -32,6 +33,16 @@ function normalizeTextContent(content) {
     return content.map((part) => (typeof part === "string" ? part : (part?.text || ""))).join("");
   }
   return String(content || "");
+}
+
+function normalizeUserQuestion(input) {
+  if (typeof input === "string") {
+    return input.trim();
+  }
+  if (input && typeof input === "object") {
+    return String(input.text || "").trim();
+  }
+  return String(input || "").trim();
 }
 
 function toJsonSchemaType(type) {
@@ -184,6 +195,7 @@ export class ProductionAgent {
     this.vectorStore = vectorStore;
     this.embeddings = embeddings;
     this.options = options;
+    this.knowledgeRetriever = options.knowledgeRetriever || null;
     this.maxIterations = options.maxIterations || 20;
     this.defaultSessionId = options.defaultSessionId || "default";
     this.sessionTtlMs = options.sessionTtlMs || 30 * 60 * 1000;
@@ -245,10 +257,10 @@ export class ProductionAgent {
 
     if (this.options.debug) {
       console.log("\n" + "=".repeat(70));
-      console.log("📝 基础系统提示（全量能力模板，仅初始化展示）：");
-      console.log("=".repeat(70));
-      console.log(systemPrompt);
-      console.log("=".repeat(70) + "\n");
+      // console.log("📝 基础系统提示（全量能力模板，仅初始化展示）：");
+      // console.log("=".repeat(70));
+      // console.log(systemPrompt);
+      // console.log("=".repeat(70) + "\n");
     }
 
     return systemPrompt;
@@ -682,7 +694,10 @@ export class ProductionAgent {
     }
     
     if (toolName === "search_knowledge") {
-      return searchKnowledgeBase(this.vectorStore, args[0]);
+      return searchKnowledgeBase({
+        vectorStore: this.vectorStore,
+        knowledgeRetriever: this.knowledgeRetriever,
+      }, args[0]);
     }
     const tool = TOOLS[toolName];
     if (!tool) {
@@ -1000,6 +1015,54 @@ export class ProductionAgent {
     return new HumanMessage(String(input));
   }
 
+  async maybeTriggerLLMWikiLearning(userInput, answer, sessionId, options = {}) {
+    const enabled =
+      this.options.knowledgeRetriever?.type === "llm_wiki" &&
+      this.options.llmWikiAutoLearningEnabled === true;
+    const usedSearchKnowledge = options.usedSearchKnowledge === true;
+    if (!enabled || !usedSearchKnowledge) {
+      return;
+    }
+
+    const question = normalizeUserQuestion(userInput);
+    if (!question || !answer) {
+      return;
+    }
+
+    const wikiPath = this.options.llmWikiPath;
+    if (!wikiPath || !this.embeddings) {
+      console.log("ℹ️ [llm-wiki-learning] 跳过：wikiPath 或 embeddings 未就绪");
+      return;
+    }
+
+    try {
+      console.log(`📝 [llm-wiki-learning] 开始自动学习: session=${sessionId}`);
+      let references = [];
+      if (this.knowledgeRetriever?.retrieve) {
+        const retrieval = await this.knowledgeRetriever.retrieve(
+          question,
+          this.options.llmWikiTopK || CONFIG.llmWikiTopK || CONFIG.ragTopK
+        );
+        references = Array.isArray(retrieval?.references) ? retrieval.references : [];
+        console.log(`📝 [llm-wiki-learning] 已获取参考页: ${references.length}`);
+      }
+
+      const learningResult = await processLLMWikiLearning({
+        wikiPath,
+        embeddings: this.embeddings,
+        llm: this.llm,
+        question,
+        answer,
+        references,
+        learningConfig: this.options.llmWikiLearningConfig,
+      });
+
+      console.log(`📝 [llm-wiki-learning] 自动学习结果: ${learningResult.status}${learningResult.reason ? ` (${learningResult.reason})` : ""}`);
+    } catch (error) {
+      console.warn(`⚠️ [llm-wiki-learning] 自动学习失败: ${error.message}`);
+    }
+  }
+
   // ========== 会话锁包装器（供 planExecMode 调用） ==========
   async withSessionLockWrapper(fn, sessionId = this.defaultSessionId) {
     const session = this.getOrCreateSession(sessionId);
@@ -1103,6 +1166,7 @@ export class ProductionAgent {
 
         this.touchSession(session);
         const toolExcResults = [];
+        let usedSearchKnowledge = false;
         const logText = typeof userInput === "string" ? userInput : (userInput?.text || "[多模态输入]");
         console.log(`👤 [${sessionId}] 用户: ${logText}`);
         if (!skipUserMessageAppend) {
@@ -1177,6 +1241,9 @@ export class ProductionAgent {
               });
             }
             fullResponseCallback?.(aiText, toolExcResults);
+            void this.maybeTriggerLLMWikiLearning(userInput, aiText, sessionId, {
+              usedSearchKnowledge,
+            });
 
             // ========== 长期记忆更新检查 ==========
             if (this.longTermMemory) {
@@ -1233,6 +1300,9 @@ export class ProductionAgent {
             if (!isInternalToolCall) {
               toolExcResults.push(toolExcResult);
               emitToolEvent(chunkCallback, toolExcResult);
+            }
+            if (toolCall.name === "search_knowledge") {
+              usedSearchKnowledge = true;
             }
             console.log(`【TOOL】执行 ${toolCall.name}结果:${JSON.stringify(result)}`)
             const content = typeof result === "string" ? result : JSON.stringify(result, null, 2);

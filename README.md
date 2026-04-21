@@ -23,7 +23,7 @@
 | 特性 | 描述 |
 |------|------|
 | 🤖 **智能对话** | 基于 LangChain 的 AI 对话能力 |
-| 📚 **RAG 知识库** | 支持本地知识库检索，可处理 PDF、MD、EPUB 等格式 |
+| 📚 **RAG / LLM Wiki 知识检索** | 支持经典 RAG 检索，也支持基于 Wiki 页面与候选审核机制的 `llm_wiki` 检索模式 |
 | 🛠️ **工具系统** | 模块化工具架构，支持代码分析、文档生成、网络搜索等 |
 | 🎯 **技能管理** | 内置多种 AI 技能，支持教学、咨询、问答等场景 |
 | 🌊 **流式响应** | 支持实时流式输出，提升用户体验 |
@@ -137,6 +137,68 @@ npm run dev
 ```
 
 服务启动后将在 `http://localhost:3600` 提供服务。
+
+---
+
+## 🧠 LLM Wiki 知识检索与学习
+
+项目在原有 `RAG` 链路上新增了可切换的 `LLM Wiki` 模式，用于结构化知识检索与可审核的增量沉淀。
+
+### 核心说明
+
+- `KNOWLEDGE_SEARCH_PROVIDER=rag`：默认模式，继续使用原有 `vector_db/` 检索
+- `KNOWLEDGE_SEARCH_PROVIDER=llm_wiki`：切换到 `llm_wiki/` 检索
+- Agent 对外仍统一使用 `search_knowledge`，不会改变既有工具协议
+- 自动学习默认关闭，开启后建议优先使用 `candidate` 模式
+
+### 相关配置
+
+```bash
+# 知识检索模式: rag 或 llm_wiki
+KNOWLEDGE_SEARCH_PROVIDER=rag
+
+# 是否开启 LLM Wiki 自动学习（默认 false）
+LLM_WIKI_AUTO_LEARNING_ENABLED=false
+
+# 自动学习写入模式: candidate 或 direct
+LLM_WIKI_LEARNING_MODE=candidate
+```
+
+### 自动学习触发条件
+
+只有同时满足以下条件时，才会尝试自动学习：
+
+1. 当前模式为 `llm_wiki`
+2. `LLM_WIKI_AUTO_LEARNING_ENABLED=true`
+3. 本轮对话里真实执行过 `search_knowledge`
+
+因此普通闲聊、未检索回答、`rag` 模式都不会触发 LLM Wiki 学习。
+
+### 常用命令
+
+```bash
+# 首次构建 / 强制重建
+npm run wiki:build
+npm run wiki:build:force
+
+# 查看候选池
+npm run wiki:review
+
+# 审核并正式发布全部候选
+npm run wiki:review:publish
+```
+
+### 审核说明
+
+- `candidate`：先进入候选池，人工审核后再发布到正式 Wiki
+- `direct`：直接写入正式 Wiki，风险更高，建议谨慎开启
+- `wiki:review:publish` 等价于 `node scripts/reviewLlmWiki.js --apply --all --write`
+
+### 使用建议
+
+- 生产环境建议优先使用 `rag`，或使用 `llm_wiki + candidate`
+- 不建议对外直接暴露 `llm_wiki/` 资料目录
+- 开启自动学习前，建议先执行一次 `npm run wiki:build`
 
 ---
 
@@ -456,10 +518,14 @@ import { SuspendedBallChat } from 'ai-suspended-ball-chat'
 
 ```javascript
 export const CONFIG = {
-  maxHistoryMessages: 20,        // 最大历史消息数
-  maxContextLength: 8000,        // 最大上下文 token 数
-  ragTopK: 3,                    // RAG 检索返回数量
-  streamEnabled: true,           // 是否启用流式输出
+  maxHistoryMessages: 20,          // 最大历史消息数
+  maxContextLength: 8000,          // 最大上下文 token 数
+  ragTopK: 4,                      // RAG 检索返回数量
+  streamEnabled: true,             // 是否启用流式输出
+  knowledgeSearchProvider: 'rag',  // 知识检索模式: 'rag' | 'llm_wiki'
+  llmWikiTopK: 4,                  // LLM Wiki 检索返回数量
+  llmWikiAutoLearningEnabled: false, // 是否开启 LLM Wiki 自动学习
+  llmWikiLearningMode: 'candidate',  // 自动学习模式: 'candidate' | 'direct'
   capabilityRoutingEnabled: false, // 是否启用动态能力路由（建议先完善 capabilityRouter.js 再开启）
 };
 ```

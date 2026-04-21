@@ -3,6 +3,34 @@ import test from "node:test";
 
 import { skillEmailSender } from "../skills/emailSender.js";
 
+function withClearedSmtpEnv(fn) {
+  const original = {
+    SMTP_HOST: process.env.SMTP_HOST,
+    SMTP_PORT: process.env.SMTP_PORT,
+    SMTP_SECURE: process.env.SMTP_SECURE,
+    SMTP_USER: process.env.SMTP_USER,
+    SMTP_PASS: process.env.SMTP_PASS,
+  };
+
+  delete process.env.SMTP_HOST;
+  delete process.env.SMTP_PORT;
+  delete process.env.SMTP_SECURE;
+  delete process.env.SMTP_USER;
+  delete process.env.SMTP_PASS;
+
+  return Promise.resolve()
+    .then(fn)
+    .finally(() => {
+      for (const [key, value] of Object.entries(original)) {
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+    });
+}
+
 test("emailSender: should fail without recipient", async () => {
   const result = await skillEmailSender(null, "测试主题", "测试内容");
   assert.equal(result.success, false);
@@ -104,19 +132,20 @@ test("emailSender: should generate default subject when not provided", async () 
 });
 
 test("emailSender: should fail without SMTP config", async () => {
-  // 在没有 SMTP 环境变量的情况下，应该失败在验证步骤
-  const result = await skillEmailSender(
-    "test@example.com",
-    "测试",
-    "测试内容",
-    "notification"
-  );
-  // 由于没有 SMTP 配置，应该失败
-  assert.equal(result.success, false);
-  // 但至少应该开始提取步骤
-  const extractStep = result.steps.find(s => s.step === "extract");
-  assert.ok(extractStep);
-  assert.ok(extractStep.status === "completed" || extractStep.status === "processing");
+  await withClearedSmtpEnv(async () => {
+    const result = await skillEmailSender(
+      "test@example.com",
+      "测试",
+      "测试内容",
+      "notification"
+    );
+
+    assert.equal(result.success, false);
+    const extractStep = result.steps.find(s => s.step === "extract");
+    assert.ok(extractStep);
+    assert.ok(extractStep.status === "completed" || extractStep.status === "processing");
+    assert.match(result.error, /SMTP配置无效|SMTP 配置不完整/);
+  });
 });
 
 test("emailSender: should return step-by-step progress", async () => {

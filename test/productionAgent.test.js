@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test, { before, after } from "node:test";
 
 import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { CONFIG } from "../config.js";
 import { ProductionAgent } from "../agent/ProductionAgent.js";
 import { LTM_INJECT_START, LTM_INJECT_END } from "../agent/longTermMemory.js";
 
@@ -229,6 +230,99 @@ test("ProductionAgent.createSession: should create new session with correct stru
   assert.ok(session.contextManager);
   assert.ok(session.llmBreaker);
   assert.ok(session.toolBreaker);
+});
+
+test("ProductionAgent.chat: should route search_knowledge to RAG vectorStore in rag mode", async (t) => {
+  const aiTool = new AIMessage({ content: "" });
+  aiTool.tool_calls = [{ name: "search_knowledge", id: "sk-rag", args: { arg1: "AI Agent" } }];
+  const aiFinal = new AIMessage({ content: "done" });
+
+  const llm = new MockLLM([{ chunks: [aiTool] }, { chunks: [aiFinal] }]);
+  const vectorStoreCalls = [];
+  const knowledgeRetrieverCalls = [];
+  const originalProvider = CONFIG.knowledgeSearchProvider;
+  CONFIG.knowledgeSearchProvider = "rag";
+
+  t.after(() => {
+    CONFIG.knowledgeSearchProvider = originalProvider;
+  });
+
+  const agent = new ProductionAgent(llm, {
+    similaritySearch: async (query, topK) => {
+      vectorStoreCalls.push({ query, topK });
+      return [
+        {
+          pageContent: "RAG result content",
+          metadata: { source: "/tmp/rag-doc.md" },
+        },
+      ];
+    },
+  }, null, {
+    debug: false,
+    maxIterations: 2,
+    contextStrategy: "trim",
+    knowledgeRetriever: {
+      type: "llm_wiki",
+      retrieve: async (query, topK) => {
+        knowledgeRetrieverCalls.push({ query, topK });
+        return { docs: [] };
+      },
+    },
+  });
+
+  const result = await agent.chat("查知识", null, null, "rag-routing-test");
+  assert.equal(result, "done");
+  assert.equal(vectorStoreCalls.length, 1);
+  assert.equal(vectorStoreCalls[0].query, "AI Agent");
+  assert.equal(knowledgeRetrieverCalls.length, 0);
+});
+
+test("ProductionAgent.chat: should route search_knowledge to llm_wiki retriever in llm_wiki mode", async (t) => {
+  const aiTool = new AIMessage({ content: "" });
+  aiTool.tool_calls = [{ name: "search_knowledge", id: "sk-wiki", args: { arg1: "Wiki query" } }];
+  const aiFinal = new AIMessage({ content: "done" });
+
+  const llm = new MockLLM([{ chunks: [aiTool] }, { chunks: [aiFinal] }]);
+  const vectorStoreCalls = [];
+  const knowledgeRetrieverCalls = [];
+  const originalProvider = CONFIG.knowledgeSearchProvider;
+  CONFIG.knowledgeSearchProvider = "llm_wiki";
+
+  t.after(() => {
+    CONFIG.knowledgeSearchProvider = originalProvider;
+  });
+
+  const agent = new ProductionAgent(llm, {
+    similaritySearch: async (query, topK) => {
+      vectorStoreCalls.push({ query, topK });
+      return [];
+    },
+  }, null, {
+    debug: false,
+    maxIterations: 2,
+    contextStrategy: "trim",
+    knowledgeRetriever: {
+      type: "llm_wiki",
+      retrieve: async (query, topK) => {
+        knowledgeRetrieverCalls.push({ query, topK });
+        return {
+          docs: [
+            {
+              pageContent: "Wiki result content",
+              metadata: { title: "Wiki Title" },
+            },
+          ],
+          references: [{ title: "Wiki Title", slug: "wiki-title" }],
+        };
+      },
+    },
+  });
+
+  const result = await agent.chat("查 wiki", null, null, "wiki-routing-test");
+  assert.equal(result, "done");
+  assert.equal(knowledgeRetrieverCalls.length, 1);
+  assert.equal(knowledgeRetrieverCalls[0].query, "Wiki query");
+  assert.equal(vectorStoreCalls.length, 0);
 });
 
 test("ProductionAgent.touchSession: should update lastActiveAt", () => {

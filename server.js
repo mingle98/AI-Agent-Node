@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import { ProductionAgent } from "./agent/ProductionAgent.js";
 import { createLLM, createEmbeddings, createFallbackLLM } from "./llm.js";
 import { loadOrBuildVectorStore } from "./utils/ragBuilder.js";
+import { loadOrBuildLLMWiki, retrieveFromLLMWiki } from "./utils/llmWikiBuilder.js";
 import {
   renderCustomComponents,
   buildCustomComponents,
@@ -50,6 +51,12 @@ async function initAgent() {
 
   const vectorDbPath = path.join(__dirname, "vector_db");
   const knowledgeBasePath = path.join(__dirname, "knowledge_base");
+  const wikiPath = path.join(__dirname, "llm_wiki");
+
+  const useLlmWiki = CONFIG.knowledgeSearchProvider === "llm_wiki";
+  const enableLlmWikiAutoLearning = useLlmWiki && CONFIG.llmWikiAutoLearningEnabled === true;
+  console.log(`🧭 [init] 当前知识检索方案: ${useLlmWiki ? "llm_wiki" : "rag"}`);
+  console.log(`📝 [init] LLM Wiki 自动学习: ${enableLlmWikiAutoLearning ? "开启" : "关闭"}${!useLlmWiki && CONFIG.llmWikiAutoLearningEnabled ? "（当前为 RAG 模式，配置已忽略）" : ""}`);
 
   const vectorStore = await loadOrBuildVectorStore({
     vectorDbPath,
@@ -57,6 +64,36 @@ async function initAgent() {
     embeddings,
     forceRebuild: false,
   });
+  console.log("📚 [init] RAG 向量库已就绪");
+
+  const knowledgeRetriever = useLlmWiki
+    ? {
+        type: "llm_wiki",
+        wikiPath,
+        async retrieve(question, topK) {
+          return retrieveFromLLMWiki({
+            wikiPath,
+            embeddings,
+            question,
+            topK,
+          });
+        },
+      }
+    : null;
+
+  if (useLlmWiki) {
+    console.log("🧠 [init] 开始准备 LLM Wiki...");
+    await loadOrBuildLLMWiki({
+      knowledgeBasePath,
+      wikiPath,
+      llm,
+      embeddings,
+      forceRebuild: false,
+    });
+    console.log(`🧠 [init] LLM Wiki 已就绪: ${wikiPath}`);
+  } else {
+    console.log("📚 [init] 当前未启用 LLM Wiki，检索与学习均走默认 RAG/关闭状态");
+  }
 
   return new ProductionAgent(llm, vectorStore, embeddings, {
     contextStrategy: "trim",
@@ -70,6 +107,18 @@ async function initAgent() {
     roleName: "AI智能助手",
     roleDescription: "可以帮助用户解决AISuspendedBallChat前端组件使用相关的问题,以及提供AI Agent学习指导、编程指导、数据查询以及流程图绘制等服务.",
     capabilityRoutingEnabled: CONFIG.capabilityRoutingEnabled,
+    knowledgeRetriever,
+    llmWikiPath: wikiPath,
+    llmWikiTopK: CONFIG.llmWikiTopK,
+    llmWikiAutoLearningEnabled: enableLlmWikiAutoLearning,
+    llmWikiLearningConfig: {
+      writeEnabled: CONFIG.llmWikiLearningMode === "direct",
+      mode: CONFIG.llmWikiLearningMode,
+      extractor: {
+        useHeuristicFirst: true,
+        enableLLMExtractor: false,
+      },
+    },
   });
 }
 

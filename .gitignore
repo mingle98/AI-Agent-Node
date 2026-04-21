@@ -6,6 +6,8 @@ node_modules
 
 vector_db
 
+llm_wiki
+
 dist
 build
 

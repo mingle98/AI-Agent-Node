@@ -1,5 +1,9 @@
 // ========== 配置 ==========
 
+import dotenv from "dotenv";
+
+dotenv.config();
+
 // 服务器配置
 const PORT = Number(process.env.PORT || 3600);
 const HOST = process.env.HOST || 'localhost';
@@ -7,8 +11,14 @@ const HOST = process.env.HOST || 'localhost';
 export const CONFIG = {
   maxHistoryMessages: 20,  // 最大历史消息数（包括system）
   maxContextLength: 8000,  // 最大上下文token数（粗略估算）
-  ragTopK: 4,              // RAG检索返回数量
+  ragTopK: 4,              // 知识检索返回数量
   streamEnabled: true,     // 是否启用流式输出
+
+  // ========== 知识库检索配置 ==========
+  knowledgeSearchProvider: process.env.KNOWLEDGE_SEARCH_PROVIDER || 'rag', // 'rag' | 'llm_wiki'
+  llmWikiTopK: 4, // LLM Wiki 检索返回数量，默认与 RAG 保持一致
+  llmWikiAutoLearningEnabled: process.env.LLM_WIKI_AUTO_LEARNING_ENABLED === 'true', // 是否启用 LLM Wiki 自动学习（默认关闭）
+  llmWikiLearningMode: process.env.LLM_WIKI_LEARNING_MODE || 'candidate', // 'candidate' | 'direct'
 
   // 服务器基础URL（用于文件访问链接）
   baseUrl: process.env.BASE_URL || `http://${HOST}:${PORT}`,

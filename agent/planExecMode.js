@@ -239,6 +239,7 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
   let iterations = 0;
   let stepResult = "";
   const toolExcResults = [];
+  let usedSearchKnowledge = false;
 
   while (iterations < stepMaxIterations) {
     iterations += 1;
@@ -318,6 +319,9 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
         toolExcResults.push(toolExcResult);
         emitToolEvent(chunkCallback, toolExcResult);
       }
+      if (toolCall.name === "search_knowledge") {
+        usedSearchKnowledge = true;
+      }
 
       const content = typeof result === "string" ? result : JSON.stringify(result, null, 2);
 
@@ -355,6 +359,7 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
     description,
     result: stepResult,
     toolResults: toolExcResults,
+    usedSearchKnowledge,
     iterationsUsed: iterations
   };
 }
@@ -521,6 +526,11 @@ export async function chatWithPlanExec(agent, userInput, chunkCallback, fullResp
       );
 
       const allToolResults = results.flatMap(r => r.toolResults || []);
+      const usedSearchKnowledge = results.some((r) => r.usedSearchKnowledge === true);
+
+      await agent.maybeTriggerLLMWikiLearning(userInput, finalSummary, sessionId, {
+        usedSearchKnowledge,
+      });
 
       // ========== 长期记忆更新检查 ==========
       if (agent.longTermMemory) {

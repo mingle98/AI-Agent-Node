@@ -33,6 +33,15 @@ export function createFallbackLLM() {
   });
 }
 
+export function createLLMWikiBuilderLLM() {
+  return createLLM({
+    model: "qwen-flash",
+    temperature: 0.2,
+    enableSearch: false,
+    enableThinking: false,
+  });
+}
+
 export function createEmbeddings() {
   return new OpenAIEmbeddings({
     openAIApiKey: process.env.DASHSCOPE_API_KEY,

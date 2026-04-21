@@ -447,6 +447,105 @@ test("ProductionAgent: plan_exec mode with tool call in step", async () => {
   assert.ok(typeof result === "string", "Should return result");
 });
 
+test("ProductionAgent: plan_exec should trigger llm wiki learning after search_knowledge", async () => {
+  const planResponse = new AIMessage({
+    content: JSON.stringify({
+      task_summary: "Wiki learning task",
+      estimated_steps: 1,
+      steps: [{ step_id: 1, description: "先查知识再总结", depends_on: [], expected_output: "done" }],
+      final_goal: "Complete"
+    })
+  });
+
+  const searchResponse = new AIMessage({ content: "" });
+  searchResponse.tool_calls = [{ name: "search_knowledge", id: "plan-search-knowledge-1", args: { arg1: "AI Agent" } }];
+
+  const finalResponse = new AIMessage({ content: "步骤完成" });
+
+  const llm = new MockLLM([
+    { message: planResponse },
+    { message: searchResponse },
+    { message: finalResponse }
+  ]);
+
+  const learningCalls = [];
+  const agent = createAgentWithMockLLM(llm, {
+    taskMode: "plan_exec",
+    streamEnabled: false,
+    llmWikiAutoLearningEnabled: true,
+    llmWikiPath: "/tmp/llm-wiki",
+    llmWikiLearningConfig: { mode: "candidate", writeEnabled: false },
+    knowledgeRetriever: {
+      type: "llm_wiki",
+      retrieve: async () => ({ docs: [], references: [] }),
+    },
+  });
+
+  agent.vectorStore = {
+    similaritySearch: async () => [
+      { pageContent: "RAG result content", metadata: { source: "/tmp/rag-doc.md" } },
+    ],
+  };
+
+  agent.maybeTriggerLLMWikiLearning = async (userInput, answer, sessionId, options = {}) => {
+    learningCalls.push({ userInput, answer, sessionId, options });
+  };
+
+  const result = await agent.chat("帮我先查知识再总结", null, null, "plan-learning-test", {
+    taskMode: "plan_exec",
+    streamEnabled: false,
+  });
+
+  assert.ok(typeof result === "string");
+  assert.equal(learningCalls.length, 1);
+  assert.equal(learningCalls[0].sessionId, "plan-learning-test");
+  assert.equal(learningCalls[0].options.usedSearchKnowledge, true);
+});
+
+test("ProductionAgent: plan_exec should not trigger llm wiki learning without search_knowledge", async () => {
+  const planResponse = new AIMessage({
+    content: JSON.stringify({
+      task_summary: "No wiki learning task",
+      estimated_steps: 1,
+      steps: [{ step_id: 1, description: "直接输出结果", depends_on: [], expected_output: "done" }],
+      final_goal: "Complete"
+    })
+  });
+
+  const finalResponse = new AIMessage({ content: "步骤完成" });
+
+  const llm = new MockLLM([
+    { message: planResponse },
+    { message: finalResponse }
+  ]);
+
+  const learningCalls = [];
+  const agent = createAgentWithMockLLM(llm, {
+    taskMode: "plan_exec",
+    streamEnabled: false,
+    llmWikiAutoLearningEnabled: true,
+    llmWikiPath: "/tmp/llm-wiki",
+    llmWikiLearningConfig: { mode: "candidate", writeEnabled: false },
+    knowledgeRetriever: {
+      type: "llm_wiki",
+      retrieve: async () => ({ docs: [], references: [] }),
+    },
+  });
+
+  agent.maybeTriggerLLMWikiLearning = async (userInput, answer, sessionId, options = {}) => {
+    learningCalls.push({ userInput, answer, sessionId, options });
+  };
+
+  const result = await agent.chat("直接完成任务", null, null, "plan-no-learning-test", {
+    taskMode: "plan_exec",
+    streamEnabled: false,
+  });
+
+  assert.ok(typeof result === "string");
+  assert.equal(learningCalls.length, 1);
+  assert.equal(learningCalls[0].options.usedSearchKnowledge, false);
+});
+
 test("ProductionAgent: plan_exec mode emits stream events", async () => {
   const planResponse = new AIMessage({
     content: JSON.stringify({
