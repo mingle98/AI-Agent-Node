@@ -1,5 +1,5 @@
 // ========== Express 服务：将 ProductionAgent 以接口形式提供给前端 ==========
-
+import "dotenv/config";
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
