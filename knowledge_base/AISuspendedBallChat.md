@@ -3,10 +3,11 @@
 一个功能强大的AI聊天Vue3组件，支持流式响应、图片上传、语音播报、历史记录管理等功能。可以作为悬浮球或独立面板使用。
 ![Snipaste_2025-08-31_19-48-18.png](https://luckycola.com.cn/public/imgs/luckycola_Imghub_forever_8sbgSs4M17686524429047868.jpeg)
 
-**《组件落地场景体验1-AI简历助手》**: [https://luckycola.com.cn/public/resume/#/resume](https://luckycola.com.cn/public/resume/?t=123456789#/resume)
+**《组件落地场景体验1-AI简历助手》**: [点击直达案例1🔗](https://luckycola.com.cn/public/resume/?t=123456789#/resume)
 
-**《组件落地场景体验2-AI编程助手》**: [https://luckycola.com.cn/public/dist/onlineCodeEditor.html#/editor](https://luckycola.com.cn/public/dist/onlineCodeEditor.html?t=123456789#/editor)
+**《组件落地场景体验2-AI编程助手》**: [点击直达案例2🔗](https://luckycola.com.cn/public/dist/onlineCodeEditor.html?t=123456789#/editor)
 
+> **🔔 温馨提示:** 如果您觉得阅读文档困难,也可以选择咨询*在线AI助手*: [🤖点击直达咨询→](https://luckycola.com.cn/public/dist/aiAgent.html?openChat=1&t=123456789#/)
 ---
 
 ## ✨ 特性
@@ -338,6 +339,7 @@ const assistantConfig = {
 | `show-clear-button` | `boolean` | `false` | 是否显示清除按钮 |
 | `show-theme-toggle` | `boolean` | `false` | 是否显示白天/夜间模式切换按钮 |
 | `show-feedback-button` | `boolean` | `false` | 是否显示工单提交按钮 |
+| `enable-fullscreen-toggle` | `boolean` | `false` | 是否启用全屏切换功能（仅悬浮球模式下显示全屏切换按钮） |
 | `welcome-config` | `WelcomeConfig` | - | 欢迎界面配置 |
 | `preset-tasks` | `PresetTask[]` | - | 预设任务列表 |
 | `assistant-config` | `AssistantConfig` | - | AI助手配置 |
@@ -918,6 +920,40 @@ mockDataArr.forEach((data, index) => {
 ```
 
 ## 🔧 高级配置
+
+### 悬浮球全屏模式配置
+
+悬浮球模式支持通过配置开启“全屏”按钮。开启后，在桌面端打开悬浮聊天面板时，头部会出现全屏切换按钮；点击后会进入全屏覆盖层模式，使用白色页面覆盖底层内容，并以固定宽度内容区居中展示。
+
+> 注意：
+> - 该功能默认关闭
+> - 仅 `SuspendedBallChat` 组件支持该入口，`ChatPanel` 独立模式不会显示该按钮
+> - 移动端/小屏幕（宽度 `<= 768px`）不显示该按钮
+> - 当 AI 正在流式回复时，该按钮会自动禁用，避免切换布局影响交互
+
+```vue
+<template>
+  <SuspendedBallChat
+    :url="apiUrl"
+    :app-name="appName"
+    :domain-name="domainName"
+    :enable-streaming="true"
+    :enable-fullscreen-toggle="true"
+  />
+</template>
+```
+
+#### 配置项
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `enableFullscreenToggle` | `boolean` | `false` | 是否开启悬浮球聊天面板的全屏切换按钮 |
+
+#### 行为说明
+
+- 打开悬浮球聊天面板后，若配置开启且当前不是小屏设备，则头部显示全屏按钮
+- 点击后进入全屏覆盖层模式，聊天区域会在页面中居中展示
+- 退出全屏后恢复悬浮球面板布局
 
 ### 自定义请求配置
 
