@@ -39,7 +39,19 @@
 <div align="center">
   <img src="./imgs/ai-agent-node.png" alt="AI Agent Node 界面预览" width="92%" />
   <br />
-  <strong>在线体验：<a href="https://luckycola.com.cn/public/dist/aiAgent.html?t=123456">AI智能体工作台</a></strong>
+  <br />
+  <strong>👇 点击下面按钮，立即体验或查看教程 👇</strong>
+  <br />
+  <br />
+  <a href="https://luckycola.com.cn/public/dist/aiAgent.html?t=123456">
+    <img src="https://img.shields.io/badge/▶%20点击进入在线体验-AI智能体工作台-2ea44f?style=for-the-badge" alt="点击进入在线体验 AI智能体工作台" />
+  </a>
+  &nbsp;&nbsp;
+  <a href="./ai-customer-service-system-guide.md">
+    <img src="https://img.shields.io/badge/📘%20点击查看实战教程-AI智能客服搭建-blue?style=for-the-badge" alt="点击查看 AI智能客服搭建教程" />
+  </a>
+  <br />
+  <sub>左侧体验在线 Demo，右侧查看从 0 到 1 搭建 AI 智能客服系统教程</sub>
 </div>
 
 ---
