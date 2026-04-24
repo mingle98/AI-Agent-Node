@@ -12,7 +12,7 @@
 </div>
 
 <p align="center">
-   一个生产级的 AI Agent Node.js 脚手架，提供模块化架构、RAG 知识库检索、工具调用和技能管理等功能,适用于快速开发“智能客服”、“智能助手”等场景。
+    AI Agent Node 是一个基于 Node.js 和 LangChain 的 AI Agent 工程化脚手架，集成 RAG、工具调用、技能编排、长期记忆、文件处理、流式响应和 Plan+Exec 执行模式，适合用于智能客服、知识库助手和企业内部自动化助手的快速开发。
 </p>
 
 ---
