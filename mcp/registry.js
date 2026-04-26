@@ -1,7 +1,7 @@
 import { CONFIG } from "../config.js";
 import { registerExternalTools } from "../tools/index.js";
 import { MCP_CONFIG } from "./index.js";
-import { StreamableHttpMcpClient } from "./client.js";
+import { StreamableHttpMcpClient, SseMcpClient } from "./client.js";
 
 const MCP_CLIENTS = new Map();
 let initialized = false;
@@ -126,13 +126,19 @@ function summarizeMcpTool(mcpTool) {
 }
 
 function createClient(serverKey, serverConfig) {
-  if (serverConfig.type !== "streamableHttp") {
-    throw new Error(`暂不支持 MCP 类型: ${serverConfig.type}`);
+  if (serverConfig.type === "streamableHttp") {
+    return new StreamableHttpMcpClient(serverKey, serverConfig, {
+      initTimeoutMs: CONFIG.mcpInitTimeoutMs,
+      callTimeoutMs: CONFIG.mcpCallTimeoutMs,
+    });
   }
-  return new StreamableHttpMcpClient(serverKey, serverConfig, {
-    initTimeoutMs: CONFIG.mcpInitTimeoutMs,
-    callTimeoutMs: CONFIG.mcpCallTimeoutMs,
-  });
+  if (serverConfig.type === "sse") {
+    return new SseMcpClient(serverKey, serverConfig, {
+      initTimeoutMs: CONFIG.mcpInitTimeoutMs,
+      callTimeoutMs: CONFIG.mcpCallTimeoutMs,
+    });
+  }
+  throw new Error(`暂不支持 MCP 类型: ${serverConfig.type}`);
 }
 
 function extractTextKeywords(text = "") {
@@ -284,6 +290,10 @@ export async function initMcpTools(options = {}) {
 
 export function convertMcpToolToDefinitionForTest(args) {
   return convertMcpToolToDefinition(args);
+}
+
+export function createClientForTest(serverKey, serverConfig) {
+  return createClient(serverKey, serverConfig);
 }
 
 export function getMcpClients() {

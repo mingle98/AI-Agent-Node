@@ -182,6 +182,234 @@ export class StreamableHttpMcpClient {
   }
 }
 
+export class SseMcpClient extends StreamableHttpMcpClient {
+  constructor(serverKey, serverConfig, options = {}) {
+    super(serverKey, serverConfig, options);
+    this.messageEndpoint = null;
+    this.connectPromise = null;
+    this.pendingRequests = new Map();
+    this.sseAbortController = null;
+  }
+
+  async connect() {
+    if (this.messageEndpoint) {
+      return this.messageEndpoint;
+    }
+    if (this.connectPromise) {
+      return this.connectPromise;
+    }
+    if (!this.baseUrl) {
+      throw new Error(`MCP server ${this.serverKey} 缺少 baseUrl`);
+    }
+
+    this.connectPromise = withTimeout(() => new Promise((resolve, reject) => {
+      const failConnect = (error) => {
+        this.connectPromise = null;
+        this.sseAbortController?.abort?.();
+        reject(error);
+      };
+
+      (async () => {
+        try {
+          this.sseAbortController = typeof AbortController === "function" ? new AbortController() : null;
+          console.log(`🌐 [MCP:sse] connect ${this.serverKey} ${this.baseUrl}`);
+          const response = await fetch(this.baseUrl, {
+            method: "GET",
+            headers: {
+              Accept: "text/event-stream",
+              ...this.headers,
+            },
+            ...(this.sseAbortController ? { signal: this.sseAbortController.signal } : {}),
+          });
+
+          if (!response.ok) {
+            failConnect(new Error(`MCP ${this.serverKey} SSE 连接 HTTP ${response.status}`));
+            return;
+          }
+          if (!response.body) {
+            failConnect(new Error(`MCP ${this.serverKey} SSE 连接缺少响应流`));
+            return;
+          }
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          let resolvedEndpoint = false;
+
+          const endpointTimer = setTimeout(() => {
+            if (!resolvedEndpoint) {
+              failConnect(new Error(`MCP ${this.serverKey} SSE 未返回 endpoint`));
+            }
+          }, this.initTimeoutMs);
+
+          const handleEventBlock = (block) => {
+            const eventLines = block.split(/\r?\n/);
+            const eventName = eventLines
+              .find((line) => line.startsWith("event:"))
+              ?.slice(6)
+              .trim() || "message";
+            const data = eventLines
+              .filter((line) => line.startsWith("data:"))
+              .map((line) => line.slice(5).trim())
+              .join("\n");
+
+            if (!data) return;
+            if (eventName === "endpoint") {
+              clearTimeout(endpointTimer);
+              this.messageEndpoint = new URL(data, this.baseUrl).toString();
+              resolvedEndpoint = true;
+              console.log(`🌐 [MCP:sse] endpoint ${this.serverKey} ${this.messageEndpoint}`);
+              resolve(this.messageEndpoint);
+              return;
+            }
+            if (data === "[DONE]") return;
+
+            let payload;
+            try {
+              payload = JSON.parse(data);
+            } catch (error) {
+              console.warn(`⚠️ [MCP:sse] ${this.serverKey} 忽略无法解析的消息: ${error.message}`);
+              return;
+            }
+
+            const pending = this.pendingRequests.get(payload?.id);
+            if (!pending) return;
+            this.pendingRequests.delete(payload.id);
+            if (payload.error) {
+              const message = payload.error?.message || JSON.stringify(payload.error);
+              pending.reject(new Error(`MCP ${this.serverKey} 返回错误: ${message}`));
+            } else {
+              pending.resolve(normalizeJsonRpcPayload(payload));
+            }
+          };
+
+          (async () => {
+            try {
+              while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const blocks = buffer.split(/\r?\n\r?\n/);
+                buffer = blocks.pop() || "";
+                blocks.forEach(handleEventBlock);
+              }
+            } catch (error) {
+              if (error.name !== "AbortError") {
+                console.warn(`⚠️ [MCP:sse] ${this.serverKey} 连接中断: ${error.message}`);
+              }
+            } finally {
+              clearTimeout(endpointTimer);
+              this.messageEndpoint = null;
+              this.connectPromise = null;
+              for (const pending of this.pendingRequests.values()) {
+                pending.reject(new Error(`MCP ${this.serverKey} SSE 连接已关闭`));
+              }
+              this.pendingRequests.clear();
+            }
+          })();
+        } catch (error) {
+          failConnect(error);
+        }
+      })();
+    }), this.initTimeoutMs, `MCP ${this.serverKey} SSE connect`);
+
+    return this.connectPromise;
+  }
+
+  async request(method, params = undefined, timeoutMs = this.callTimeoutMs) {
+    const endpoint = await this.connect();
+    const id = `${this.serverKey}-${++this.requestId}`;
+    const body = {
+      jsonrpc: "2.0",
+      id,
+      method,
+    };
+    if (params !== undefined) {
+      body.params = params;
+    }
+
+    console.log(`🌐 [MCP:sse] -> ${this.serverKey} ${method} id=${id} params=${safeJsonPreview(params || {}, 500)}`);
+    const resultPromise = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingRequests.delete(id);
+        reject(new Error(`MCP ${this.serverKey} ${method} 超时: ${timeoutMs}ms`));
+      }, timeoutMs);
+      this.pendingRequests.set(id, {
+        resolve: (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+        cleanup: () => clearTimeout(timer),
+      });
+    });
+
+    const clearPendingRequest = () => {
+      const pending = this.pendingRequests.get(id);
+      if (pending) {
+        pending.cleanup?.();
+        this.pendingRequests.delete(id);
+      }
+    };
+
+    const startedAt = Date.now();
+    let response;
+    try {
+      response = await withTimeout((signal) => fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...this.headers,
+        },
+        body: JSON.stringify(body),
+        ...(signal ? { signal } : {}),
+      }), timeoutMs, `MCP ${this.serverKey} ${method}`);
+    } catch (error) {
+      clearPendingRequest();
+      throw error;
+    }
+
+    const text = await response.text();
+    console.log(`🌐 [MCP:sse] <- ${this.serverKey} ${method} id=${id} postStatus=${response.status} time=${Date.now() - startedAt}ms body=${safeJsonPreview(text, 500)}`);
+    if (!response.ok) {
+      const error = new Error(`MCP ${this.serverKey} ${method} HTTP ${response.status}: ${text.slice(0, 500)}`);
+      clearPendingRequest();
+      throw error;
+    }
+
+    return resultPromise;
+  }
+
+  async notify(method, params = undefined, timeoutMs = this.callTimeoutMs) {
+    const endpoint = await this.connect();
+    const body = {
+      jsonrpc: "2.0",
+      method,
+    };
+    if (params !== undefined) {
+      body.params = params;
+    }
+
+    console.log(`🌐 [MCP:sse] -> ${this.serverKey} ${method} notification`);
+    const response = await withTimeout((signal) => fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...this.headers,
+      },
+      body: JSON.stringify(body),
+      ...(signal ? { signal } : {}),
+    }), timeoutMs, `MCP ${this.serverKey} ${method}`);
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`MCP ${this.serverKey} ${method} notification HTTP ${response.status}: ${text.slice(0, 500)}`);
+    }
+  }
+}
+
 export function parseMcpResponse(text, contentType = "") {
   const trimmed = String(text || "").trim();
   if (!trimmed) {
