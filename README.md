@@ -919,3 +919,11 @@ const agent = new ProductionAgent(llm, vectorStore, embeddings, {
 - [LangChain](https://langchain.com/) - AI 应用开发框架
 - [AISuspendedBallChat](https://github.com/your-repo/ai-suspended-ball-chat) - 前端聊天组件
 - [阿里云 DashScope](https://dashscope.aliyun.com/) - AI 模型服务
+
+## 📑 交流学习
+ 
+如果你对本项目感兴趣，欢迎加入我们的交流群，一起探讨和分享 AI 技术与前端开发的实践经验。
+
+💻 **QQ交流群**: 592895347
+
+![交流群二维码](./imgs/qq.png)
