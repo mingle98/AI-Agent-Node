@@ -67,6 +67,11 @@ export function getPlanStepDivBox(text, stType = 'content') {
   }
 }
 
+export function formatToolDisplayName(name, maxLength = 25) {
+  const chars = Array.from(String(name || ""));
+  return chars.length > maxLength ? `${chars.slice(0, maxLength).join("")}...` : chars.join("");
+}
+
 /**
  * 工具调用（Tool）— 弱分支行
  * 用于：真实工具执行开始、完成
