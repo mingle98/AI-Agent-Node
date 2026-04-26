@@ -3,12 +3,12 @@ import test from "node:test";
 
 import { expandCapabilitiesToAll, searchCapabilities, selectActiveCapabilities } from "../agent/capabilityRouter.js";
 
-function tool(name, description = "") {
-  return { name, description, params: [], example: `${name}()` };
+function tool(name, description = "", extra = {}) {
+  return { name, description, params: [], example: `${name}()`, ...extra };
 }
 
-function skill(name, description = "") {
-  return { name, description, functionality: "", params: [], example: `${name}()` };
+function skill(name, description = "", extra = {}) {
+  return { name, description, functionality: "", params: [], example: `${name}()`, ...extra };
 }
 
 test("selectActiveCapabilities: should pick domain-matched capabilities and keep always-on", () => {
@@ -247,6 +247,48 @@ test("searchCapabilities: should find compact matching capabilities", () => {
   assert.ok(result.matches.every((item) => !Object.hasOwn(item, "functionality")));
   assert.ok(result.matches.every((item) => !Object.hasOwn(item, "example")));
   assert.ok(result.matches.length <= 3);
+});
+
+test("selectActiveCapabilities: should match MCP tools by explicit keywords", () => {
+  const toolDefinitions = [
+    tool("search_knowledge", "知识查询"),
+    tool("mcp__weather__forecast", "[MCP:weather] 外部服务", {
+      source: "mcp",
+      keywords: ["天气", "天气预报", "AQI", "空气质量", "天气预警"],
+    }),
+  ];
+
+  const result = selectActiveCapabilities({
+    userInput: "帮我查一下北京明天的天气",
+    toolDefinitions,
+    skillDefinitions: [],
+    alwaysOnTools: ["search_knowledge"],
+    alwaysOnSkills: [],
+    maxTools: 10,
+  });
+
+  assert.ok(result.toolNames.includes("mcp__weather__forecast"));
+});
+
+test("searchCapabilities: should find MCP tools by explicit keywords", () => {
+  const toolDefinitions = [
+    tool("mcp__weather__forecast", "[MCP:weather] 外部服务", {
+      source: "mcp",
+      keywords: ["天气", "天气预报", "AQI", "空气质量", "天气预警"],
+    }),
+  ];
+
+  const result = searchCapabilities({
+    query: "空气质量怎么样",
+    toolDefinitions,
+    skillDefinitions: [],
+    limit: 4,
+    kind: "tool",
+  });
+
+  assert.ok(result.toolNames.includes("mcp__weather__forecast"));
+  assert.ok(result.matches.some((item) => item.name === "mcp__weather__forecast"));
+  assert.ok(result.matches.every((item) => !Object.hasOwn(item, "source")));
 });
 
 test("expandCapabilitiesToAll: should include all tool and skill names", () => {

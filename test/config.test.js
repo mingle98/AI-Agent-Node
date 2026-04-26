@@ -8,6 +8,12 @@ test("CONFIG: should have required configuration fields", () => {
   assert.equal(typeof CONFIG.maxContextLength, "number");
   assert.equal(typeof CONFIG.ragTopK, "number");
   assert.equal(typeof CONFIG.streamEnabled, "boolean");
+  assert.equal(typeof CONFIG.capabilityRoutingEnabled, "boolean");
+  assert.equal(typeof CONFIG.knowledgeDecisionReminderEnabled, "boolean");
+  assert.equal(typeof CONFIG.mcpEnabled, "boolean");
+  assert.equal(typeof CONFIG.mcpToolNamePrefix, "string");
+  assert.equal(typeof CONFIG.mcpInitTimeoutMs, "number");
+  assert.equal(typeof CONFIG.mcpCallTimeoutMs, "number");
 });
 
 test("CONFIG: default values should be reasonable", () => {
@@ -15,4 +21,10 @@ test("CONFIG: default values should be reasonable", () => {
   assert.ok(CONFIG.maxContextLength > 0);
   assert.ok(CONFIG.ragTopK > 0);
   assert.ok(CONFIG.streamEnabled === true || CONFIG.streamEnabled === false);
+  assert.ok(CONFIG.capabilityRoutingEnabled === true || CONFIG.capabilityRoutingEnabled === false);
+  assert.ok(CONFIG.knowledgeDecisionReminderEnabled === true || CONFIG.knowledgeDecisionReminderEnabled === false);
+  assert.equal(CONFIG.mcpEnabled, process.env.MCP_ENABLED === "true");
+  assert.ok(CONFIG.mcpToolNamePrefix.length > 0);
+  assert.ok(CONFIG.mcpInitTimeoutMs > 0);
+  assert.ok(CONFIG.mcpCallTimeoutMs > 0);
 });

@@ -17,6 +17,7 @@ import { resolveThinkingMode } from "./utils/thinkingMode.js";
 import { escapeHtml, wrapThinkingOpen, wrapThinkingClose } from "./utils/thinkingRenderer.js";
 import { initWorkspace, getUserWorkspaceRoot, getUserStorageStats, checkUserStorageQuota, verifySignedWorkspaceUrl, getPublicUrlInfo } from './tools/fileManager.js';
 import { TOOL_DEFINITIONS } from './tools/index.js';
+import { initMcpTools } from './mcp/registry.js';
 import { initScheduler } from './tools/scheduler.js';
 import multer from "multer";
 import archiver from "archiver";
@@ -82,6 +83,13 @@ async function initAgent() {
     embeddings,
     forceRebuild: false,
   });
+
+  if (CONFIG.mcpEnabled) {
+    const mcpResult = await initMcpTools();
+    console.log(`🔌 [init] MCP 已开启，注册工具数: ${mcpResult.registered?.length || 0}`);
+  } else {
+    console.log("🔌 [init] MCP 未开启，跳过外部 MCP 工具加载");
+  }
 
   return new ProductionAgent(llm, vectorStore, embeddings, {
     contextStrategy: "trim",

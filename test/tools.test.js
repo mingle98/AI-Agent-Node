@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { TOOL_DEFINITIONS, TOOLS } from "../tools/index.js";
+import { TOOL_DEFINITIONS, TOOLS, registerExternalTools } from "../tools/index.js";
 
 test("TOOL_DEFINITIONS: should export all tool definitions", () => {
   assert.ok(Array.isArray(TOOL_DEFINITIONS));
@@ -185,4 +185,29 @@ test("TOOLS: should include email functions", () => {
   assert.equal(typeof TOOLS.email_send, "function");
   assert.equal(typeof TOOLS.email_template, "function");
   assert.equal(typeof TOOLS.email_verify, "function");
+});
+
+test("registerExternalTools: should be atomic on duplicate tool names", () => {
+  const beforeDefinitionLength = TOOL_DEFINITIONS.length;
+  const uniqueName = `external_atomic_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+  assert.throws(() => registerExternalTools([
+    {
+      name: uniqueName,
+      func: () => "ok",
+      description: "external test tool",
+      params: [],
+      example: `${uniqueName}()`,
+    },
+    {
+      name: uniqueName,
+      func: () => "ok2",
+      description: "external duplicate test tool",
+      params: [],
+      example: `${uniqueName}()`,
+    },
+  ]), /工具名冲突/);
+
+  assert.equal(TOOL_DEFINITIONS.length, beforeDefinitionLength);
+  assert.equal(Object.hasOwn(TOOLS, uniqueName), false);
 });

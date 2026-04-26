@@ -346,7 +346,7 @@ export class ProductionAgent {
       console.log("\n" + "=".repeat(70));
       console.log("📝 基础系统提示（全量能力模板，仅初始化展示）：");
       console.log("=".repeat(70));
-      console.log(systemPrompt);
+      // console.log(systemPrompt);
       console.log("=".repeat(70) + "\n");
     }
 
