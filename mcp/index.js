@@ -54,6 +54,8 @@ export const MCP_CONFIG = {
         "网页",
         "页面",
         "爬取",
+        "提取",
+        "链接",
         "WebParser",
       ],
       isActive: true,
