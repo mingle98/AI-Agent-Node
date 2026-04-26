@@ -8,6 +8,11 @@ dotenv.config();
 const PORT = Number(process.env.PORT || 3600);
 const HOST = process.env.HOST || 'localhost';
 
+function parsePositiveNumber(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : fallback;
+}
+
 export const CONFIG = {
   maxHistoryMessages: 20,  // 最大历史消息数（包括system）
   maxContextLength: 8000,  // 最大上下文token数（粗略估算）
@@ -31,4 +36,10 @@ export const CONFIG = {
   // 重要提示: 如果配置开始,请保证capabilityRouter.js中的DOMAIN_PATTERNS关键词匹配尽量覆盖全面,因为他会直接影响召回准确性
   // 但工具或技能非常多，所以建议先通过能力路由配置文件capabilityRouter.js进行配置，再开启此功能
   capabilityRoutingEnabled: false, // 默认关闭动态能力路由，保持全量能力注入
+
+  // ========== MCP 配置 ==========
+  mcpEnabled: process.env.MCP_ENABLED === 'true', // 默认关闭，开启后在 Agent 创建前发现并注册 MCP 工具
+  mcpToolNamePrefix: process.env.MCP_TOOL_NAME_PREFIX || 'mcp',
+  mcpInitTimeoutMs: parsePositiveNumber(process.env.MCP_INIT_TIMEOUT_MS, 15000),
+  mcpCallTimeoutMs: parsePositiveNumber(process.env.MCP_CALL_TIMEOUT_MS, 60000),
 };

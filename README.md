@@ -24,6 +24,7 @@
 | 🤖 **智能对话** | 基于 LangChain 的 AI 对话能力 |
 | 📚 **RAG / LLM Wiki 知识检索** | 支持经典 RAG 检索，也支持基于 Wiki 页面与候选审核机制的 `llm_wiki` 检索模式 |
 | 🛠️ **工具系统** | 模块化工具架构，支持代码分析、文档生成、网络搜索等 |
+| 🔌 **MCP 扩展能力** | 支持通过独立开关接入 Streamable HTTP MCP Server，将外部 MCP 工具增量注册进现有工具体系 |
 | 🎯 **技能管理** | 内置多种 AI 技能，支持教学、咨询、问答等场景 |
 | 🌊 **流式响应** | 支持实时流式输出，提升用户体验 |
 | 🔄 **会话管理** | 多会话支持，自动上下文管理 |
@@ -125,6 +126,12 @@ LLM_PROVIDER=aliyun
 
 # 阿里云 DashScope API配置
 DASHSCOPE_API_KEY=your_dashscope_api_key_here
+
+# MCP 外部工具接入（默认关闭，开启后启动时发现并注册 active MCP Server 的 tools）
+MCP_ENABLED=false
+# MCP_TOOL_NAME_PREFIX=mcp
+# MCP_INIT_TIMEOUT_MS=15000
+# MCP_CALL_TIMEOUT_MS=60000
 
 # OpenAI API配置（如果使用 OpenAI 则取消注释并设置）
 # OPENAI_API_KEY=your_openai_api_key_here
@@ -338,6 +345,7 @@ Content-Type: application/json
 AI-Agent-Node/
   agent/                 # Agent 核心：会话、上下文、工具/技能调用编排
   tools/                 # 工具：单一能力（如 daily_news、analyze_chart 等）
+  mcp/                   # MCP 外部工具接入配置、客户端与注册器
   skills/                # 技能：组合能力（多步骤流程）
   utils/                 # 通用工具（如 RAG 构建、custom component 渲染）
   knowledge_base/        # 本地知识库源文件（md/pdf/epub/...）
@@ -458,6 +466,56 @@ import { SuspendedBallChat } from 'ai-suspended-ball-chat'
 | `schedule_list` | 查询定时任务 | 状态过滤(可选) | `schedule_list("pending")` |
 | `schedule_cancel` | 取消定时任务 | 任务ID | `schedule_cancel("task-uuid")` |
 
+### MCP 外部工具扩展
+
+项目支持通过 MCP（Model Context Protocol）接入外部工具服务。该能力默认关闭，开启后会在 Agent 创建前发现并注册 MCP Server 暴露的 tools，使其像本地工具一样参与全量能力注入或动态能力路由。
+
+#### 开启方式
+
+在 `.env` 中开启：
+
+```bash
+MCP_ENABLED=true
+DASHSCOPE_API_KEY=your_dashscope_api_key_here
+```
+
+可选配置：
+
+```bash
+MCP_TOOL_NAME_PREFIX=mcp
+MCP_INIT_TIMEOUT_MS=15000
+MCP_CALL_TIMEOUT_MS=60000
+```
+
+#### 配置入口
+
+在 `mcp/index.js` 中配置 MCP Server。当前支持 `streamableHttp` 类型，建议为每个 MCP Server 配置 `description` 和 `keywords`，便于动态能力路由召回。
+
+```javascript
+export const MCP_CONFIG = {
+  mcpServers: {
+    WebSearch: {
+      type: "streamableHttp",
+      description: "提供实时互联网信息检索。",
+      keywords: ["搜索", "联网搜索", "实时搜索", "最新消息"],
+      isActive: true,
+      name: "AliyunBailianMCP_WebSearch",
+      baseUrl: "https://dashscope.aliyuncs.com/api/v1/mcps/WebSearch/mcp",
+      headers: {
+        Authorization: `Bearer ${process.env.DASHSCOPE_API_KEY || ""}`,
+      },
+    },
+  },
+};
+```
+
+说明：
+
+- `MCP_ENABLED=false` 时不加载 MCP，原有工具/技能链路不变。
+- `MCP_ENABLED=true` 时会启动时加载 active MCP Server 的 tools，修改配置后需要重启服务。
+- MCP 工具会自动加 `mcp__...` 前缀并做命名隔离，避免和本地工具冲突。
+- `keywords` 不宜过宽，避免动态能力路由误召回。
+
 ### 用户文件管理
 
 系统提供基于 `sessionId` 的用户文件隔离机制，每个用户拥有独立的工作空间。
@@ -538,6 +596,10 @@ export const CONFIG = {
   llmWikiAutoLearningEnabled: false, // 是否开启 LLM Wiki 自动学习
   llmWikiLearningMode: 'candidate',  // 自动学习模式: 'candidate' | 'direct'
   capabilityRoutingEnabled: false, // 是否启用动态能力路由（建议先完善 capabilityRouter.js 再开启）
+  mcpEnabled: false,               // 是否启用 MCP 外部工具接入（由 MCP_ENABLED 控制）
+  mcpToolNamePrefix: 'mcp',        // MCP 工具名前缀
+  mcpInitTimeoutMs: 15000,         // MCP 初始化超时时间
+  mcpCallTimeoutMs: 60000,         // MCP 工具调用超时时间
 };
 ```
 

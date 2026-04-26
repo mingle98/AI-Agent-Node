@@ -593,6 +593,26 @@ export const TOOLS = TOOL_DEFINITIONS.reduce((acc, tool) => {
   writeDocx: writeDocx
 });
 
+export function registerExternalTools(toolDefinitions = []) {
+  const validTools = toolDefinitions.filter((tool) => tool && typeof tool.name === "string" && typeof tool.func === "function");
+  const existingNames = new Set(TOOL_DEFINITIONS.map((tool) => tool.name));
+  const pendingNames = new Set();
+
+  for (const tool of validTools) {
+    if (existingNames.has(tool.name) || Object.hasOwn(TOOLS, tool.name) || pendingNames.has(tool.name)) {
+      throw new Error(`工具名冲突: ${tool.name}`);
+    }
+    pendingNames.add(tool.name);
+  }
+
+  for (const tool of validTools) {
+    TOOL_DEFINITIONS.push(tool);
+    TOOLS[tool.name] = tool.func;
+  }
+
+  return validTools.map((tool) => tool.name);
+}
+
 // 导出函数
 export {
   searchKnowledgeBase,

@@ -16,13 +16,20 @@ function buildKeywordRegex(words = []) {
 }
 
 function matchDefinition(def, text) {
-  const candidates = [
+  const baseCandidates = [
     def.name,
     def.description,
     def.functionality,
     def.example,
     ...(def.params || []).flatMap((p) => [p.name, p.example, ...(p.options || [])]),
-  ].filter(Boolean);
+  ];
+  const mcpCandidates = def.source === "mcp"
+    ? [
+        ...(def.keywords || []),
+        ...(def.params || []).flatMap((p) => [p.description]),
+      ]
+    : [];
+  const candidates = [...baseCandidates, ...mcpCandidates].filter(Boolean);
 
   const regex = buildKeywordRegex(candidates);
   if (!regex) return false;

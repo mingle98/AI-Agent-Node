@@ -17,6 +17,7 @@ import { resolveThinkingMode } from "./utils/thinkingMode.js";
 import { escapeHtml, wrapThinkingOpen, wrapThinkingClose } from "./utils/thinkingRenderer.js";
 import { initWorkspace, getUserWorkspaceRoot, getUserStorageStats, checkUserStorageQuota } from './tools/fileManager.js';
 import { TOOL_DEFINITIONS } from './tools/index.js';
+import { initMcpTools } from './mcp/registry.js';
 import { initScheduler } from './tools/scheduler.js';
 import multer from "multer";
 import archiver from "archiver";
@@ -93,6 +94,13 @@ async function initAgent() {
     console.log(`🧠 [init] LLM Wiki 已就绪: ${wikiPath}`);
   } else {
     console.log("📚 [init] 当前未启用 LLM Wiki，检索与学习均走默认 RAG/关闭状态");
+  }
+
+  if (CONFIG.mcpEnabled) {
+    const mcpResult = await initMcpTools();
+    console.log(`🔌 [init] MCP 已开启，注册工具数: ${mcpResult.registered?.length || 0}`);
+  } else {
+    console.log("🔌 [init] MCP 未开启，跳过外部 MCP 工具加载");
   }
 
   return new ProductionAgent(llm, vectorStore, embeddings, {
