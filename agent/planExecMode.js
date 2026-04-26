@@ -3,7 +3,7 @@
 
 import { SystemMessage, HumanMessage, ToolMessage } from "@langchain/core/messages";
 
-import { getPlanPhaseDivBox, getPlanStepDivBox, getToolDivBox } from "../utils/streamRenderer.js";
+import { getPlanPhaseDivBox, getPlanStepDivBox, getToolDivBox, formatToolDisplayName } from "../utils/streamRenderer.js";
 import { AbortError } from "./ProductionAgent.js";
 
 const INTERNAL_TOOL_NAMES = new Set(["search_tools"]);
@@ -275,9 +275,10 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
       const isInternalToolCall = INTERNAL_TOOL_NAMES.has(toolCall?.name);
 
       if (streamEnabled && !isInternalToolCall) {
+        const toolDisplayName = formatToolDisplayName(toolCall.name);
         emitStreamEvent(chunkCallback, {
           type: "status",
-          content: getToolDivBox(`🚀 【步骤 ${stepId}】执行 ${toolCall.name} 工具`)
+          content: getToolDivBox(`🚀 【步骤 ${stepId}】执行 ${toolDisplayName} 工具`)
         });
       }
 
@@ -311,9 +312,10 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
       const content = typeof result === "string" ? result : JSON.stringify(result, null, 2);
 
       if (streamEnabled && !isInternalToolCall) {
+        const toolDisplayName = formatToolDisplayName(toolCall.name);
         emitStreamEvent(chunkCallback, {
           type: "status",
-          content: getToolDivBox(`✅ 【步骤 ${stepId}】执行 ${toolCall.name} 完成`, 'end')
+          content: getToolDivBox(`✅ 【步骤 ${stepId}】执行 ${toolDisplayName} 完成`, 'end')
         });
       }
 

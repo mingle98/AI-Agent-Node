@@ -10,7 +10,7 @@ import { buildSystemPrompt } from "./promptBuilder.js";
 import { ContextManager } from "./contextManager.js";
 import { CircuitBreaker, retryWithBackoff, withSessionLock, withTimeout } from "./resilience.js";
 import { selectTaskMode, chatWithPlanExec } from "./planExecMode.js";
-import { getToolDivBox } from "../utils/streamRenderer.js";
+import { getToolDivBox, formatToolDisplayName } from "../utils/streamRenderer.js";
 import { LongTermMemory, LTM_INJECT_START, LTM_INJECT_END } from "./longTermMemory.js";
 import { selectActiveCapabilities, expandCapabilitiesToAll, searchCapabilities } from "./capabilityRouter.js";
 
@@ -1340,9 +1340,10 @@ export class ProductionAgent {
             const isInternalToolCall = toolCall?.name === SEARCH_TOOLS_NAME;
 
             if (streamEnabled && !isInternalToolCall) {
+              const toolDisplayName = formatToolDisplayName(toolCall.name);
               emitStreamEvent(chunkCallback, {
                 type: "status",
-                content: getToolDivBox(`🚀 【TOOL】执行 ${toolCall.name} 工具`),
+                content: getToolDivBox(`🚀 【TOOL】执行 ${toolDisplayName} 工具`),
               });
             }
             const callable = this.callableDefinitions.get(toolCall.name);
@@ -1372,9 +1373,10 @@ export class ProductionAgent {
             console.log(`【TOOL】执行 ${toolCall.name}结果:${JSON.stringify(result)}`)
             const content = formatToolResultForModel(result);
             if (streamEnabled && !isInternalToolCall) {
+              const toolDisplayName = formatToolDisplayName(toolCall.name);
               emitStreamEvent(chunkCallback, {
                 type: "status",
-                content: getToolDivBox(`✅ 【TOOL】执行 ${toolCall.name} 完成`, 'end'),
+                content: getToolDivBox(`✅ 【TOOL】执行 ${toolDisplayName} 完成`, 'end'),
               });
             }
             session.messages.push(new ToolMessage({
