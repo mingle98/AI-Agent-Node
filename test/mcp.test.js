@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseMcpResponse } from "../mcp/client.js";
-import { convertMcpToolToDefinitionForTest, initMcpTools } from "../mcp/registry.js";
+import { parseMcpResponse, SseMcpClient } from "../mcp/client.js";
+import { convertMcpToolToDefinitionForTest, createClientForTest, initMcpTools } from "../mcp/registry.js";
 import { CONFIG } from "../config.js";
 
 const originalMcpEnabled = CONFIG.mcpEnabled;
@@ -67,6 +67,65 @@ test("MCP registry: should merge server and tool keywords into tool definition",
   assert.ok(tool.keywords.includes("空气质量"));
   assert.ok(tool.keywords.includes("降雨概率"));
   assert.ok(tool.keywords.includes("城市名称"));
+});
+
+test("MCP registry: should create SSE client for sse type", () => {
+  const client = createClientForTest("web-parser", {
+    type: "sse",
+    baseUrl: "https://example.com/sse",
+  });
+
+  assert.equal(client.constructor.name, "SseMcpClient");
+});
+
+test("MCP SSE client: should reset failed connect promise for retry", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return new Response("fail", { status: 500 });
+  };
+
+  try {
+    const client = new SseMcpClient("sse-server", { baseUrl: "https://example.com/sse" }, { initTimeoutMs: 50 });
+    await assert.rejects(() => client.connect(), /SSE 连接 HTTP 500/);
+    await assert.rejects(() => client.connect(), /SSE 连接 HTTP 500/);
+    assert.equal(calls, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("MCP SSE client: should clear pending request when post fails", async () => {
+  const originalFetch = globalThis.fetch;
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode("event: endpoint\ndata: /messages\n\n"));
+      controller.close();
+    },
+    cancel() {},
+  });
+  let calls = 0;
+  globalThis.fetch = async (_url, options = {}) => {
+    calls += 1;
+    if (options.method === "GET") {
+      return new Response(body, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      });
+    }
+    return new Response("post failed", { status: 500 });
+  };
+
+  try {
+    const client = new SseMcpClient("sse-server", { baseUrl: "https://example.com/sse" }, { initTimeoutMs: 100, callTimeoutMs: 100 });
+    await assert.rejects(() => client.request("tools/list", {}, 100), /HTTP 500/);
+    assert.equal(client.pendingRequests.size, 0);
+    assert.equal(calls, 2);
+    client.sseAbortController?.abort?.();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("MCP registry: should generate unique names for non-ascii tool names", async () => {
