@@ -217,7 +217,7 @@ export class ProductionAgent {
     this.maxStepIterations = options.maxStepIterations || 5;  // 每个计划步骤的最大迭代次数
 
     // ========== 长期记忆配置 ==========
-    this.longTermMemoryEnabled = options.longTermMemoryEnabled !== false;  // 默认开启
+    this.longTermMemoryEnabled = options.longTermMemoryEnabled ?? CONFIG.longTermMemoryEnabled;
     this.longTermMemory = null;
     if (this.longTermMemoryEnabled) {
       this.longTermMemory = new LongTermMemory(this, {
