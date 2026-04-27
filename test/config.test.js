@@ -28,7 +28,7 @@ test("CONFIG: default values should be reasonable", () => {
   assert.ok(CONFIG.llmWikiTopK > 0);
   assert.ok(CONFIG.llmWikiAutoLearningEnabled === true || CONFIG.llmWikiAutoLearningEnabled === false);
   assert.ok(["candidate", "direct"].includes(CONFIG.llmWikiLearningMode));
-  assert.equal(CONFIG.longTermMemoryEnabled, false);
+  assert.equal(CONFIG.longTermMemoryEnabled, true);
   assert.equal(CONFIG.mcpEnabled, process.env.MCP_ENABLED === "true");
   assert.ok(CONFIG.mcpToolNamePrefix.length > 0);
   assert.ok(CONFIG.mcpInitTimeoutMs > 0);
