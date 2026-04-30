@@ -272,13 +272,23 @@ app.post("/api/chat", async (req, res, next) => {
     res.status(200);
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-transform");
-    res.setHeader("Connection", "close");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders?.();
 
     let clientAborted = false;
+    let hasSentEnd = false;
+    let heartbeatTimer = null;
+    const clearHeartbeat = () => {
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+      }
+    };
     const onDisconnect = (reason) => {
       if (clientAborted) return;
       clientAborted = true;
+      clearHeartbeat();
       console.log("⛓️‍💥 SSE 客户端断开:", reason);
       if (requestState) {
         agent.abortRequest(agent.getOrCreateSession(sessionId), requestState.id, reason);
@@ -303,7 +313,17 @@ app.post("/api/chat", async (req, res, next) => {
         onDisconnect("res.write.error");
       }
     };
-    let hasSentEnd = false;
+    const sendHeartbeat = () => {
+      if (clientAborted || res.writableEnded || hasSentEnd) {
+        return;
+      }
+      try {
+        res.write(`\n`);
+      } catch (e) {
+        onDisconnect("heartbeat.write.error");
+      }
+    };
+    heartbeatTimer = setInterval(sendHeartbeat, 15000);
     const toolExcResults = [];
     let pending = Promise.resolve();
     // 是否正在思考中
@@ -383,6 +403,7 @@ app.post("/api/chat", async (req, res, next) => {
           sendChunk({ code: 0, result: wrapThinkingClose(), is_end: false });
           isThinking = false;
         }
+        hasSentEnd = true;
         sendChunk({ code: 0, result: '', is_end: true });
       }
     } catch (error) {
@@ -390,8 +411,10 @@ app.post("/api/chat", async (req, res, next) => {
         sendChunk({ code: 0, result: wrapThinkingClose(), is_end: false });
         isThinking = false;
       }
+      hasSentEnd = true;
       sendChunk({ code: 1, result: error.message || "未知错误", is_end: true });
     } finally {
+      clearHeartbeat();
       res.end();
     }
   } catch (error) {
