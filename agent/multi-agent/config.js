@@ -197,7 +197,12 @@ export const DEFAULT_SUBAGENT_PROFILES = [
     enabledWhen: (text) => /什么|为什么|背景|资料|介绍|说明|调研|research|信息|情况/i.test(text),
     buildPrompt: (text, _userInput, taskInstruction = "") => buildProfilePrompt(
       "information gatherer",
-      "请只做信息收集、背景补充与关键事实整理，不要直接替代主 agent 给出最终回答。",
+      [
+        "请只做信息收集、背景补充与关键事实整理，不要直接替代主 agent 给出最终回答。",
+        "优先基于你当前已具备的技能与上下文完成方案设计。",
+        "除非任务明确要求额外能力支持，否则不要为了泛化探索去寻找新工具。",
+        "如果发现缺少关键前提，请在输出中明确标记假设、缺口与取舍，而不是扩展为无关的工具探索。",
+      ].join(""),
       ["关键背景", "已知事实/线索", "仍需确认的信息"],
       text,
       taskInstruction
@@ -215,7 +220,12 @@ export const DEFAULT_SUBAGENT_PROFILES = [
     enabledWhen: (text) => /怎么做|如何|方案|设计|规划|步骤|架构|实现|优化|改造/i.test(text),
     buildPrompt: (text, _userInput, taskInstruction = "") => buildProfilePrompt(
       "solution designer",
-      "请聚焦提出通用可行的方案与执行路径，不要直接替代主 agent 给出最终回答。",
+      [
+        "请聚焦提出通用可行的方案与执行路径，不要直接替代主 agent 给出最终回答。",
+        "优先基于你当前已具备的技能与上下文完成方案设计。",
+        "除非任务明确要求额外能力支持，否则不要为了泛化探索去寻找新工具。",
+        "如果发现缺少关键前提，请在输出中明确标记假设、缺口与取舍，而不是扩展为无关的工具探索。",
+      ].join(""),
       ["候选方案", "推荐路径", "取舍点"],
       text,
       taskInstruction
@@ -233,7 +243,12 @@ export const DEFAULT_SUBAGENT_PROFILES = [
     enabledWhen: () => true,
     buildPrompt: (text, _userInput, taskInstruction = "") => buildProfilePrompt(
       "risk reviewer",
-      "请审查任务中的风险、边界条件与验证建议，不要直接替代主 agent 给出最终回答。",
+      [
+        "请审查任务中的风险、边界条件与验证建议，不要直接替代主 agent 给出最终回答。",
+        "默认基于当前上下文进行审查，优先指出风险、前提缺口与验证建议。",
+        "除非任务明确要求，否则不要主动扩展到额外能力探索或无关工具调用。",
+        "如果信息不足，请明确指出缺失前提，而不是把风险审查扩展成方案设计或信息收集。",
+      ].join(""),
       ["主要风险", "缺失前提/边界条件", "验证建议"],
       text,
       taskInstruction

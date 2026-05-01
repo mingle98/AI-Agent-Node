@@ -6,6 +6,7 @@ import { ProductionAgent } from "../agent/ProductionAgent.js";
 import { MultiAgentCoordinator } from "../agent/multi-agent/index.js";
 import {
   DEFAULT_MULTI_AGENT_OPTIONS,
+  DEFAULT_SUBAGENT_PROFILES,
   MULTI_AGENT_UI_CONFIG,
   buildMultiAgentSelectorPrompt,
   buildSubAgentPrompt,
@@ -593,6 +594,40 @@ test("multi-agent config: should expose dynamic-orchestrator defaults and prompt
   );
   assert.match(subPrompt, /本次你只允许处理以下子任务：只审查安全风险/);
   assert.match(subPrompt, /不要完整回答用户原始问题/);
+
+  const infoPrompt = buildSubAgentPrompt(
+    {
+      id: "information_gatherer",
+      taskInstruction: "整理背景",
+      buildPrompt: DEFAULT_SUBAGENT_PROFILES.find((item) => item.id === "information_gatherer")?.buildPrompt,
+    },
+    "请调研当前方案"
+  );
+  assert.match(infoPrompt, /默认先尝试 search_knowledge/);
+  assert.match(infoPrompt, /只有在现有能力明显不足/);
+  assert.match(infoPrompt, /不要为了泛泛探索系统能力而调用 search_tools/);
+
+  const solutionPrompt = buildSubAgentPrompt(
+    {
+      id: "solution_designer",
+      taskInstruction: "设计方案",
+      buildPrompt: DEFAULT_SUBAGENT_PROFILES.find((item) => item.id === "solution_designer")?.buildPrompt,
+    },
+    "请给出改造方案"
+  );
+  assert.match(solutionPrompt, /优先基于你当前已具备的技能与上下文完成方案设计/);
+  assert.match(solutionPrompt, /不要为了泛化探索去寻找新工具/);
+
+  const riskPrompt = buildSubAgentPrompt(
+    {
+      id: "risk_reviewer",
+      taskInstruction: "审查风险",
+      buildPrompt: DEFAULT_SUBAGENT_PROFILES.find((item) => item.id === "risk_reviewer")?.buildPrompt,
+    },
+    "请审查当前方案风险"
+  );
+  assert.match(riskPrompt, /默认基于当前上下文进行审查/);
+  assert.match(riskPrompt, /不要主动扩展到额外能力探索或无关工具调用/);
 });
 
 test("renderMultiAgentEventBlock: should read multi-agent UI copy from config", () => {
