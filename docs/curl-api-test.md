@@ -56,6 +56,41 @@ curl -N -X POST 'http://127.0.0.1:3600/api/chat' \
 
 - `query`: 用户输入文本
 - `session_id`: 可选，用于保持会话上下文
+- `enableMultiAgent`: 可选，传 `true` 时开启多 agent 协同
+- `multiAgent.waitForSubAgentsMs`: 可选，主链路在回答前最多等待 subagent 的毫秒数
+
+## 2.0.1) 多 Agent 非流式示例
+
+注意：当前多 agent 协同**仅在流式（SSE）链路生效**。如果你在非流式请求里传 `enableMultiAgent: true`，服务端会自动退回单 agent 普通模式。
+
+```bash
+curl -X POST 'http://127.0.0.1:3600/api/chat' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": "请帮我分析这个需求并给出方案与风险",
+    "session_id": "curl-multi-agent-1",
+    "enableMultiAgent": true,
+    "multiAgent": {
+      "waitForSubAgentsMs": 300
+    }
+  }'
+```
+
+## 2.0.2) 多 Agent 流式示例
+
+```bash
+curl -N -X POST 'http://127.0.0.1:3600/api/chat' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": "请帮我分析这个需求并给出方案与风险",
+    "session_id": "curl-multi-agent-stream-1",
+    "isStream": true,
+    "enableMultiAgent": true,
+    "multiAgent": {
+      "waitForSubAgentsMs": 300
+    }
+  }'
+```
 
 ## 2.1) 工具触发示例（daily_news / analyze_chart）
 

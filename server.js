@@ -12,6 +12,7 @@ import {
   buildCustomComponents,
   ensureAnswerHasCustomComponentPlaceholders,
 } from "./utils/customComponentRenderer.js";
+import { buildMultiAgentCoordinator, normalizeMultiAgentOptions, renderMultiAgentEventBlock } from "./utils/serverChatHelpers.js";
 import { CONFIG } from "./config.js";
 import { resolveThinkingMode } from "./utils/thinkingMode.js";
 import { escapeHtml, wrapThinkingOpen, wrapThinkingClose } from "./utils/thinkingRenderer.js";
@@ -34,6 +35,7 @@ const allowedCorsOrigins = CORS_ORIGIN.split(",")
   .filter(Boolean);
 
 let agentInitError = null;
+let multiAgentCoordinator = null;
 
 // 辅助函数：格式化文件大小
 function formatFileSize(bytes) {
@@ -103,7 +105,7 @@ async function initAgent() {
     console.log("🔌 [init] MCP 未开启，跳过外部 MCP 工具加载");
   }
 
-  return new ProductionAgent(llm, vectorStore, embeddings, {
+  const agent = new ProductionAgent(llm, vectorStore, embeddings, {
     contextStrategy: "trim",
     fallbackLlm,
     thinkingLlm,
@@ -128,6 +130,11 @@ async function initAgent() {
       },
     },
   });
+
+  multiAgentCoordinator = buildMultiAgentCoordinator(agent, {
+    capabilityRoutingEnabled: CONFIG.capabilityRoutingEnabled,
+  });
+  return agent;
 }
 
 const agentPromise = initAgent().catch((error) => {
@@ -212,7 +219,13 @@ app.post("/api/chat", async (req, res, next) => {
         ? req.body.session_id.trim()
         : "default";
     const stream = typeof req.body?.isStream === "boolean" ? req.body.isStream : false;
+    const enableMultiAgent = req.body?.enableMultiAgent === true;
+    const multiAgentOptions = normalizeMultiAgentOptions(req.body);
+    const multiAgentEnabledForRequest = enableMultiAgent || multiAgentOptions.enabled === true;
+    const multiAgentParentRequestId = multiAgentEnabledForRequest ? `${sessionId}::multi::${Date.now()}` : null;
     const { enableThinking } = resolveThinkingMode(req.body, stream);
+
+    console.log(`🛰️ [/api/chat] session=${sessionId}, stream=${stream}, multiAgent=${multiAgentEnabledForRequest}`);
 
     if (!message) {
       res.status(400).json({ error: "message 不能为空" });
@@ -237,14 +250,22 @@ app.post("/api/chat", async (req, res, next) => {
       const response = await agent.chat(
         userMessages,
         null,
-        (finalText, toolResults) => {
+        (_finalText, toolResults) => {
           if (Array.isArray(toolResults)) {
             toolExcResult = toolResults;
           }
           console.log('🧮 普通请求模式结束:', toolResults)
         },
         sessionId,
-        { streamEnabled: stream }
+        {
+          streamEnabled: false,
+          enableThinking,
+          parentRequestId: multiAgentParentRequestId,
+          multiAgent: {
+            ...multiAgentOptions,
+            enabled: multiAgentEnabledForRequest,
+          },
+        }
       );
 
       const customComponents = buildCustomComponents(toolExcResult);
@@ -290,6 +311,9 @@ app.post("/api/chat", async (req, res, next) => {
       clientAborted = true;
       clearHeartbeat();
       console.log("⛓️‍💥 SSE 客户端断开:", reason);
+      if (multiAgentEnabledForRequest && multiAgentParentRequestId && multiAgentCoordinator) {
+        multiAgentCoordinator.abortParentRequest(multiAgentParentRequestId, `sse.disconnect:${reason}`);
+      }
       if (requestState) {
         agent.abortRequest(agent.getOrCreateSession(sessionId), requestState.id, reason);
       }
@@ -330,7 +354,7 @@ app.post("/api/chat", async (req, res, next) => {
     let isThinking = false;
 
     try {
-      const finalResponse = await agent.chat(
+      await agent.chat(
         userMessages,
         (chunk, toolExcResult) => {
           pending = pending
@@ -346,6 +370,21 @@ app.post("/api/chat", async (req, res, next) => {
                 return;
               }
               if (hasSentEnd) {
+                return;
+              }
+              if (chunk.type === "multi_agent_status" || chunk.type === "subagent_status" || chunk.type === "subagent_result") {
+                sendChunk({
+                  code: 0,
+                  result: renderMultiAgentEventBlock(chunk),
+                  is_end: false,
+                  event_type: chunk.type,
+                  event_meta: {
+                    subagentId: chunk.subagentId || null,
+                    status: chunk.status || null,
+                    launchedProfiles: chunk.launchedProfiles || null,
+                    taskId: chunk.taskId || null,
+                  },
+                });
                 return;
               }
               if (chunk.type === "done") {
@@ -389,11 +428,20 @@ app.post("/api/chat", async (req, res, next) => {
               console.log('stream callback err', e);
             });
         },
-        (fallbackText, toolExcResult) => {
+        (_fallbackText, _toolExcResult) => {
           // console.log('🆑流结束===》', toolExcResult);
         },
         sessionId,
-        { streamEnabled: stream, enableThinking, requestState }
+        {
+          streamEnabled: stream,
+          enableThinking,
+          requestState,
+          parentRequestId: multiAgentParentRequestId,
+          multiAgent: {
+            ...multiAgentOptions,
+            enabled: multiAgentEnabledForRequest,
+          },
+        }
       );
 
       await pending;
@@ -430,6 +478,12 @@ app.post("/api/session/reset", async (req, res, next) => {
         ? req.body.session_id.trim()
         : "default";
     await agent.reset(sessionId);
+    if (multiAgentCoordinator) {
+      multiAgentCoordinator.clearSession(sessionId, {
+        abortRunning: true,
+        reason: "session.reset",
+      });
+    }
     res.json({ ok: true, sessionId });
   } catch (error) {
     console.log('session/reset error:', error);

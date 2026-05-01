@@ -3,7 +3,7 @@
 import { SystemMessage, HumanMessage, AIMessage, ToolMessage } from "@langchain/core/messages";
 import { concat } from "@langchain/core/utils/stream";
 import { CONFIG } from "../config.js";
-import { TOOLS, TOOL_DEFINITIONS, setScriptGeneratorLLM, TOOLS_NEEDING_SESSION_ID, toolNeedsSessionId } from "../tools/index.js";
+import { TOOLS, TOOL_DEFINITIONS, setScriptGeneratorLLM, toolNeedsSessionId } from "../tools/index.js";
 import { searchKnowledgeBase } from "../tools/knowledge.js";
 import { SKILLS, SKILL_DEFINITIONS } from "../skills/index.js";
 import { buildSystemPrompt } from "./promptBuilder.js";
@@ -13,7 +13,7 @@ import { selectTaskMode, chatWithPlanExec } from "./planExecMode.js";
 import { getToolDivBox, formatToolDisplayName } from "../utils/streamRenderer.js";
 import { LongTermMemory, LTM_INJECT_START, LTM_INJECT_END } from "./longTermMemory.js";
 import { selectActiveCapabilities, expandCapabilitiesToAll, searchCapabilities } from "./capabilityRouter.js";
-import { processLLMWikiLearning } from "../utils/llmWikiBuilder.js";
+import { DEFAULT_MULTI_AGENT_OPTIONS } from "./multi-agent/config.js";
 
 const SEARCH_TOOLS_NAME = "search_tools";
 
@@ -159,6 +159,64 @@ function extractReasoningContent(chunk) {
   return typeof delta?.reasoning_content === "string" ? delta?.reasoning_content : "";
 }
 
+function isPrimaryMultiAgentOrchestrationMode(requestOptions = {}) {
+  return requestOptions?.multiAgentMeta?.orchestrationMode === true;
+}
+
+function buildDynamicMultiAgentMeta(requestOptions = {}, sessionId = "default", coordinator = null) {
+  if (requestOptions?.multiAgentMeta?.orchestrationMode === true) {
+    return requestOptions.multiAgentMeta;
+  }
+
+  const multiAgentOptions = requestOptions?.multiAgent;
+  if (!coordinator || multiAgentOptions?.enabled !== true) {
+    return requestOptions?.multiAgentMeta || null;
+  }
+
+  const mergedOptions = {
+    ...DEFAULT_MULTI_AGENT_OPTIONS,
+    ...(multiAgentOptions || {}),
+  };
+  const parentRequestId = requestOptions?.parentRequestId || coordinator.buildParentRequestId(sessionId, requestOptions);
+
+  return {
+    parentRequestId,
+    orchestrationMode: mergedOptions.primaryAgentOrchestrationMode === true,
+    orchestrationCapabilities: [...new Set([...(mergedOptions.primaryAgentOrchestrationCapabilities || []), "delegate_subagents"])],
+    dynamicDelegationEnabled: mergedOptions.dynamicDelegationEnabled === true,
+    maxDelegationRounds: mergedOptions.maxDelegationRounds,
+    maxDelegatedTasksPerRound: mergedOptions.maxDelegatedTasksPerRound,
+    delegationGuide: coordinator.buildDelegationGuide(mergedOptions),
+  };
+}
+
+function getPrimaryMultiAgentOrchestrationCapabilities(requestOptions = {}) {
+  const capabilityNames = requestOptions?.multiAgentMeta?.orchestrationCapabilities;
+  return Array.isArray(capabilityNames) ? capabilityNames.filter(Boolean) : [];
+}
+
+function isDynamicDelegationEnabled(requestOptions = {}) {
+  return requestOptions?.multiAgentMeta?.dynamicDelegationEnabled === true;
+}
+
+function getDelegationGuide(requestOptions = {}) {
+  return typeof requestOptions?.multiAgentMeta?.delegationGuide === "string"
+    ? requestOptions.multiAgentMeta.delegationGuide
+    : "";
+}
+
+function getMaxDelegationRounds(requestOptions = {}) {
+  return Number.isFinite(requestOptions?.multiAgentMeta?.maxDelegationRounds)
+    ? Math.max(1, requestOptions.multiAgentMeta.maxDelegationRounds)
+    : 3;
+}
+
+function getMaxDelegatedTasksPerRound(requestOptions = {}) {
+  return Number.isFinite(requestOptions?.multiAgentMeta?.maxDelegatedTasksPerRound)
+    ? Math.max(1, requestOptions.multiAgentMeta.maxDelegatedTasksPerRound)
+    : 4;
+}
+
 function extractMemoryBlock(systemPrompt = "") {
   if (typeof systemPrompt !== "string" || !systemPrompt) {
     return "";
@@ -184,6 +242,16 @@ const SEARCH_TOOLS_DEFINITION = {
     { name: "返回数量", type: "number", example: 8, required: false },
   ],
   example: 'search_tools("处理 Excel 并发送邮件报告", "all", 8)',
+  special: true,
+};
+
+const DELEGATE_SUBAGENTS_DEFINITION = {
+  name: "delegate_subagents",
+  description: "将当前任务拆分并委派给一个或多个子 agent，等待其返回结构化结果后继续推进下一步",
+  params: [
+    { name: "委派任务JSON字符串", type: "string", example: '{"tasks":[{"profileId":"information_gatherer","task":"整理当前架构现状"}]}' },
+  ],
+  example: 'delegate_subagents("{\\"tasks\\":[{\\"profileId\\":\\"information_gatherer\\",\\"task\\":\\"整理当前架构现状\\"}]}")',
   special: true,
 };
 
@@ -270,7 +338,8 @@ export class ProductionAgent {
     const allDefs = [
       ...TOOL_DEFINITIONS.map((def) => ({ ...def, kind: "tool" })),
       ...SKILL_DEFINITIONS.map((def) => ({ ...def, kind: "skill" })),
-      ...(this.capabilityRoutingEnabled ? [{ ...SEARCH_TOOLS_DEFINITION, kind: "tool" }] : []),
+      { ...SEARCH_TOOLS_DEFINITION, kind: "tool" },
+      { ...DELEGATE_SUBAGENTS_DEFINITION, kind: "tool" },
     ];
     // console.log('🧧buildCallableDefinitions 所有定义:', allDefs);
 
@@ -429,18 +498,6 @@ export class ProductionAgent {
   }
 
   searchAndActivateCapabilities(session, query, options = {}) {
-    if (!this.capabilityRoutingEnabled) {
-      if (this.options.debug) {
-        console.log(`🔎 [${session?.id || "unknown"}] search_tools 跳过：capability routing 未开启`);
-      }
-      return {
-        query: String(query || ""),
-        kind: options?.kind || "all",
-        matches: [],
-        activated: [],
-      };
-    }
-
     const { kind = "all", limit = 4 } = options || {};
     const result = searchCapabilities({
       query,
@@ -670,7 +727,7 @@ export class ProductionAgent {
       .map((key) => argObj[key]);
   }
 
-  async runToolCall(toolName, args, sessionId) {
+  async runToolCall(toolName, args, sessionId, options = {}) {
     if (this.options.debug && toolName === SEARCH_TOOLS_DEFINITION.name) {
       console.log(`🛠️ [${sessionId}] 调用常驻工具 search_tools: args=${JSON.stringify(args)}`);
     }
@@ -680,6 +737,10 @@ export class ProductionAgent {
         kind: args[1] || "all",
         limit: typeof args[2] === "number" ? args[2] : 4,
       });
+    }
+
+    if (toolName === "delegate_subagents") {
+      return this.handleDelegateSubagents(sessionId, args[0], options);
     }
 
     // 检查工具是否需要 sessionId 进行用户隔离
@@ -706,6 +767,121 @@ export class ProductionAgent {
     return tool(...args);
   }
 
+  parseDelegatedTasks(rawInput, maxTasks = 4) {
+    if (this.options.debug) {
+      console.log("[delegate_subagents] rawInput:", rawInput);
+    }
+
+    let parsed = rawInput;
+    if (typeof parsed === "string") {
+      try {
+        parsed = JSON.parse(parsed);
+      } catch (error) {
+        throw new Error(`delegate_subagents 参数不是合法 JSON: ${error.message}`);
+      }
+    }
+
+    const rawTasks = Array.isArray(parsed?.tasks)
+      ? parsed.tasks
+      : (Array.isArray(parsed?.subtasks)
+        ? parsed.subtasks
+        : (Array.isArray(parsed?.delegations)
+          ? parsed.delegations
+          : (Array.isArray(parsed) ? parsed : (parsed && typeof parsed === "object" ? [parsed] : []))));
+
+    const normalizedTasks = rawTasks
+      .map((item) => ({
+        profileId: String(
+          item?.profileId
+          || item?.id
+          || item?.role
+          || item?.agent
+          || item?.subagent
+          || item?.profile
+          || ""
+        ).trim(),
+        task: String(
+          item?.task
+          || item?.instruction
+          || item?.focus
+          || item?.prompt
+          || item?.content
+          || item?.objective
+          || item?.goal
+          || item?.title
+          || ""
+        ).trim(),
+      }))
+      .filter((item) => item.profileId && item.task)
+      .slice(0, Math.max(1, maxTasks));
+
+    if (this.options.debug) {
+      console.log("[delegate_subagents] parsed:", parsed);
+      console.log("[delegate_subagents] normalizedTasks:", normalizedTasks);
+    }
+
+    return normalizedTasks;
+  }
+
+  formatDelegatedResultsMessage(result = {}) {
+    const rows = Array.isArray(result?.results) ? result.results : [];
+    if (rows.length === 0) {
+      return "[SubAgent Results]\n- 无子任务结果返回";
+    }
+    return [
+      `[SubAgent Results] round=${result?.roundId || "unknown"}`,
+      ...rows.map((item, index) => [
+        `${index + 1}. ${item.displayName || item.roleName || item.profileId || "subagent"} / ${item.status || "unknown"}`,
+        item.taskTitle ? `子任务: ${item.taskTitle}` : "",
+        item.summary ? `结果: ${item.summary}` : (item.error ? `错误: ${item.error}` : ""),
+      ].filter(Boolean).join("\n")),
+    ].join("\n\n");
+  }
+
+  async handleDelegateSubagents(sessionId, rawInput, options = {}) {
+    const coordinator = this.multiAgentCoordinator;
+    if (!coordinator) {
+      throw new Error("multiAgentCoordinator 未就绪，无法执行 delegate_subagents");
+    }
+    const requestOptions = options?.requestOptions || {};
+    if (!isDynamicDelegationEnabled(requestOptions)) {
+      throw new Error("当前请求未开启动态多轮协同委派");
+    }
+    const maxTasks = getMaxDelegatedTasksPerRound(requestOptions);
+    const tasks = this.parseDelegatedTasks(rawInput, maxTasks);
+    if (tasks.length === 0) {
+      if (this.options.debug) {
+        console.warn("[delegate_subagents] 未解析出有效 tasks，返回空委派结果");
+      }
+      return {
+        parentRequestId: requestOptions?.multiAgentMeta?.parentRequestId || null,
+        roundId: null,
+        launchedProfiles: [],
+        results: [],
+      };
+    }
+
+    const delegationState = options?.delegationState || { rounds: 0 };
+    const maxRounds = getMaxDelegationRounds(requestOptions);
+    if ((delegationState.rounds || 0) >= maxRounds) {
+      throw new Error(`delegate_subagents 超过最大委派轮数限制: ${maxRounds}`);
+    }
+    delegationState.rounds = (delegationState.rounds || 0) + 1;
+
+    const result = await coordinator.runDelegatedTasks({
+      tasks,
+      userInput: options?.currentUserInput || "",
+      sessionId,
+      parentRequestId: requestOptions?.multiAgentMeta?.parentRequestId,
+      chunkCallback: options?.chunkCallback || null,
+      requestOptions,
+    });
+    return {
+      ...result,
+      formatted: this.formatDelegatedResultsMessage(result),
+    };
+  }
+
   async runSkillCall(skillName, args, sessionId) {
     console.log(`[DEBUG] skill: ${skillName}, sessionId=${sessionId}, args=`, args);
     const skill = SKILLS[skillName];
@@ -715,7 +891,7 @@ export class ProductionAgent {
     return skill(...args, sessionId);
   }
 
-  async executeCallableWithResilience(session, name, argsObject, requestState = null) {
+  async executeCallableWithResilience(session, name, argsObject, requestState = null, options = {}) {
     const callable = this.callableDefinitions.get(name);
     if (!callable) {
       return `错误：未找到可调用能力 ${name}`;
@@ -724,12 +900,21 @@ export class ProductionAgent {
     this.ensureRequestActive(session, requestState, session.id);
 
     const args = this.orderedArgsFromObject(argsObject, callable.orderedParamKeys);
+    const isDelegateSubagentsSingleObjectFallback =
+      name === "delegate_subagents"
+      && Array.isArray(callable.orderedParamKeys)
+      && callable.orderedParamKeys.length === 1
+      && argsObject
+      && typeof argsObject === "object"
+      && !Array.isArray(argsObject)
+      && args[0] === undefined;
+    const normalizedArgs = isDelegateSubagentsSingleObjectFallback ? [argsObject] : args;
     const run = async () => {
       this.ensureRequestActive(session, requestState, session.id);
       if (callable.kind === "skill") {
-        return this.runSkillCall(name, args, session.id);
+        return this.runSkillCall(name, normalizedArgs, session.id);
       }
-      return this.runToolCall(name, args, session.id);
+      return this.runToolCall(name, normalizedArgs, session.id, options);
     };
 
     if (!session.toolBreaker.canRequest()) {
@@ -1145,9 +1330,23 @@ export class ProductionAgent {
     const session = this.getOrCreateSession(sessionId);
     const requestState = requestOptions?.requestState || this.beginRequest(session);
     this.activateRequest(session, requestState);
+    const dynamicMultiAgentMeta = buildDynamicMultiAgentMeta(requestOptions, sessionId, this.multiAgentCoordinator);
+    if (dynamicMultiAgentMeta && requestOptions?.multiAgentMeta !== dynamicMultiAgentMeta) {
+      requestOptions = {
+        ...requestOptions,
+        parentRequestId: dynamicMultiAgentMeta.parentRequestId || requestOptions?.parentRequestId,
+        multiAgentMeta: dynamicMultiAgentMeta,
+      };
+    }
     this.messages = session.messages;
     const streamEnabled = requestOptions?.streamEnabled ?? CONFIG.streamEnabled;
     const enableThinking = streamEnabled ? requestOptions?.enableThinking : undefined;
+    const orchestrationMode = isPrimaryMultiAgentOrchestrationMode(requestOptions);
+    const orchestrationCapabilities = orchestrationMode
+      ? getPrimaryMultiAgentOrchestrationCapabilities(requestOptions)
+      : null;
+    const delegationGuide = orchestrationMode ? getDelegationGuide(requestOptions) : "";
+    const delegationState = { rounds: 0 };
     // 内部参数：仅用于 plan_exec 回退 ReAct 时避免重复写入同一条用户消息
     const skipUserMessageAppend = requestOptions?.skipUserMessageAppend === true;
 
@@ -1168,6 +1367,14 @@ export class ProductionAgent {
         const toolExcResults = [];
         let usedSearchKnowledge = false;
         const logText = typeof userInput === "string" ? userInput : (userInput?.text || "[多模态输入]");
+        if (orchestrationMode && chunkCallback) {
+          emitStreamEvent(chunkCallback, {
+            type: "multi_agent_status",
+            parentRequestId: requestOptions?.multiAgentMeta?.parentRequestId || null,
+            status: "running",
+            content: "正在进行协同分析",
+          });
+        }
         console.log(`👤 [${sessionId}] 用户: ${logText}`);
         if (!skipUserMessageAppend) {
           const addMessage = this.buildHumanMessage(userInput);
@@ -1175,6 +1382,9 @@ export class ProductionAgent {
             console.log(`👤 [${sessionId}] 用户消息:`, addMessage.toString());
           }
           session.messages.push(addMessage);
+          if (delegationGuide && !skipUserMessageAppend) {
+            session.messages.push(new SystemMessage(delegationGuide));
+          }
           await this.manageContext(session);
         }
 
@@ -1191,6 +1401,8 @@ export class ProductionAgent {
             {
               streamEnabled,
               enableThinking,
+              allowTools: true,
+              capabilityNames: orchestrationCapabilities,
               onChunk: streamEnabled
                 ? (chunk) => {
                   if (this.isRequestAborted(session, requestState)) return;
@@ -1215,6 +1427,7 @@ export class ProductionAgent {
 
           if (toolCalls.length === 0) {
             const shouldExpandCapabilities =
+              !orchestrationMode &&
               this.capabilityRoutingEnabled &&
               iterations === 1 &&
               (session.activeCapabilityNames?.length || 0) < this.callableDefinitions.size &&
@@ -1284,7 +1497,13 @@ export class ProductionAgent {
               session,
               toolCall.name,
               toolCall.args || {},
-              requestState
+              requestState,
+              {
+                requestOptions,
+                chunkCallback,
+                currentUserInput: logText,
+                delegationState,
+              }
             );
             const endAt = Date.now();
             const toolExcResult = {
@@ -1306,7 +1525,9 @@ export class ProductionAgent {
               usedSearchKnowledge = true;
             }
             console.log(`【TOOL】执行 ${toolCall.name}结果:${JSON.stringify(result)}`)
-            const content = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+            const content = toolCall.name === "delegate_subagents"
+              ? (result?.formatted || JSON.stringify(result, null, 2))
+              : (typeof result === "string" ? result : JSON.stringify(result, null, 2));
             if (streamEnabled && !isInternalToolCall) {
               const toolDisplayName = formatToolDisplayName(toolCall.name);
               emitStreamEvent(chunkCallback, {

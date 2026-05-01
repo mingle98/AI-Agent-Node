@@ -767,12 +767,16 @@
               description: '我是您的智能助手，有什么可以帮助您的吗？',
             }
 
-            const customRequestConfig = {
+            const customRequestConfig = reactive({
               customParams: {
                 session_id: 'test123456',
                 useThinkMode: true,
+                enableMultiAgent: false,
+                multiAgent: {
+                  waitForSubAgentsMs: 0,
+                },
               },
-            };
+            });
 
             // 文件管理功能
             const getSessionId = () => {
@@ -1274,6 +1278,41 @@
                   h('div', { class: `toggle-switch ${this.enableStreaming ? 'on' : ''}` }),
                   h('span', null, '流式响应'),
                 ]),
+                h('div', { class: 'header-divider' }),
+                // Multi-agent toggle
+                h('div', {
+                  class: 'header-toggle',
+                  onClick: () => {
+                    if (this.customRequestConfig?.customParams) {
+                      this.customRequestConfig.customParams.enableMultiAgent = !this.customRequestConfig.customParams.enableMultiAgent;
+                    }
+                  },
+                }, [
+                  h('div', {
+                    class: `toggle-switch ${this.customRequestConfig?.customParams?.enableMultiAgent ? 'on' : ''}`,
+                  }),
+                  h('span', null, '多 Agent(仅流式)'),
+                ]),
+                h('div', { class: 'header-field' }, [
+                  h('label', null, 'WaitMs'),
+                  h('input', {
+                    class: 'header-input',
+                    type: 'number',
+                    min: '0',
+                    value: this.customRequestConfig?.customParams?.multiAgent?.waitForSubAgentsMs ?? 0,
+                    style: 'width: 90px;',
+                    onInput: (e) => {
+                      const value = Number(e.target.value);
+                      if (!this.customRequestConfig?.customParams?.multiAgent) {
+                        this.customRequestConfig.customParams.multiAgent = {};
+                      }
+                      this.customRequestConfig.customParams.multiAgent.waitForSubAgentsMs = Number.isFinite(value) && value >= 0 ? value : 0;
+                    },
+                  }),
+                ]),
+                this.customRequestConfig?.customParams?.enableMultiAgent && !this.enableStreaming
+                  ? h('span', { class: 'header-tag', style: 'background: rgba(245,158,11,0.16); border-color: rgba(245,158,11,0.35); color: #fbbf24;' }, '多 Agent 当前不会生效：请同时开启流式')
+                  : null,
                 h('div', { class: 'header-divider' }),
                 // File panel toggle
                 h('button', {

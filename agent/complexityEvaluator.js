@@ -852,16 +852,22 @@ export function detectTaskComplexitySync(text) {
  * 获取任务模式建议
  */
 export async function selectTaskMode(agent, userInput, requestOptions = {}, sessionHistory = []) {
-  // 1. 强制指定
   if (requestOptions.taskMode === "react" || requestOptions.taskMode === "plan_exec") {
     return requestOptions.taskMode;
   }
 
-  // 2. Agent 配置
+  const multiAgentEnabled = requestOptions?.multiAgent?.enabled === true
+    || requestOptions?.enableMultiAgent === true
+    || requestOptions?.multiAgentMeta?.orchestrationMode === true
+    || requestOptions?.multiAgentMeta?.dynamicDelegationEnabled === true;
+
+  if (multiAgentEnabled) {
+    return "react";
+  }
+
   if (agent.taskMode === "react") return "react";
   if (agent.taskMode === "plan_exec") return "plan_exec";
 
-  // 3. 智能评估（长提示词优先走 LLM，避免纯关键词误判）
   const evaluator = new IntelligentComplexityEvaluator({
     llm: agent.llm,
     enableLLMEval: true,
@@ -873,7 +879,6 @@ export async function selectTaskMode(agent, userInput, requestOptions = {}, sess
 
   const result = await evaluator.evaluate(userInput, sessionHistory);
 
-  // 4. 应用阈值
   const threshold = agent.complexityThreshold || 0.5;
   const complexity = result.score;
 

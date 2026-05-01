@@ -32,6 +32,7 @@
 | 🛡️ **容错机制** | 熔断器、重试机制、降级策略 |
 | 🧠 **双执行模式** | 支持 ReAct 快速响应和 Plan+Exec 计划执行两种模式，智能切换 |
 | 🧭 **动态能力路由** | 支持按用户请求动态裁剪工具/技能能力面，降低无关能力干扰（可通过 `capabilityRoutingEnabled` 开关控制） |
+| 🤝 **多 Agent 协同** | 支持主控 agent 按任务拆分调度多个子 agent，内置角色分工、子任务约束、前端协同状态展示与请求级清理机制；相关默认配置集中在 `agent/multi-agent/config.js` |
 | 📁 **用户文件隔离** | 基于 sessionId 的独立工作空间，自动目录初始化，支持文件数量限制（100个/用户） |
 | 📧 **邮件发送** | 支持 SMTP 发送，内置多种精美模板（通知/告警/报告/感谢信/验证码/邀请函/营销） |
 | 🎨 **AISuspendedBallChat 兼容** | 完全符合 AISuspendedBallChat 组件接口规范 |
@@ -217,6 +218,25 @@ npm run wiki:review:publish
 - 生产环境建议优先使用 `rag`，或使用 `llm_wiki + candidate`
 - 不建议对外直接暴露 `llm_wiki/` 资料目录
 - 开启自动学习前，建议先执行一次 `npm run wiki:build`
+
+---
+
+### 多 Agent 协同
+
+项目已内置多 Agent 协同能力，适合将一个复杂请求拆成多个并行子任务后再由主控 agent 汇总。
+
+关键信息：
+
+- 支持主控 agent 选择多个子 agent 并并行执行
+- 支持重复调度同一角色，按独立子任务实例运行
+- 子 agent 默认带有单任务范围约束，避免重复处理整题
+- 子 agent 支持按角色配置静态工具/技能白名单
+- 主 agent 在协同模式下会切换为更偏协调/汇总的执行方式
+- 前端流式输出支持展示主控状态、子 agent 结果和子任务标题
+- 请求断开后会触发多 agent 后台清理
+- `session reset` 时会同步清理 multi-agent 运行状态与结果缓存
+
+相关默认配置与文案集中在：`agent/multi-agent/config.js`
 
 ---
 
