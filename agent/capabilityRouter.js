@@ -21,6 +21,7 @@ function matchDefinition(def, text) {
     def.description,
     def.functionality,
     def.example,
+    ...(def.keywords || []),
     ...(def.params || []).flatMap((p) => [p.name, p.example, ...(p.options || [])]),
   ];
   const mcpCandidates = def.source === "mcp"

@@ -1,0 +1,70 @@
+{
+  "runtime": "node",
+  "entry": "scripts/qr_generator.mjs",
+  "workingDirectory": ".",
+  "keywords": [
+    "qr-code-generator",
+    "高度可定制二维码生成技能",
+    "支持",
+    "PNG",
+    "二维码",
+    "扫码",
+    "生成",
+    "SVG",
+    "输出",
+    "尺寸",
+    "边距",
+    "颜色",
+    "纠错等级",
+    "Logo",
+    "圆角",
+    "标签文字等配置",
+    "适用于链接分享",
+    "活动物料",
+    "产品包装",
+    "名片和网页入口",
+    "Code",
+    "Generator",
+    "能力概览",
+    "将文本",
+    "URL",
+    "联系方式",
+    "Wi-Fi"
+  ],
+  "dependencies": {
+    "node": [
+      "qrcode",
+      "sharp"
+    ]
+  },
+  "runtimeOptions": {
+    "node": {
+      "packageManager": "npm",
+      "installMode": "auto"
+    }
+  },
+  "install": {
+    "node": {
+      "enabled": true,
+      "installer": "npm",
+      "strategy": "project"
+    }
+  },
+  "input": {
+    "mode": "raw",
+    "description": "二维码承载内容，可直接传 URL 或文本"
+  },
+  "commands": {
+    "build": [
+      "scripts/qr_generator.mjs",
+      "--data",
+      "{input}",
+      "--output",
+      "{output}",
+      "{options}"
+    ]
+  },
+  "defaults": {
+    "output": "qr-code.png"
+  }
+}

@@ -12,6 +12,9 @@ import { skillDecisionHelper } from './decisionHelper.js';
 import { skillEmailWriter } from './emailWriter.js';
 import { skillEmailSender } from './emailSender.js';
 import { skillPythonExecutor } from './pythonExecutor.js';
+import { loadCommunitySkillDefinitions } from './communitySkills.js';
+
+const COMMUNITY_SKILL_DEFINITIONS = loadCommunitySkillDefinitions();
 
 // 技能定义（包含函数和元数据）
 export const SKILL_DEFINITIONS = [
@@ -163,6 +166,7 @@ export const SKILL_DEFINITIONS = [
     ],
     example: 'python_executor("计算漏斗转化率并找出最大流失环节", "exposure=120000, click=8400, signup=2100, pay=315", "auto")',
   },
+  ...COMMUNITY_SKILL_DEFINITIONS, // 自动解析skillMds目录下的SKILLS,如果不需要可以去掉
 ];
 
 // 生成技能映射表

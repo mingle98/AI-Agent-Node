@@ -8,6 +8,8 @@ node_modules
 
 /llm_wiki/
 
+.npm-cache
+.community-venv
 dist
 build
 

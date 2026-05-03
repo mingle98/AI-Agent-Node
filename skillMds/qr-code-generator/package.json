@@ -1,0 +1,10 @@
+{
+  "name": "qr-code-generator-bundle",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "sharp": "^0.33.5"
+  }
+}

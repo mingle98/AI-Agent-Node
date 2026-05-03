@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import test, { before, after } from "node:test";
 
 import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
@@ -218,6 +220,23 @@ test("ProductionAgent.getStructuredTools: should return tool schemas", () => {
   assert.ok(Array.isArray(tools));
   assert.ok(tools.length > 0);
   assert.ok(tools.every(t => t.type === "function"));
+});
+
+test("ProductionAgent.runSkillCall: should inject sessionId for community bundle skills", async () => {
+  const llm = new MockLLM([]);
+  const agent = createAgentWithMockLLM(llm);
+  const sessionId = `prod_agent_skill_${Date.now()}`;
+
+  const resultText = await agent.runSkillCall(
+    "qr-code-generator",
+    ["生成二维码", "测试上下文", "https://example.com", "qrcodes/agent-test.png", '{"size":180,"format":"png"}'],
+    sessionId
+  );
+  const result = JSON.parse(resultText);
+
+  assert.equal(result.sessionId, sessionId);
+  assert.equal(result.skillName, "qr-code-generator");
+  assert.equal(result.source, "community-skill");
 });
 
 test("ProductionAgent.createSession: should create new session with correct structure", () => {

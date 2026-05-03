@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { loadCommunitySkillDefinitions } from "../skills/communitySkills.js";
 import { expandCapabilitiesToAll, searchCapabilities, selectActiveCapabilities } from "../agent/capabilityRouter.js";
 
 function tool(name, description = "", extra = {}) {
@@ -233,6 +234,37 @@ test("searchCapabilities: should find MCP tools by explicit keywords", () => {
   assert.ok(result.toolNames.includes("mcp__weather__forecast"));
   assert.ok(result.matches.some((item) => item.name === "mcp__weather__forecast"));
   assert.ok(result.matches.every((item) => !Object.hasOwn(item, "source")));
+});
+
+test("selectActiveCapabilities: should activate wechat article writer for公众号文章 queries", () => {
+  const skillDefinitions = loadCommunitySkillDefinitions();
+
+  const result = selectActiveCapabilities({
+    userInput: "帮我写一篇公众号文章",
+    toolDefinitions: [],
+    skillDefinitions,
+    alwaysOnTools: [],
+    alwaysOnSkills: [],
+    maxTools: 10,
+    maxSkills: 10,
+  });
+
+  assert.ok(result.skillNames.includes("wechat-article-writer"));
+});
+
+test("searchCapabilities: should find wechat article writer by公众号 query", () => {
+  const skillDefinitions = loadCommunitySkillDefinitions();
+
+  const result = searchCapabilities({
+    query: "帮我写一篇公众号文章",
+    toolDefinitions: [],
+    skillDefinitions,
+    limit: 5,
+    kind: "skill",
+  });
+
+  assert.ok(result.skillNames.includes("wechat-article-writer"));
+  assert.ok(result.matches.some((item) => item.name === "wechat-article-writer"));
 });
 
 test("expandCapabilitiesToAll: should include all tool and skill names", () => {
