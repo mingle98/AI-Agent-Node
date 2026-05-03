@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { SKILL_DEFINITIONS, SKILLS } from "../skills/index.js";
 import { generateManifestSuggestions, loadCommunitySkillDefinitions, writeManifestSuggestionForSkill, detectPythonCommand, installPythonDependencies, detectNodeCommand, getRuntimeHandler } from "../skills/communitySkills.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const repoRoot = path.resolve(__dirname, "..");
 
 test("SKILL_DEFINITIONS: should export all skill definitions", () => {
   assert.ok(Array.isArray(SKILL_DEFINITIONS));
@@ -104,12 +109,16 @@ test("community manifest suggestions: should generate suggestions for bundle ski
 });
 
 test("community manifest auto-write: should create manifest when missing", () => {
-  const skillRoot = "/Users/zhoumingle/Desktop/myProjects/AI-Agent-Node/skillMds/qr-code-generator";
+  const skillRoot = path.join(repoRoot, "skillMds", "qr-code-generator");
   const manifestPath = path.join(skillRoot, "manifest.json");
   const backupPath = `${manifestPath}.bak-test`;
+  const hadManifest = fs.existsSync(manifestPath);
+
   if (fs.existsSync(backupPath)) fs.unlinkSync(backupPath);
-  fs.copyFileSync(manifestPath, backupPath);
-  fs.unlinkSync(manifestPath);
+  if (hadManifest) {
+    fs.copyFileSync(manifestPath, backupPath);
+    fs.unlinkSync(manifestPath);
+  }
 
   try {
     const definitions = loadCommunitySkillDefinitions();
@@ -122,7 +131,9 @@ test("community manifest auto-write: should create manifest when missing", () =>
     assert.equal(written.entry, "scripts/qr_generator.mjs");
   } finally {
     if (fs.existsSync(manifestPath)) fs.unlinkSync(manifestPath);
-    fs.renameSync(backupPath, manifestPath);
+    if (hadManifest && fs.existsSync(backupPath)) {
+      fs.renameSync(backupPath, manifestPath);
+    }
   }
 });
 
@@ -187,7 +198,7 @@ test("community manifest suggestions: should include runtimeOptions and install 
 
 test("community python runtime handler: should support venv-aware detect", () => {
   const handler = getRuntimeHandler("python");
-  const runtimeInfo = handler.detect("/Users/zhoumingle/Desktop/myProjects/AI-Agent-Node/skillMds/pptx-generator/pptx-generator", {
+  const runtimeInfo = handler.detect(path.join(repoRoot, "skillMds", "pptx-generator", "pptx-generator"), {
     runtime: "python",
     runtimeOptions: { python: { useVenv: false, venvPath: ".community-venv", pythonCommand: "python3" } },
   });
@@ -198,7 +209,7 @@ test("community python runtime handler: should support venv-aware detect", () =>
 
 test("community node runtime handler: should expose package manager info", () => {
   const handler = getRuntimeHandler("node");
-  const runtimeInfo = handler.detect("/Users/zhoumingle/Desktop/myProjects/AI-Agent-Node", {
+  const runtimeInfo = handler.detect(repoRoot, {
     runtime: "node",
     runtimeOptions: { node: { packageManager: "npm" } },
   });
