@@ -45,5 +45,5 @@ export const CONFIG = {
   mcpCallTimeoutMs: parsePositiveNumber(process.env.MCP_CALL_TIMEOUT_MS, 60000),
 
   // 是否启用社区SKILL支持(skillMds目录下自动解析)
-  supportCommunitySkills: true,
+  supportCommunitySkills: false,
 };
