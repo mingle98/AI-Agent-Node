@@ -43,4 +43,7 @@ export const CONFIG = {
   mcpToolNamePrefix: process.env.MCP_TOOL_NAME_PREFIX || 'mcp',
   mcpInitTimeoutMs: parsePositiveNumber(process.env.MCP_INIT_TIMEOUT_MS, 15000),
   mcpCallTimeoutMs: parsePositiveNumber(process.env.MCP_CALL_TIMEOUT_MS, 60000),
+
+  // 是否启用社区SKILL支持(skillMds目录下自动解析)
+  supportCommunitySkills: true,
 };

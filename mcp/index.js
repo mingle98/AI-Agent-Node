@@ -19,6 +19,7 @@ export const MCP_CONFIG = {
         "搜一下",
         "新闻",
         "查询",
+        "查一下",
         "查找",
         "检索",
         "WebSearch",

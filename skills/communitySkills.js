@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { CONFIG } from '../config.js';
 import { getUserWorkspaceRoot } from '../tools/fileManager.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -1432,6 +1433,10 @@ export {
 
 export function loadCommunitySkillDefinitions(skillDir = DEFAULT_COMMUNITY_SKILLS_DIR) {
   try {
+    if (!CONFIG.supportCommunitySkills) {
+      console.log(`[community-skills] 社区SKILL支持未开启`);
+      return [];
+    }
     console.log(`[community-skills] 开始扫描目录: ${skillDir}`);
     const markdownFiles = collectMarkdownFiles(skillDir, true);
     console.log(`[community-skills] 扫描完成，发现 Markdown 文件 ${markdownFiles.length} 个`);
