@@ -603,6 +603,7 @@ export const CONFIG = {
   mcpToolNamePrefix: 'mcp',        // MCP 工具名前缀
   mcpInitTimeoutMs: 15000,         // MCP 初始化超时时间
   mcpCallTimeoutMs: 60000,         // MCP 工具调用超时时间
+  supportCommunitySkills: true,  // 是否启用社区SKILL支持(skillMds目录下自动解析)
 };
 ```
 
