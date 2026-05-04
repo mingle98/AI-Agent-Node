@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import test, { before, after } from "node:test";
+import { CONFIG } from "../config.js";
+
+// 在测试环境中确保启用社区技能
+CONFIG.supportCommunitySkills = true;
 
 import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
-import { CONFIG } from "../config.js";
-import { ProductionAgent } from "../agent/ProductionAgent.js";
-import { LTM_INJECT_START, LTM_INJECT_END } from "../agent/longTermMemory.js";
+const { ProductionAgent } = await import("../agent/ProductionAgent.js");
+const { LTM_INJECT_START, LTM_INJECT_END } = await import("../agent/longTermMemory.js");
 
 const __ORIGINAL_CONSOLE__ = {
   log: console.log,

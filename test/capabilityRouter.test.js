@@ -3,6 +3,10 @@ import test from "node:test";
 
 import { loadCommunitySkillDefinitions } from "../skills/communitySkills.js";
 import { expandCapabilitiesToAll, searchCapabilities, selectActiveCapabilities } from "../agent/capabilityRouter.js";
+import { CONFIG } from "../config.js";
+
+// 在测试环境中确保启用社区技能
+CONFIG.supportCommunitySkills = true;
 
 function tool(name, description = "", extra = {}) {
   return { name, description, params: [], example: `${name}()`, ...extra };

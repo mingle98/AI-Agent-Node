@@ -3,9 +3,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { CONFIG } from "../config.js";
 
-import { SKILL_DEFINITIONS, SKILLS } from "../skills/index.js";
-import { generateManifestSuggestions, loadCommunitySkillDefinitions, writeManifestSuggestionForSkill, detectPythonCommand, installPythonDependencies, detectNodeCommand, getRuntimeHandler } from "../skills/communitySkills.js";
+// 在测试环境中确保启用社区技能，不修改仓库配置文件
+CONFIG.supportCommunitySkills = true;
+
+const { SKILL_DEFINITIONS, SKILLS } = await import("../skills/index.js");
+const { generateManifestSuggestions, loadCommunitySkillDefinitions, writeManifestSuggestionForSkill, detectPythonCommand, installPythonDependencies, detectNodeCommand, getRuntimeHandler } = await import("../skills/communitySkills.js");
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
