@@ -9,6 +9,8 @@ vector_db
 dist
 build
 
+skillMds
+
 .DS_Store
 
 npm-debug.log*
