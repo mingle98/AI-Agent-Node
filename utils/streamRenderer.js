@@ -95,7 +95,7 @@ function getToolStatusIcon(status = 'running') {
  * 工具调用（Tool）— 弱分支行
  * 用于：真实工具执行开始、完成
  */
-export function getToolDivBox(payload, stType = 'content') {
+export function getToolDivBox(payload, stType = 'start') {
   try {
     if (!payload) return '';
 
