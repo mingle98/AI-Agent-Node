@@ -1488,7 +1488,10 @@ export class ProductionAgent {
               const toolDisplayName = formatToolDisplayName(toolCall.name);
               emitStreamEvent(chunkCallback, {
                 type: "status",
-                content: getToolDivBox(`🚀 【TOOL】执行 ${toolDisplayName} 工具`),
+                content: getToolDivBox({
+                  text: `执行「${toolDisplayName}」工具`,
+                  status: "running",
+                }),
               });
             }
             const callable = this.callableDefinitions.get(toolCall.name);
@@ -1532,7 +1535,10 @@ export class ProductionAgent {
               const toolDisplayName = formatToolDisplayName(toolCall.name);
               emitStreamEvent(chunkCallback, {
                 type: "status",
-                content: getToolDivBox(`✅ 【TOOL】执行 ${toolDisplayName} 完成`, 'end'),
+                content: getToolDivBox({
+                  text: `工具「${toolDisplayName}」完成`,
+                  status: "success",
+                }, 'end'),
               });
             }
             session.messages.push(new ToolMessage({
