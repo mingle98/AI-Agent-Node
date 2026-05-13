@@ -82,7 +82,7 @@ function escapeHtml(text) {
 }
 
 function getToolStatusIcon(status = 'running') {
-  const iconStyle = 'display:inline-block;width:16px;height:16px;flex:0 0 16px;';
+  const iconStyle = 'display:inline-block;width:18px;height:18px;flex:0 0 18px;';
 
   if (status === 'success') {
     return `<svg viewBox="0 0 16 16" fill="none" style="${iconStyle}" aria-hidden="true"><circle cx="8" cy="8" r="5.5" stroke="#22c55e" stroke-width="1.4"></circle><path d="M5.2 8.1l1.8 1.9 3.8-4.2" stroke="#22c55e" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
