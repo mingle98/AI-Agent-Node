@@ -164,7 +164,7 @@ async function generatePlan(agent, userInput, session, chunkCallback, streamEnab
   if (streamEnabled) {
     emitStreamEvent(chunkCallback, {
       type: "status",
-      content: getPlanPhaseDivBox('📋 【PLAN】正在分析任务并生成执行计划...', 'start')
+      content: getPlanPhaseDivBox('📋 【PLAN】正在分析任务并生成执行计划', 'start')
     });
   }
 
@@ -278,7 +278,11 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
         const toolDisplayName = formatToolDisplayName(toolCall.name);
         emitStreamEvent(chunkCallback, {
           type: "status",
-          content: getToolDivBox(`🚀 【步骤 ${stepId}】执行 ${toolDisplayName} 工具`)
+          content: getToolDivBox({
+            label: `STEP ${stepId}`,
+            text: `执行「${toolDisplayName}」工具`,
+            status: "running",
+          })
         });
       }
 
@@ -315,7 +319,11 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
         const toolDisplayName = formatToolDisplayName(toolCall.name);
         emitStreamEvent(chunkCallback, {
           type: "status",
-          content: getToolDivBox(`✅ 【步骤 ${stepId}】执行 ${toolDisplayName} 完成`, 'end')
+          content: getToolDivBox({
+            label: `STEP ${stepId}`,
+            text: `工具「${toolDisplayName}」完成`,
+            status: "success",
+          }, 'end')
         });
       }
 
