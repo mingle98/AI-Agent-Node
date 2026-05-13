@@ -25,7 +25,7 @@ const _toolBranch =
   'border-radius:0;box-shadow:none;border:none;' +
   'line-height:1.35;letter-spacing:0.02em;' +
   'font-size:12px;font-weight:400;' +
-  'padding:4px 6px 1px 10px;margin:0 0 1px 8px;' +
+  'padding:2px 4px 1px 4px;margin:0 0 1px 0px;' +
   'border-left:1px solid #e5e7eb;' +
   'color:#b4bcc8;background:transparent;';
 
@@ -72,12 +72,43 @@ export function formatToolDisplayName(name, maxLength = 25) {
   return chars.length > maxLength ? `${chars.slice(0, maxLength).join("")}...` : chars.join("");
 }
 
+function escapeHtml(text) {
+  return String(text || "")
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function getToolStatusIcon(status = 'running') {
+  const iconStyle = 'display:inline-block;width:16px;height:16px;flex:0 0 16px;';
+
+  if (status === 'success') {
+    return `<svg viewBox="0 0 16 16" fill="none" style="${iconStyle}" aria-hidden="true"><circle cx="8" cy="8" r="5.5" stroke="#22c55e" stroke-width="1.4"></circle><path d="M5.2 8.1l1.8 1.9 3.8-4.2" stroke="#22c55e" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
+  }
+
+  return `<svg viewBox="0 0 16 16" fill="none" style="${iconStyle}" aria-hidden="true"><circle cx="8" cy="8" r="5.5" stroke="#94a3b8" stroke-width="1.4"></circle><path d="M8 5.1v3.1l2.2 1.3" stroke="#64748b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
+}
+
 /**
  * 工具调用（Tool）— 弱分支行
  * 用于：真实工具执行开始、完成
  */
-export function getToolDivBox(text, stType = 'content') {
+export function getToolDivBox(payload, stType = 'content') {
   try {
+    if (!payload) return '';
+
+    const normalized = typeof payload === 'string'
+      ? { text: payload, label: '', status: 'running' }
+      : payload;
+    const {
+      text = '',
+      label = '',
+      status = 'running',
+      meta = ''
+    } = normalized || {};
+
     if (!text) return '';
     const margin =
       stType === 'start'
@@ -85,8 +116,16 @@ export function getToolDivBox(text, stType = 'content') {
         : stType === 'end'
           ? 'margin-bottom:10px;'
           : '';
-    const style = `${_toolBranch}${margin}`;
-    return `<div data-tool="true" data-tool-muted="true" style="${style}">${text}</div>\n\n`;
+    const style = `${_toolBranch}${margin}display:flex;align-items:center;gap:6px;`;
+    const labelStyle =
+      'display:inline-block;font-size:10px;font-weight:600;letter-spacing:0.08em;color:#94a3b8;';
+    const textStyle = 'display:inline-block;color:#818181;';
+    const metaStyle = 'display:inline-block;margin-left:4px;color:#94a3b8;';
+    const icon = getToolStatusIcon(status);
+    const labelHtml = label ? `<span style="${labelStyle}">${escapeHtml(label)}</span>` : '';
+    const metaHtml = meta ? `<span style="${metaStyle}">${escapeHtml(meta)}</span>` : '';
+
+    return `<div data-tool="true" data-tool-muted="true" data-tool-status="${escapeHtml(status)}" style="${style}">${icon}${labelHtml}<span style="${textStyle}">${escapeHtml(text)}</span>${metaHtml}</div>\n\n`;
   } catch (error) {
     return '';
   }
