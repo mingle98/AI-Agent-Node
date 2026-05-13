@@ -167,7 +167,7 @@ async function generatePlan(agent, userInput, session, chunkCallback, streamEnab
   if (streamEnabled) {
     emitStreamEvent(chunkCallback, {
       type: "status",
-      content: getPlanPhaseDivBox('📋 【PLAN】正在分析任务并生成执行计划...', 'start')
+      content: getPlanPhaseDivBox('📋 【PLAN】正在分析任务并生成执行计划', 'start')
     });
   }
 
