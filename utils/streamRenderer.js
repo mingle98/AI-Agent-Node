@@ -25,7 +25,7 @@ const _toolBranch =
   'border-radius:0;box-shadow:none;border:none;' +
   'line-height:1.35;letter-spacing:0.02em;' +
   'font-size:12px;font-weight:400;' +
-  'padding:2px 4px 1px 4px;margin:0 0 1px 0px;' +
+  'padding:1px 4px 1px 4px;margin:0 0 1px 0px;' +
   'border-left:1px solid #e5e7eb;' +
   'color:#b4bcc8;background:transparent;';
 
@@ -112,9 +112,9 @@ export function getToolDivBox(payload, stType = 'start') {
     if (!text) return '';
     const margin =
       stType === 'start'
-        ? 'margin-top:10px;'
+        ? 'margin-top:7px;'
         : stType === 'end'
-          ? 'margin-bottom:10px;'
+          ? 'margin-bottom:7px;'
           : '';
     const style = `${_toolBranch}${margin}display:flex;align-items:center;gap:6px;`;
     const labelStyle =
