@@ -294,9 +294,8 @@ test("ProductionAgent.chat: should route search_knowledge to RAG vectorStore in 
 
   const result = await agent.chat("查知识", null, null, "rag-routing-test");
   assert.equal(result, "done");
-  assert.equal(vectorStoreCalls.length, 2);
-  assert.equal(vectorStoreCalls[0].query, "查知识");
-  assert.equal(vectorStoreCalls[1].query, "AI Agent");
+  assert.equal(vectorStoreCalls.length, 1);
+  assert.equal(vectorStoreCalls[0].query, "AI Agent");
   assert.equal(knowledgeRetrieverCalls.length, 0);
 });
 
@@ -530,9 +529,16 @@ test("ProductionAgent.chat: should replace old injected knowledge context on nex
   assert.ok(!injectedMessages[0].content.includes("知识片段:第一个问题"));
 });
 
-test("ProductionAgent.chat: should not proactively inject knowledge context when feature is disabled", async () => {
+test("ProductionAgent.chat: should not proactively inject knowledge context when config feature is disabled", async (t) => {
   const llm = new MockLLM([{ chunks: [new AIMessage({ content: "done" })] }]);
   const vectorStoreCalls = [];
+  const originalSetting = CONFIG.knowledgeDecisionReminderEnabled;
+  CONFIG.knowledgeDecisionReminderEnabled = false;
+
+  t.after(() => {
+    CONFIG.knowledgeDecisionReminderEnabled = originalSetting;
+  });
+
   const agent = new ProductionAgent(llm, {
     similaritySearch: async (query) => {
       vectorStoreCalls.push(query);
