@@ -13,6 +13,7 @@ test("CONFIG: should have required configuration fields", () => {
   assert.equal(typeof CONFIG.llmWikiAutoLearningEnabled, "boolean");
   assert.equal(typeof CONFIG.llmWikiLearningMode, "string");
   assert.equal(typeof CONFIG.longTermMemoryEnabled, "boolean");
+  assert.equal(typeof CONFIG.knowledgeDecisionReminderEnabled, "boolean");
   assert.equal(typeof CONFIG.mcpEnabled, "boolean");
   assert.equal(typeof CONFIG.mcpToolNamePrefix, "string");
   assert.equal(typeof CONFIG.mcpInitTimeoutMs, "number");

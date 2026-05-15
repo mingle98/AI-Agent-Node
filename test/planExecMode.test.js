@@ -293,6 +293,49 @@ test("ProductionAgent: plan_exec should hide search_tools from frontend tool eve
   assert.ok(!events.some((item) => item.type === "status" && typeof item.content === "string" && item.content.includes("search_tools")));
 });
 
+test("ProductionAgent: plan_exec should proactively inject knowledge context once per user turn", async () => {
+  const planResponse = new AIMessage({
+    content: JSON.stringify({
+      task_summary: "Knowledge inject task",
+      estimated_steps: 1,
+      steps: [{ step_id: 1, description: "回答问题", depends_on: [], expected_output: "done" }],
+      final_goal: "Complete"
+    })
+  });
+  const finalResponse = new AIMessage({ content: "步骤完成" });
+
+  const llm = new MockLLM([
+    { message: planResponse },
+    { message: finalResponse }
+  ]);
+
+  const vectorStoreCalls = [];
+  const agent = new ProductionAgent(llm, {
+    similaritySearch: async (query, topK) => {
+      vectorStoreCalls.push({ query, topK });
+      return [{ pageContent: "计划模式知识片段", metadata: { source: "/tmp/plan-doc.md" } }];
+    },
+  }, null, {
+    debug: false,
+    taskMode: "plan_exec",
+    streamEnabled: false,
+    contextStrategy: "trim",
+    knowledgeDecisionReminderEnabled: true,
+  });
+
+  const result = await agent.chat("plan 模式问题", null, null, "plan-knowledge-inject");
+  assert.ok(typeof result === "string");
+  assert.equal(vectorStoreCalls.length, 1);
+  assert.equal(vectorStoreCalls[0].query, "plan 模式问题");
+
+  const session = agent.getOrCreateSession("plan-knowledge-inject");
+  const injectedMessages = session.messages.filter(
+    (m) => m._getType?.() === "system" && typeof m.content === "string" && m.content.startsWith("【本轮知识库上下文】")
+  );
+  assert.equal(injectedMessages.length, 1);
+  assert.ok(injectedMessages[0].content.includes("计划模式知识片段"));
+});
+
 // ========== Plan+Exec Configuration Tests ==========
 
 test("ProductionAgent: plan_exec configuration options", () => {

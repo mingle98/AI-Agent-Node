@@ -294,8 +294,9 @@ test("ProductionAgent.chat: should route search_knowledge to RAG vectorStore in 
 
   const result = await agent.chat("查知识", null, null, "rag-routing-test");
   assert.equal(result, "done");
-  assert.equal(vectorStoreCalls.length, 1);
-  assert.equal(vectorStoreCalls[0].query, "AI Agent");
+  assert.equal(vectorStoreCalls.length, 2);
+  assert.equal(vectorStoreCalls[0].query, "查知识");
+  assert.equal(vectorStoreCalls[1].query, "AI Agent");
   assert.equal(knowledgeRetrieverCalls.length, 0);
 });
 
@@ -342,8 +343,9 @@ test("ProductionAgent.chat: should route search_knowledge to llm_wiki retriever 
 
   const result = await agent.chat("查 wiki", null, null, "wiki-routing-test");
   assert.equal(result, "done");
-  assert.equal(knowledgeRetrieverCalls.length, 1);
-  assert.equal(knowledgeRetrieverCalls[0].query, "Wiki query");
+  assert.equal(knowledgeRetrieverCalls.length, 2);
+  assert.equal(knowledgeRetrieverCalls[0].query, "查 wiki");
+  assert.equal(knowledgeRetrieverCalls[1].query, "Wiki query");
   assert.equal(vectorStoreCalls.length, 0);
 });
 
@@ -466,6 +468,86 @@ test("ProductionAgent.buildHumanMessage: should handle data URI images", async (
 
   const msg = agent.buildHumanMessage({ text: "look", images: ["data:image/png;base64,abc123"] });
   assert.ok(Array.isArray(msg.content));
+});
+
+test("ProductionAgent.chat: should proactively inject knowledge context once per user turn in react mode", async () => {
+  const llm = new MockLLM([{ chunks: [new AIMessage({ content: "done" })] }]);
+  const vectorStoreCalls = [];
+  const agent = new ProductionAgent(llm, {
+    similaritySearch: async (query, topK) => {
+      vectorStoreCalls.push({ query, topK });
+      return [{ pageContent: "知识片段A", metadata: { source: "/tmp/doc-a.md" } }];
+    },
+  }, null, {
+    debug: false,
+    maxIterations: 2,
+    contextStrategy: "trim",
+    knowledgeDecisionReminderEnabled: true,
+  });
+
+  const result = await agent.chat("请解释 Agent 架构", null, null, "react-knowledge-inject-once");
+  assert.equal(result, "done");
+  assert.equal(vectorStoreCalls.length, 1);
+  assert.equal(vectorStoreCalls[0].query, "请解释 Agent 架构");
+
+  const session = agent.getOrCreateSession("react-knowledge-inject-once");
+  const injectedMessages = session.messages.filter(
+    (m) => m._getType?.() === "system" && typeof m.content === "string" && m.content.startsWith("【本轮知识库上下文】")
+  );
+  assert.equal(injectedMessages.length, 1);
+  assert.ok(injectedMessages[0].content.includes("知识片段A"));
+});
+
+test("ProductionAgent.chat: should replace old injected knowledge context on next user turn", async () => {
+  const llm = new MockLLM([
+    { chunks: [new AIMessage({ content: "first" })] },
+    { chunks: [new AIMessage({ content: "second" })] },
+  ]);
+  const queries = [];
+  const agent = new ProductionAgent(llm, {
+    similaritySearch: async (query) => {
+      queries.push(query);
+      return [{ pageContent: `知识片段:${query}`, metadata: { source: "/tmp/doc.md" } }];
+    },
+  }, null, {
+    debug: false,
+    maxIterations: 2,
+    contextStrategy: "trim",
+    knowledgeDecisionReminderEnabled: true,
+  });
+
+  await agent.chat("第一个问题", null, null, "react-knowledge-replace");
+  await agent.chat("第二个问题", null, null, "react-knowledge-replace");
+
+  assert.deepEqual(queries, ["第一个问题", "第二个问题"]);
+
+  const session = agent.getOrCreateSession("react-knowledge-replace");
+  const injectedMessages = session.messages.filter(
+    (m) => m._getType?.() === "system" && typeof m.content === "string" && m.content.startsWith("【本轮知识库上下文】")
+  );
+  assert.equal(injectedMessages.length, 1);
+  assert.ok(injectedMessages[0].content.includes("知识片段:第二个问题"));
+  assert.ok(!injectedMessages[0].content.includes("知识片段:第一个问题"));
+});
+
+test("ProductionAgent.chat: should not proactively inject knowledge context when feature is disabled", async () => {
+  const llm = new MockLLM([{ chunks: [new AIMessage({ content: "done" })] }]);
+  const vectorStoreCalls = [];
+  const agent = new ProductionAgent(llm, {
+    similaritySearch: async (query) => {
+      vectorStoreCalls.push(query);
+      return [{ pageContent: "知识片段", metadata: { source: "/tmp/doc.md" } }];
+    },
+  }, null, {
+    debug: false,
+    maxIterations: 2,
+    contextStrategy: "trim",
+    knowledgeDecisionReminderEnabled: false,
+  });
+
+  const result = await agent.chat("不开启注入", null, null, "react-knowledge-disabled");
+  assert.equal(result, "done");
+  assert.equal(vectorStoreCalls.length, 0);
 });
 
 

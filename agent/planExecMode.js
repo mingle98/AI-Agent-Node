@@ -499,11 +499,17 @@ export async function chatWithPlanExec(agent, userInput, chunkCallback, fullResp
       agent.ensureRequestActive(session, requestState, sessionId);
 
       // 构建并记录用户消息（关键：保持与 chatWithReAct 一致的上下文处理）
+      session.messages = agent.stripInjectedKnowledgeContextMessages(session.messages);
       const addMessage = agent.buildHumanMessage(userInput);
       if (agent.options.debug) {
         console.log(`👤 [${sessionId}] 用户消息:`, addMessage.toString());
       }
       session.messages.push(addMessage);
+      const injectedKnowledgeContext = await agent.getInjectedKnowledgeContext(userInput);
+      console.log(`📚 [${sessionId}] 知识库上下文注入: ${injectedKnowledgeContext ? "已命中" : "未命中"}`);
+      if (injectedKnowledgeContext) {
+        session.messages.push(new SystemMessage(injectedKnowledgeContext));
+      }
       await agent.manageContext(session);
 
       agent.ensureRequestActive(session, requestState, sessionId);

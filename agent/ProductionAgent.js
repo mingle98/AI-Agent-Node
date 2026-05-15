@@ -17,6 +17,33 @@ import { processLLMWikiLearning } from "../utils/llmWikiBuilder.js";
 
 const SEARCH_TOOLS_NAME = "search_tools";
 
+const KNOWLEDGE_CONTEXT_PREFIX = "【本轮知识库上下文】";
+
+function buildInjectedKnowledgeContextMessage(knowledgeContext = "") {
+  const normalized = String(knowledgeContext || "").trim();
+  if (!normalized) return "";
+  return [
+    KNOWLEDGE_CONTEXT_PREFIX,
+    "以下内容是系统已主动检索到的知识，请优先基于这些内容回答当前问题。",
+    "这份知识库内容已经由系统检索完成，本轮不要再次调用 search_knowledge；只有当用户明确要求继续深挖文档、当前片段明显不足以回答，或需要检索其他主题时，才允许再次调用。",
+    "如果当前片段已足够，直接回答。",
+    normalized,
+  ].join("\n");
+}
+
+function isInjectedKnowledgeContextMessage(message) {
+  return message?._getType?.() === "system"
+    && typeof message?.content === "string"
+    && message.content.startsWith(KNOWLEDGE_CONTEXT_PREFIX);
+}
+
+function stripInjectedKnowledgeContextMessages(messages = []) {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return messages;
+  }
+  return messages.filter((message) => !isInjectedKnowledgeContextMessage(message));
+}
+
 // ========== 会话中止错误类 ==========
 export class AbortError extends Error {
   constructor(message = "Session aborted by client") {
@@ -43,6 +70,24 @@ function normalizeUserQuestion(input) {
     return String(input.text || "").trim();
   }
   return String(input || "").trim();
+}
+
+function shouldSkipKnowledgeInjectionQuery(input) {
+  const normalized = normalizeUserQuestion(input);
+  if (!normalized) {
+    return true;
+  }
+
+  const compact = normalized.replace(/[\s\p{P}\p{S}]/gu, "");
+  if (!compact) {
+    return true;
+  }
+
+  if (/^\d+$/u.test(compact)) {
+    return true;
+  }
+
+  return compact.length < 4;
 }
 
 function toJsonSchemaType(type) {
@@ -225,6 +270,8 @@ export class ProductionAgent {
         updateInterval: options.memoryUpdateInterval || CONFIG.memoryUpdateInterval,
       });
     }
+
+    this.knowledgeDecisionReminderEnabled = CONFIG.knowledgeDecisionReminderEnabled !== false;
 
     this.capabilityRoutingEnabled = options.capabilityRoutingEnabled === true;
     this.compactSystemPrompt = this.capabilityRoutingEnabled || false;
@@ -1074,6 +1121,41 @@ export class ProductionAgent {
     return this.beginRequest(session);
   }
 
+  async getInjectedKnowledgeContext(userInput) {
+    if (!this.knowledgeDecisionReminderEnabled) {
+      return "";
+    }
+    if (!this.vectorStore && !this.knowledgeRetriever) {
+      return "";
+    }
+    if (shouldSkipKnowledgeInjectionQuery(userInput)) {
+      return "";
+    }
+    const userInputText = typeof userInput === "string"
+      ? userInput
+      : String(userInput?.text || "");
+    if (!userInputText.trim()) {
+      return "";
+    }
+    try {
+      const knowledgeContext = await searchKnowledgeBase(
+        { vectorStore: this.vectorStore, knowledgeRetriever: this.knowledgeRetriever },
+        userInputText
+      );
+      if (!knowledgeContext || knowledgeContext.includes("知识库中未找到相关信息")) {
+        return "";
+      }
+      return buildInjectedKnowledgeContextMessage(knowledgeContext);
+    } catch (error) {
+      console.warn(`⚠️ 知识库主动注入失败: ${error.message}`);
+      return "";
+    }
+  }
+
+  stripInjectedKnowledgeContextMessages(messages = []) {
+    return stripInjectedKnowledgeContextMessages(messages);
+  }
+
   // ========== 任务入口 ==========
   async chat(
     userInput,
@@ -1170,11 +1252,17 @@ export class ProductionAgent {
         const logText = typeof userInput === "string" ? userInput : (userInput?.text || "[多模态输入]");
         console.log(`👤 [${sessionId}] 用户: ${logText}`);
         if (!skipUserMessageAppend) {
+          session.messages = stripInjectedKnowledgeContextMessages(session.messages);
           const addMessage = this.buildHumanMessage(userInput);
           if (this.options.debug) {
             console.log(`👤 [${sessionId}] 用户消息:`, addMessage.toString());
           }
           session.messages.push(addMessage);
+          const injectedKnowledgeContext = await this.getInjectedKnowledgeContext(userInput);
+          console.log(`📚 [${sessionId}] 知识库上下文注入: ${injectedKnowledgeContext ? "已命中" : "未命中"}`);
+          if (injectedKnowledgeContext) {
+            session.messages.push(new SystemMessage(injectedKnowledgeContext));
+          }
           await this.manageContext(session);
         }
 
