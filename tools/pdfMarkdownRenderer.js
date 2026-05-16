@@ -118,6 +118,34 @@ function mergeSegments(segments) {
   return merged;
 }
 
+function ensureDocY(doc, ctx) {
+  if (!Number.isFinite(doc.y) || doc.y < ctx.margin) {
+    doc.y = ctx.margin;
+  }
+}
+
+function getPageBottom(doc, ctx) {
+  return doc.page.height - ctx.margin;
+}
+
+function getRemainingHeight(doc, ctx) {
+  ensureDocY(doc, ctx);
+  return Math.max(0, getPageBottom(doc, ctx) - doc.y);
+}
+
+function startNewPage(doc, ctx) {
+  doc.addPage();
+  doc.y = ctx.margin;
+}
+
+function ensurePageSpace(doc, ctx, needed = 0, minFallback = 18) {
+  ensureDocY(doc, ctx);
+  const threshold = Math.max(Number(needed) || 0, minFallback);
+  if (getRemainingHeight(doc, ctx) < threshold && doc.y > ctx.margin) {
+    startNewPage(doc, ctx);
+  }
+}
+
 function applySegmentStyle(doc, seg, ctx) {
   let size = ctx.baseSize;
   if (seg.code) size -= 1;
@@ -149,9 +177,17 @@ function applySegmentStyle(doc, seg, ctx) {
 function drawSegments(doc, segments, ctx, x, width) {
   const merged = mergeSegments(segments).filter((s) => s.text != null && String(s.text).length > 0);
   if (!merged.length) {
+    ensurePageSpace(doc, ctx, ctx.baseSize * 0.6, 12);
     doc.moveDown(0.15);
     return;
   }
+
+  const estimatedHeight = merged.reduce((sum, seg) => {
+    applySegmentStyle(doc, seg, ctx);
+    return sum + doc.heightOfString(String(seg.text), { width: Math.max(1, width) });
+  }, 0);
+  ensurePageSpace(doc, ctx, Math.min(estimatedHeight + 8, getPageBottom(doc, ctx) - ctx.margin), 18);
+
   const yStart = Number.isFinite(doc.y) ? doc.y : ctx.margin;
   doc.y = yStart;
   for (let i = 0; i < merged.length; i++) {
@@ -183,35 +219,81 @@ function renderCodeBlock(doc, token, ctx) {
   const pad = 8;
   const lang = token.lang ? ` ${token.lang}` : "";
   const code = String(token.text || "").replace(/\r\n/g, "\n");
-
-  const y0 = doc.y;
   const fs = Math.max(9, ctx.baseSize - 1);
-  doc.font(ctx.hasChineseFont ? ctx.chineseFontName : "Courier").fontSize(fs);
+  const lineGap = 2;
+  const lines = code.split("\n");
+  const lineHeight = fs + lineGap;
+  const langHeight = lang ? fs + 4 : 0;
+  const availableHeight = Math.max(60, getPageBottom(doc, ctx) - ctx.margin);
+  const chunkCapacity = Math.max(1, Math.floor((availableHeight - 2 * pad - langHeight) / lineHeight));
 
-  const textHeight = doc.heightOfString(code, { width: w - 2 * pad });
-  const boxH = textHeight + 2 * pad + (lang ? fs + 4 : 0);
+  let start = 0;
+  while (start < lines.length || (lines.length === 1 && lines[0] === "" && start === 0)) {
+    const isFirstChunk = start === 0;
+    const visibleLangHeight = isFirstChunk ? langHeight : 0;
+    const end = Math.min(lines.length, start + chunkCapacity);
+    const chunkLines = lines.slice(start, end);
+    const chunkText = chunkLines.join("\n") || " ";
+    const textHeight = Math.max(lineHeight, chunkLines.length * lineHeight);
+    const boxH = textHeight + 2 * pad + visibleLangHeight;
 
-  doc.save();
-  doc.rect(margin, y0, w, boxH).fill("#f1f5f9");
-  doc.fillColor("#334155");
+    ensurePageSpace(doc, ctx, boxH + 6, 40);
+    const y0 = doc.y;
 
-  let ty = y0 + pad;
-  if (lang) {
-    doc.fontSize(fs - 1).fillColor("#64748b").text(lang.trim(), margin + pad, ty, { width: w - 2 * pad });
-    ty += fs + 2;
+    doc.save();
+    doc.rect(margin, y0, w, boxH).fill("#f1f5f9");
+
+    let ty = y0 + pad;
+    if (isFirstChunk && lang) {
+      doc.font(ctx.hasChineseFont ? ctx.chineseFontName : "Helvetica")
+        .fontSize(fs - 1)
+        .fillColor("#64748b")
+        .text(lang.trim(), margin + pad, ty, { width: w - 2 * pad });
+      ty += fs + 2;
+    }
+
+    doc.font(ctx.hasChineseFont ? ctx.chineseFontName : "Courier")
+      .fontSize(fs)
+      .fillColor("#1e293b")
+      .text(chunkText, margin + pad, ty, {
+        width: w - 2 * pad,
+        lineGap,
+      });
+    doc.restore();
+
+    doc.y = y0 + boxH + 6;
+    start = end;
+    if (lines.length === 1 && lines[0] === "") break;
   }
-  doc.fontSize(fs).fillColor("#1e293b");
-  doc.font(ctx.hasChineseFont ? ctx.chineseFontName : "Courier");
-  doc.text(code, margin + pad, ty, { width: w - 2 * pad });
-  doc.restore();
-
-  doc.y = y0 + boxH + 6;
 }
 
 function renderHr(doc, ctx) {
+  ensurePageSpace(doc, ctx, 14, 14);
   const y = doc.y + 4;
   doc.moveTo(ctx.margin, y).lineTo(ctx.margin + ctx.contentWidth, y).strokeColor("#cbd5e1").lineWidth(0.5).stroke();
   doc.y = y + 10;
+}
+
+function drawTableRow(doc, row, rowHeight, cols, colW, pad, margin, w, fs, ctx, alignments, isHead) {
+  const y = doc.y;
+  if (isHead) {
+    doc.rect(margin, y, w, rowHeight).fill("#f1f5f9");
+  }
+  doc.rect(margin, y, w, rowHeight).strokeColor("#cbd5e1").lineWidth(0.5).stroke();
+
+  for (let c = 0; c < cols; c++) {
+    const x = margin + c * colW;
+    if (c > 0) {
+      doc.moveTo(x, y).lineTo(x, y + rowHeight).strokeColor("#cbd5e1").lineWidth(0.5).stroke();
+    }
+    const txt = row[c]?.plain || "";
+    doc.fillColor(isHead ? "#0f172a" : "#334155");
+    doc.font(ctx.hasChineseFont ? ctx.chineseFontName : "Helvetica");
+    doc.fontSize(isHead ? fs + 0.5 : fs);
+    doc.text(txt, x + pad, y + pad, { width: colW - 2 * pad, align: alignments[c] });
+  }
+
+  doc.y = y + rowHeight;
 }
 
 function renderTable(doc, token, ctx) {
@@ -234,47 +316,33 @@ function renderTable(doc, token, ctx) {
     return doc.heightOfString(text || " ", { width: colW - 2 * pad });
   };
 
-  const allRows = [token.header, ...(token.rows || [])];
-  const heights = allRows.map((row) => {
-    let maxH = fs + 2 * pad;
-    for (let c = 0; c < cols; c++) {
-      const txt = cellPlain(row[c]);
-      maxH = Math.max(maxH, cellTextHeight(txt) + 2 * pad);
-    }
-    return maxH;
+  const alignments = Array.from({ length: cols }, (_, c) => {
+    const rawAlign = token.align?.[c] || "left";
+    return rawAlign === "right" ? "right" : rawAlign === "center" ? "center" : "left";
   });
 
-  let y = doc.y;
-  const totalH = heights.reduce((a, b) => a + b, 0);
+  const rows = [token.header, ...(token.rows || [])].map((row, index) => {
+    const cells = Array.from({ length: cols }, (_, c) => {
+      const plain = cellPlain(row[c]);
+      return { plain };
+    });
+    const height = cells.reduce((maxH, cell) => Math.max(maxH, cellTextHeight(cell.plain) + 2 * pad), fs + 2 * pad);
+    return { cells, height, isHead: index === 0 };
+  });
 
-  doc.save();
-  doc.rect(margin, y, w, totalH).strokeColor("#cbd5e1").lineWidth(0.5).stroke();
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const headerRepeatHeight = !row.isHead && rows[0] ? rows[0].height : 0;
+    ensurePageSpace(doc, ctx, row.height + headerRepeatHeight + 8, 24);
 
-  let ry = y;
-  for (let r = 0; r < allRows.length; r++) {
-    const h = heights[r];
-    const isHead = r === 0;
-    if (isHead) {
-      doc.rect(margin, ry, w, h).fill("#f1f5f9");
+    if (i > 0 && doc.y === ctx.margin && rows[0]) {
+      drawTableRow(doc, rows[0].cells, rows[0].height, cols, colW, pad, margin, w, fs, ctx, alignments, true);
     }
-    doc.moveTo(margin, ry + h).lineTo(margin + w, ry + h).strokeColor("#cbd5e1").lineWidth(0.5).stroke();
 
-    for (let c = 0; c < cols; c++) {
-      const x = margin + c * colW;
-      if (c > 0) {
-        doc.moveTo(x, ry).lineTo(x, ry + h).strokeColor("#cbd5e1").lineWidth(0.5).stroke();
-      }
-      const txt = cellPlain(allRows[r][c]);
-      doc.fillColor(isHead ? "#0f172a" : "#334155");
-      doc.font(ctx.hasChineseFont ? ctx.chineseFontName : "Helvetica");
-      doc.fontSize(isHead ? fs + 0.5 : fs);
-      const align = (token.align?.[c] || "left") === "right" ? "right" : token.align?.[c] === "center" ? "center" : "left";
-      doc.text(txt, x + pad, ry + pad, { width: colW - 2 * pad, align });
-    }
-    ry += h;
+    drawTableRow(doc, row.cells, row.height, cols, colW, pad, margin, w, fs, ctx, alignments, row.isHead);
   }
-  doc.restore();
-  doc.y = y + totalH + 8;
+
+  doc.y += 8;
 }
 
 function renderBlockquote(doc, token, ctx) {
@@ -282,15 +350,35 @@ function renderBlockquote(doc, token, ctx) {
   const gap = 10;
   const inner = ctx.margin + barW + gap;
   const w = ctx.contentWidth - barW - gap;
-  const yStart = doc.y;
 
   const subCtx = { ...ctx, margin: inner, contentWidth: w };
-  renderBlockTokens(doc, token.tokens || [], subCtx, 0);
-  const yEnd = doc.y;
+  const blocks = token.tokens || [];
+  let chunk = [];
 
-  doc.save();
-  doc.fillColor("#e2e8f0").rect(ctx.margin, yStart, barW, Math.max(yEnd - yStart, 12)).fill();
-  doc.restore();
+  const flushChunk = () => {
+    if (!chunk.length) return;
+    ensurePageSpace(doc, ctx, subCtx.baseSize * 1.6, 18);
+    const yStart = doc.y;
+    renderBlockTokens(doc, chunk, subCtx, 0);
+    const yEnd = doc.y;
+    doc.save();
+    doc.fillColor("#e2e8f0").rect(ctx.margin, yStart, barW, Math.max(yEnd - yStart, 12)).fill();
+    doc.restore();
+    chunk = [];
+  };
+
+  for (const block of blocks) {
+    if (block.type === "space") {
+      chunk.push(block);
+      flushChunk();
+      continue;
+    }
+    chunk.push(block);
+    if (["heading", "paragraph", "text", "code", "table", "hr", "list"].includes(block.type)) {
+      flushChunk();
+    }
+  }
+  flushChunk();
   doc.moveDown(0.15);
 }
 
@@ -327,12 +415,14 @@ function renderBlockTokens(doc, tokens, ctx, listDepth = 0) {
   for (const token of tokens) {
     switch (token.type) {
       case "space":
+        ensurePageSpace(doc, ctx, 12, 12);
         doc.moveDown(0.15);
         break;
       case "heading": {
         const hs = headingSize(token.depth);
         const save = ctx.baseSize;
         ctx.baseSize = hs;
+        ensurePageSpace(doc, ctx, hs * 2.2, 28);
         doc.moveDown(0.2);
         if (ctx.hasChineseFont) doc.font(ctx.chineseFontName);
         else doc.font("Helvetica-Bold");
@@ -353,6 +443,7 @@ function renderBlockTokens(doc, tokens, ctx, listDepth = 0) {
         );
         break;
       case "list":
+        ensurePageSpace(doc, ctx, ctx.baseSize * 1.8, 18);
         renderList(doc, token, ctx, listDepth);
         break;
       case "code":
@@ -369,6 +460,7 @@ function renderBlockTokens(doc, tokens, ctx, listDepth = 0) {
         break;
       case "html":
         if (token.text) {
+          ensurePageSpace(doc, ctx, ctx.baseSize * 1.6, 18);
           doc.font(ctx.hasChineseFont ? ctx.chineseFontName : "Helvetica").fontSize(ctx.baseSize).fillColor("#64748b");
           doc.text(token.text, ctx.margin, doc.y, { width: ctx.contentWidth });
           doc.moveDown(0.2);
@@ -376,6 +468,7 @@ function renderBlockTokens(doc, tokens, ctx, listDepth = 0) {
         break;
       default:
         if (token.text) {
+          ensurePageSpace(doc, ctx, ctx.baseSize * 1.6, 18);
           doc.font(ctx.hasChineseFont ? ctx.chineseFontName : "Helvetica").fontSize(ctx.baseSize).fillColor("#0f172a");
           doc.text(token.text, ctx.margin, doc.y, { width: ctx.contentWidth });
           doc.moveDown(0.2);
@@ -422,7 +515,9 @@ export function renderMarkdownOnPdf(doc, markdown, opts = {}) {
     ];
   }
 
-  doc.y = margin;
+  if (!Number.isFinite(doc.y) || doc.y < margin) {
+    doc.y = margin;
+  }
 
   if (title && String(title).trim() && title !== "Document") {
     const save = ctx.baseSize;

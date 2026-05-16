@@ -34,8 +34,16 @@ import { TOOLS } from "../tools/index.js";
 function makeDoc() {
   const doc = new PDFDocument({ size: "A4", margin: 50 });
   const chunks = [];
+  let pageAddedCount = 0;
   doc.on("data", (c) => chunks.push(c));
-  return { doc, chunks };
+  doc.on("pageAdded", () => {
+    pageAddedCount += 1;
+  });
+  return {
+    doc,
+    chunks,
+    getPageCount: () => 1 + pageAddedCount,
+  };
 }
 
 async function endAndBuffer(doc, chunks) {
@@ -454,6 +462,93 @@ test("renderMarkdownOnPdf: 段落中混排多种行内样式", async () => {
   });
   const buf = await endAndBuffer(doc, chunks);
   assert.ok(buf.length > 100);
+});
+
+test("renderMarkdownOnPdf: 多页代码块与表格安全分页", async () => {
+  const { doc, chunks, getPageCount } = makeDoc();
+  doc.font("Helvetica");
+  const codeLines = Array.from({ length: 120 }, (_, i) => `console.log('line ${i + 1}')`).join("\n");
+  const tableRows = Array.from({ length: 40 }, (_, i) => `| 行 ${i + 1} | 内容 ${"数据".repeat(8)} |`).join("\n");
+  const md =
+    "# 跨页块测试\n\n" +
+    "```javascript\n" +
+    codeLines +
+    "\n```\n\n" +
+    "| 标题 | 说明 |\n" +
+    "| --- | --- |\n" +
+    tableRows;
+
+  assert.doesNotThrow(() => {
+    renderMarkdownOnPdf(doc, md, {});
+  });
+  const buf = await endAndBuffer(doc, chunks);
+  assert.ok(buf.length > 500);
+  assert.ok(getPageCount() >= 2);
+});
+
+test("renderMarkdownOnPdf: blockquote 跨页不应抛错", async () => {
+  const { doc, chunks, getPageCount } = makeDoc();
+  doc.font("Helvetica");
+  const quoteBody = Array.from({ length: 140 }, (_, i) => `> 这是第 ${i + 1} 行引用内容，${"测试文本".repeat(12)}`).join("\n");
+  assert.doesNotThrow(() => {
+    renderMarkdownOnPdf(doc, quoteBody, {});
+  });
+  const buf = await endAndBuffer(doc, chunks);
+  assert.ok(buf.length > 300);
+  assert.ok(getPageCount() >= 2);
+});
+
+test("renderMarkdownOnPdf: 实际政策汇总样式内容分页稳定", async () => {
+  const { doc, chunks, getPageCount } = makeDoc();
+  doc.font("Helvetica");
+  const repeatEmploymentBlock = Array.from({ length: 36 }, (_, i) => (
+    `### 就业带动（案例 ${i + 1}）\n` +
+    `- 无带动1人就业，年补贴1000元，最高2万元/年（3年）\n` +
+    `- 吸纳重点群体就业可叠加社保补贴与岗位补贴\n` +
+    `- 区级政策通常要求企业正常经营、依法纳税、按期申报\n`
+  )).join("\n");
+
+  const md =
+    "# 一人公司政策汇总\n\n" +
+    "## 1. 杭州市 —— 《支持一人公司 OPC 创新创业发展的若干举措》（2026年4月）\n\n" +
+    "核心政策\n\n" +
+    "| 类别 | 内容 |\n" +
+    "| --- | --- |\n" +
+    "| 审批简化 | 全程网办 + 半天办结；首套公章免费刻制；电子执照免费申领 |\n" +
+    "| 地址灵活 | 推行工位注册、一址多照、免房产证明 |\n" +
+    "| 治理简化 | 一人可兼任法人、执行董事、经理，无需监事 |\n" +
+    "| 税收优惠 | 增值税免征（小规模纳税人月销<10万）；企业所得税实际税负约5% |\n" +
+    "| 创业补贴 | 初次创办且经营满6个月，补贴3000元（大学生/失业人员） |\n\n" +
+    "注册流程\n\n" +
+    "1. 登录“浙里办”企业开办专区\n" +
+    "2. 名称自主申报（准备 3-5 个备选名）\n" +
+    "3. 填写经营范围、注册资本（建议10-50万，5年内实缴）\n" +
+    "4. 提交法人/股东信息、股权比例（100%独资）\n" +
+    "5. 选择注册地址（自有/租赁/园区工位）\n" +
+    "6. 审核通过后领取营业执照（最快半天）\n" +
+    "7. 免费刻章、申领电子执照\n\n" +
+    "## 2. 上海市 —— 各区差异化补贴\n\n" +
+    "### 临港区\n" +
+    "- 团办公与住宿：前3年享租金减免\n" +
+    "- 算力补贴：最高30万元\n" +
+    "- 融资支持：最高500万元 + 80万元创业担保贷款\n" +
+    "- 人才政策：直接落户 / 绿色通道 / 创业保险\n\n" +
+    "### 徐汇区\n" +
+    "- 办公支持：首年工位全免，优秀者再免1年 + 租房补贴2000元/月\n" +
+    "- 核心资源：“三券”（算力 / 模型 / 语料），每项最高100万元\n" +
+    "- 资金支持：启动资金最高10万元 + 赛事奖励最高500万元\n\n" +
+    "### 浦东新区（张江）\n" +
+    "- 园区孵化：可申请低成本工位、联合办公和公共会议室\n" +
+    "- 科创支持：对人工智能、数据、芯片类项目优先推荐入库\n" +
+    "- 金融支持：贷款贴息、知识产权质押融资、人才安居政策\n\n" +
+    repeatEmploymentBlock;
+
+  assert.doesNotThrow(() => {
+    renderMarkdownOnPdf(doc, md, { title: "政策汇总复现测试" });
+  });
+  const buf = await endAndBuffer(doc, chunks);
+  assert.ok(buf.length > 1200);
+  assert.ok(getPageCount() >= 4);
 });
 
 // ---------------------------------------------------------------------------
