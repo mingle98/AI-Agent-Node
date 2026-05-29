@@ -1,6 +1,6 @@
-# AISuspendedBallChat
+# AISuspendedBallChat(AI助手组件)
 
-一个功能强大的AI聊天Vue3组件，支持流式响应、图片上传、语音播报、历史记录管理等功能。可以作为悬浮球或独立面板使用。
+一个功能强大的AI聊天Vue3组件，支持流式响应、图片上传、语音播报、历史记录管理等功能。该AI组件可以作为悬浮球或独立面板使用。
 ![Snipaste_2025-08-31_19-48-18.png](https://luckycola.com.cn/public/imgs/luckycola_Imghub_forever_8sbgSs4M17686524429047868.jpeg)
 
 **《组件落地场景体验1-AI简历助手》**: [点击直达案例1🔗](https://luckycola.com.cn/public/resume/?t=123456789#/resume)
@@ -27,6 +27,7 @@
 - ☎️ **问题工单搜集**: 支持搜集需人工处理的问题
 - 📅 **渲染自定义组件**: 对话流中支持渲染自定义系列的组件(shoelace)
 - 📊 **ECharts 图表渲染**: 支持在 Markdown 中使用 echarts 代码块渲染图表
+- 🎛️ **更多抽屉**: 支持自定义"更多"抽屉面板，可通过插槽渲染自定义内容
 
 
 ## 📦 安装
@@ -304,6 +305,28 @@ const assistantConfig = {
 - 如果不提供 `assistant-config.avatar`，将使用默认的SVG图标
 - 自定义头像会自动适应头像容器的大小和样式
 
+### 自定义"更多"抽屉
+
+启用 `show-more-button` 后，点击头部"更多"按钮会从右侧滑出抽屉，内容通过 `#more` 插槽自定义：
+
+```vue
+<template>
+  <SuspendedBallChat
+    :show-more-button="true"
+    more-drawer-title="更多"
+  >
+    <template #more="{ close }">
+      <div style="padding: 20px;">
+        <p>这里放你的自定义内容</p>
+        <button @click="close">关闭</button>
+      </div>
+    </template>
+  </SuspendedBallChat>
+</template>
+```
+
+`ChatPanel` 组件用法相同。插槽参数 `{ close }` 可用于关闭抽屉。
+
 ## 📋 API 参考
 
 ### SuspendedBallChat Props
@@ -335,6 +358,7 @@ const assistantConfig = {
 | `enable-deep-thinking` | `boolean` | `false` | 是否显示深度思考模式开关；开启后用户可在输入区切换该模式，发送请求时会影响请求参数中的 `isThinkMode` 值 |
 | `custom-tools` | `ChatInputCustomTool[]` | `[]` | 输入区顶部自定义工具配置；支持通过数组渲染自定义工具按钮，可选激活态，并可通过 `clickCallback` 响应点击事件 |
 | `show-avatar` | `boolean` | `true` | 是否显示聊天头像（移动端小屏幕会强制隐藏） |
+| `align-user-messages-right` | `boolean` | `false` | 是否将用户消息布局到右侧，开启后更接近传统聊天界面布局 |
 | `enable-auto-speech` | `boolean` | `false` | 是否启用AI助理完成输出后自动语音播报 |
 | `title` | `string` | `'AI助手'` | 聊天面板标题 |
 | `show-header` | `boolean` | `true` | 是否显示头部 |
@@ -342,6 +366,8 @@ const assistantConfig = {
 | `show-clear-button` | `boolean` | `false` | 是否显示清除按钮 |
 | `show-theme-toggle` | `boolean` | `false` | 是否显示白天/夜间模式切换按钮 |
 | `show-feedback-button` | `boolean` | `false` | 是否显示工单提交按钮 |
+| `show-more-button` | `boolean` | `false` | 是否显示"更多"按钮，点击后从右侧滑出抽屉面板 |
+| `more-drawer-title` | `string` | `'更多'` | "更多"抽屉面板的标题 |
 | `enable-fullscreen-toggle` | `boolean` | `false` | 是否启用全屏切换功能（仅悬浮球模式下显示全屏切换按钮） |
 | `welcome-config` | `WelcomeConfig` | - | 欢迎界面配置 |
 | `preset-tasks` | `PresetTask[]` | - | 预设任务列表 |
@@ -375,6 +401,7 @@ const assistantConfig = {
 | `enable-deep-thinking` | `boolean` | `false` | 是否显示深度思考模式开关；开启后用户可在输入区切换该模式，发送请求时会影响请求参数中的 `isThinkMode` 值 |
 | `custom-tools` | `ChatInputCustomTool[]` | `[]` | 输入区顶部自定义工具配置；支持通过数组渲染自定义工具按钮，可选激活态，并可通过 `clickCallback` 响应点击事件 |
 | `show-avatar` | `boolean` | `true` | 是否显示聊天头像（移动端小屏幕会强制隐藏） |
+| `align-user-messages-right` | `boolean` | `false` | 是否将用户消息布局到右侧，开启后更接近传统聊天界面布局 |
 | `enable-auto-speech` | `boolean` | `false` | 是否启用AI助理完成输出后自动语音播报 |
 | `title` | `string` | `'AI助手'` | 聊天面板标题 |
 | `show-header` | `boolean` | `true` | 是否显示头部 |
@@ -382,6 +409,8 @@ const assistantConfig = {
 | `show-clear-button` | `boolean` | `false` | 是否显示清除按钮 |
 | `show-theme-toggle` | `boolean` | `false` | 是否显示白天/夜间模式切换按钮 |
 | `show-feedback-button` | `boolean` | `false` | 是否显示工单提交按钮 |
+| `show-more-button` | `boolean` | `false` | 是否显示"更多"按钮，点击后从右侧滑出抽屉面板 |
+| `more-drawer-title` | `string` | `'更多'` | "更多"抽屉面板的标题 |
 | `welcome-config` | `WelcomeConfig` | - | 欢迎界面配置 |
 | `preset-tasks` | `PresetTask[]` | - | 预设任务列表 |
 | `assistant-config` | `AssistantConfig` | - | AI助手配置 |
