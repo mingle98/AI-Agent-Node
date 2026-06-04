@@ -129,7 +129,7 @@ const DOMAIN_PATTERNS = [
   {
     test: /(教学|学习|讲解|教程|入门|原理|是什么|怎么用|如何使用|架构|概念|对比|区别|ai\s*agent|智能体)/i,
     tools: ["search_knowledge"],
-    skills: ["ai_agent_teaching", "component_consulting", "code_explanation"],
+    skills: ["ai_agent_teaching", "code_explanation"],
   },
   {
     test: /(分析数据|统计|转化率|加权|脚本|python|pandas|numpy|matplotlib|回归分析|预测|建模|批处理|自动化脚本|数据处理|数据清洗)/i,
