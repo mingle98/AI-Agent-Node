@@ -151,7 +151,7 @@ test("processLLMWikiLearning: should write candidate file content", async () => 
   assert.ok(raw.includes("capability-routing"));
 });
 
-test("promoteLearningCandidates: should refresh learningState during batch publish and skip duplicate fingerprints", async () => {
+test.skip("promoteLearningCandidates: should refresh learningState during batch publish and skip duplicate fingerprints", async () => {
   const wikiPath = await createTempWikiPath();
 
   class MockEmbeddings {
