@@ -846,6 +846,7 @@ export const SKILL_DEFINITIONS = [
    - `.md` - Markdown 文件
    - `.pdf` - PDF 文件
    - `.epub` - EPUB 电子书
+   - ...
 
 ### 自定义提示词
 
