@@ -16,12 +16,11 @@ export async function skillAIAgentTeaching(topic, level = "beginner") {
       content: `AI Agent 教学内容:\n\n` +
         `主题: ${topic}\n` +
         `难度: ${level}\n\n` +
-        `本技能将调用知识库中的AI Agent学习资料，为用户提供：\n` +
+        `请结合本轮已检索到的知识库内容，为用户整理：\n` +
         `1. 核心概念解释\n` +
         `2. 实际案例分析\n` +
         `3. 最佳实践建议\n` +
-        `4. 常见问题解答\n\n` +
-        `建议先使用 search_knowledge 工具查询相关资料。`
+        `4. 常见问题解答`
     };
     
     return JSON.stringify(teachingContent, null, 2);
