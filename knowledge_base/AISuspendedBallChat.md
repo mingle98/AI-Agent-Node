@@ -327,6 +327,72 @@ const assistantConfig = {
 
 `ChatPanel` 组件用法相同。插槽参数 `{ close }` 可用于关闭抽屉。
 
+### 自定义聊天内容区插槽
+
+`ChatPanel、SuspendedBallChat` 还支持在聊天内容区上下方注入自定义内容，适合补充公告、说明、快捷操作等能力。
+
+```vue
+<template>
+  <ChatPanel :url="apiUrl" :app-name="appName" :domain-name="domainName">
+    <template #chat-box-head="{ uiHistory, showWelcomeScreen, isStreaming }">
+      <div>
+        <p>顶部插槽示例</p>
+        <span>消息数：{{ uiHistory.length }}</span>
+      </div>
+    </template>
+
+    <template #chat-box-footer="{ uiHistory, showWelcomeScreen, isStreaming }">
+      <div>
+        <span>底部插槽示例：当前共 {{ uiHistory.length }} 条消息</span>
+      </div>
+    </template>
+  </ChatPanel>
+</template>
+```
+
+这两个插槽当前对外暴露的上下文为：
+
+- `uiHistory`：当前 UI 历史消息列表
+- `showWelcomeScreen`：是否正在显示欢迎页
+- `isStreaming`：是否正在流式输出
+
+### 自定义欢迎区插槽
+
+`ChatPanel、SuspendedBallChat` 还支持通过 `#welcome` 自定义欢迎区内容。一旦传入该插槽，就会覆盖默认欢迎内容，不再渲染组件内置的头像、标题、描述和默认任务布局。
+
+```vue
+<template>
+  <ChatPanel
+    :url="apiUrl"
+    :app-name="appName"
+    :domain-name="domainName"
+    :welcome-config="welcomeConfig"
+    :preset-tasks="presetTasks"
+  >
+    <template #welcome="{ title, welcomeConfig, presetTasks, onTaskClick }">
+      <div>
+        <h2>{{ welcomeConfig?.title || title }}</h2>
+        <p>{{ welcomeConfig?.description }}</p>
+
+        <button
+          v-for="task in presetTasks"
+          :key="task.id"
+          @click="onTaskClick(task)"
+        >
+          {{ task.title }}
+        </button>
+      </div>
+    </template>
+  </ChatPanel>
+</template>
+```
+
+该插槽当前对外暴露的上下文为：
+
+- `welcomeConfig`：欢迎区配置对象
+- `presetTasks`：预设任务列表
+- `onTaskClick`：触发预设任务点击的函数
+
 ## 📋 API 参考
 
 ### SuspendedBallChat Props
