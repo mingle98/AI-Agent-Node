@@ -1,6 +1,9 @@
 # AISuspendedBallChat(AI助手组件)
 
 一个功能强大的AI聊天Vue3组件，支持流式响应、图片上传、语音播报、历史记录管理等功能。该AI组件可以作为悬浮球或独立面板使用。
+
+**⚠️使用场景注意**: <u>当前是Vue3专用组件版本,如果您的业务是其他技术栈(例如React、Vue2、原生应用等),请使用 [ai-chat-embed 版本→](https://www.npmjs.com/package/ai-chat-embed)。</u>
+
 ![Snipaste_2025-08-31_19-48-18.png](https://luckycola.com.cn/public/imgs/luckycola_Imghub_forever_8sbgSs4M17686524429047868.jpeg)
 
 **《组件落地场景体验1-AI简历助手》**: [点击直达案例1🔗](https://luckycola.com.cn/public/resume/?t=123456789#/resume)
