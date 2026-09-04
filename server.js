@@ -364,7 +364,7 @@ app.post("/api/chat", chatInfoCheckMiddleware, async (req, res, next) => {
           data: {
             id: curthinkID,
             status: 'done',
-            title: '深度思考过程',
+            title: '深度思考已完成',
             content: thinkAllContent,
           },
         };
@@ -429,7 +429,7 @@ app.post("/api/chat", chatInfoCheckMiddleware, async (req, res, next) => {
                       data: {
                         id: thinkID,
                         status: 'running',
-                        title: '正在深度思考',
+                        title: '正在深度思考中',
                         content: thinkAllContent,
                       },
                     }
@@ -440,7 +440,7 @@ app.post("/api/chat", chatInfoCheckMiddleware, async (req, res, next) => {
                       data: {
                         id: thinkID,
                         status: 'running',
-                        title: '正在深度思考',
+                        title: '正在深度思考中',
                         content: thinkAllContent,
                       },
                     };
