@@ -13,9 +13,7 @@ import { selectTaskMode, chatWithPlanExec } from "./planExecMode.js";
 import { getToolDivBox, formatToolDisplayName } from "../utils/streamRenderer.js";
 import { LongTermMemory, LTM_INJECT_START, LTM_INJECT_END } from "./longTermMemory.js";
 import { selectActiveCapabilities, expandCapabilitiesToAll, searchCapabilities } from "./capabilityRouter.js";
-
-global.toolId = 1000;
-global.thinkId = 2000;
+import { nextToolId, nextThinkId } from "../utils/componentId.js";
 
 const SEARCH_TOOLS_NAME = "search_tools";
 
@@ -1259,8 +1257,7 @@ export class ProductionAgent {
 
           this.ensureRequestActive(session, requestState, sessionId);
 
-          global.thinkId += 1;
-          const currentThinkId = global.thinkId;
+          const currentThinkId = nextThinkId();
           const { message: aiResponse, streamedText } = await this.invokeLLMWithResilience(
             session,
             session.messages,
@@ -1350,7 +1347,7 @@ export class ProductionAgent {
             const isInternalToolCall = toolCall?.name === SEARCH_TOOLS_NAME;
 
             // 为本次工具调用分配唯一 ID
-            const currentToolId = streamEnabled && !isInternalToolCall ? ++global.toolId : null;
+            const currentToolId = streamEnabled && !isInternalToolCall ? nextToolId() : null;
 
             if (currentToolId !== null) {
               const toolDisplayName = formatToolDisplayName(toolCall.name);

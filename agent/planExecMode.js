@@ -5,6 +5,7 @@ import { SystemMessage, HumanMessage, ToolMessage } from "@langchain/core/messag
 
 import { getPlanPhaseDivBox, getPlanStepDivBox, getToolDivBox, formatToolDisplayName } from "../utils/streamRenderer.js";
 import { AbortError } from "./ProductionAgent.js";
+import { nextToolId, nextThinkId } from "../utils/componentId.js";
 
 const INTERNAL_TOOL_NAMES = new Set(["search_tools"]);
 
@@ -238,8 +239,7 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
 
     agent.ensureRequestActive(session, requestState, session.id);
 
-    global.thinkId += 1;
-    const currentThinkId = global.thinkId;
+    const currentThinkId = nextThinkId();
     const { message: aiResponse } = await agent.invokeLLMWithResilience(
       session,
       session.messages,
@@ -282,7 +282,7 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
       const isInternalToolCall = INTERNAL_TOOL_NAMES.has(toolCall?.name);
 
       // 为本次工具调用分配唯一 ID
-      const currentToolId = streamEnabled && !isInternalToolCall ? ++global.toolId : null;
+      const currentToolId = streamEnabled && !isInternalToolCall ? nextToolId() : null;
 
       if (currentToolId !== null) {
         const toolDisplayName = formatToolDisplayName(toolCall.name);

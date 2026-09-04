@@ -3,6 +3,7 @@ import test, { before, after } from "node:test";
 
 import { AIMessage } from "@langchain/core/messages";
 import { ProductionAgent } from "../agent/ProductionAgent.js";
+import { nextToolId, nextThinkId } from "../utils/componentId.js";
 
 const __ORIGINAL_CONSOLE__ = {
   log: console.log,
@@ -73,6 +74,43 @@ function createAgentWithMockLLM(mockLlm, options = {}) {
     ...options,
   });
 }
+
+test("component ID counters: should wrap at the configured numeric limit", () => {
+  const originalToolId = global.toolId;
+  const originalThinkId = global.thinkId;
+
+  try {
+    global.toolId = 999999999;
+    global.thinkId = 999999999;
+
+    assert.equal(nextToolId(), 1000);
+    assert.equal(nextThinkId(), 2000);
+
+    global.toolId = 1001;
+    global.thinkId = 2001;
+    assert.equal(nextToolId(), 1002);
+    assert.equal(nextThinkId(), 2002);
+  } finally {
+    global.toolId = originalToolId;
+    global.thinkId = originalThinkId;
+  }
+});
+
+test("component ID counters: should recover from invalid global values", () => {
+  const originalToolId = global.toolId;
+  const originalThinkId = global.thinkId;
+
+  try {
+    global.toolId = "invalid";
+    global.thinkId = Number.NaN;
+
+    assert.equal(nextToolId(), 1001);
+    assert.equal(nextThinkId(), 2001);
+  } finally {
+    global.toolId = originalToolId;
+    global.thinkId = originalThinkId;
+  }
+});
 
 // ============ Test Cases for Deep Thinking (Reasoning) Mode ============
 
