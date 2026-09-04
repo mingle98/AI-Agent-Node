@@ -107,7 +107,7 @@ export default function Page() {
 }
 ```
 
-> 前提：页面已通过 `<script src=\"https://unpkg.com/ai-chat-embed/dist/ai-chat-embed.min.js\"></script>` 加载 SDK。
+> 前提：页面已通过 `<script src="https://unpkg.com/ai-chat-embed/dist/ai-chat-embed.min.js"></script>` 加载 SDK。
 
 ### 原生 HTML
 
@@ -219,6 +219,95 @@ const chat = await AIChatEmbed.init({
 });
 ```
 
+### 插槽自定义
+
+`ai-chat-embed` 支持将底层组件的插槽通过 `slots` 配置传入。可用插槽为 `more`、`welcome`、`chat-box-head` 和 `chat-box-footer`。插槽值可以是 HTML 字符串、DOM 节点，或接收 slot 参数并返回 HTML 字符串的函数。
+
+#### 默认悬浮球模式（`ball`）
+
+`mode` 默认值是 `"ball"`。悬浮球和展开后的聊天面板默认挂载到 `#ai-chat-embed-root`，因此可以在 `document` 上做事件委托，再通过容器 id 限定作用范围。
+
+```html
+<script>
+  // 不能把 @click / v-on:click 写进 HTML 字符串，它们不会被 Vue 编译。
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+
+    const actionElement = target.closest(
+      '#ai-chat-embed-root [data-chat-action]'
+    );
+    if (!actionElement) return;
+
+    if (actionElement.dataset.chatAction === "human") {
+      console.log("悬浮球模式：用户点击了转人工服务");
+      // 在这里调用你的业务逻辑，例如打开人工客服窗口。
+    }
+  });
+
+  const chat = await AIChatEmbed.init({
+    // mode 可省略，默认就是 "ball"
+    slots: {
+      "chat-box-footer": `
+        <button type="button" data-chat-action="human">
+          转人工服务
+        </button>
+      `
+    }
+  });
+</script>
+```
+
+#### 内嵌面板模式（`panel`）
+
+`panel` 模式下，插槽内容位于 `mountTo` 指定的容器内，可以直接在该容器上绑定事件。
+
+```html
+<div id="chat-panel"></div>
+<script>
+  const chatPanel = document.querySelector("#chat-panel");
+
+  chatPanel.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+
+    const actionElement = target.closest("[data-chat-action]");
+    if (!actionElement) return;
+
+    if (actionElement.dataset.chatAction === "human") {
+      console.log("面板模式：用户点击了转人工服务");
+      // 在这里调用你的业务逻辑，例如打开人工客服窗口。
+    }
+  });
+
+  const chat = await AIChatEmbed.init({
+    mode: "panel",
+    mountTo: chatPanel,
+    slots: {
+      welcome: ({ title }) => `
+        <section class="my-welcome">
+          <strong>${title}</strong>
+          <p>欢迎咨询，请选择一个问题开始。</p>
+        </section>
+      `,
+      "chat-box-head": ({ uiHistory }) =>
+        `<div class="my-chat-head">已发送 ${uiHistory.length} 条消息</div>`,
+      "chat-box-footer": `
+        <button type="button" data-chat-action="human">
+          转人工服务
+        </button>
+      `,
+      more: '<a href="/help">帮助中心</a>'
+    }
+  });
+</script>
+```
+
+函数 slot 的参数由底层组件提供：`welcome` 包含 `title`、`welcomeConfig`、`presetTasks`、`onTaskClick`；`chat-box-head` 和 `chat-box-footer` 包含 `uiHistory`、`showWelcomeScreen`、`isStreaming`；`more` 的参数取决于底层版本。传入 `welcome` 后会覆盖默认欢迎内容。HTML 会被转换为 Vue VNode，建议只传入可信内容；需要绑定交互时，可按上面的方式在稳定的外层容器上进行事件委托。
+
+> 具体支持哪些插槽和配置能力，请查看 [ai-suspended-ball-chat](https://www.npmjs.com/package/ai-suspended-ball-chat) 原生组件文档。
+
+
 ### `chat.update(options)`
 
 通过实例动态更新组件配置（如切换标题、接口地址等），无需重新挂载。
@@ -270,8 +359,11 @@ chat.destroy();
 | `onEmbedLoading` | function | - | 封装层资源加载状态回调：`(loading, meta)` |
 | `onEmbedReady` | function | - | 封装层初始化完成回调：`(meta)` |
 | `onEmbedError` | function | - | 封装层初始化失败回调：`(error, meta)` |
+| `slots` | object | - | 插槽配置：支持 `more`、`welcome`、`chat-box-head`、`chat-box-footer`等，值可以是 HTML 字符串、DOM 节点或渲染函数 |
 
 > 其余所有配置（`url`、`appName`、`domainName`、`title`、`callbacks`、`enableStreaming` 等）会直接透传给底层 `SuspendedBallChat` 组件。完整配置参考原包文档：[ai-suspended-ball-chat](https://www.npmjs.com/package/ai-suspended-ball-chat)
+
+_⚠️值得注意点是:在这个组件中使用`ai-suspended-ball-chat`支持的配置时需要使用**驼峰**的写法,例如:domainName(而不是写domain-name)._
 
 ## 五、适用场景
 
@@ -286,8 +378,8 @@ chat.destroy();
 
 ## 七、chatLibUrl版本
 - 正式版本: https://unpkg.com/ai-suspended-ball-chat@latest/dist/suspended-ball-chat.umd.js
-- alpha版本: https://unpkg.com/ai-suspended-ball-chat@0.3.61-alpha.1/dist/suspended-ball-chat.umd.js
-- beta版本: https://unpkg.com/ai-suspended-ball-chat@0.3.61-beta.1/dist/suspended-ball-chat.umd.js
+- alpha版本: https://unpkg.com/ai-suspended-ball-chat@alpha/dist/suspended-ball-chat.umd.js
+- beta版本: https://unpkg.com/ai-suspended-ball-chat@beta/dist/suspended-ball-chat.umd.js
 
 ### Q: 不同版本功能上是否有差异?
 

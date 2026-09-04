@@ -577,6 +577,9 @@ Access-Control-Allow-Origin: *
 | `sl-card-group`　　 | ShoelaceCardGroup　　 | `id?`、`items: {imageUrl?, videoUrl?, title?, description?, jumpLink?}[]`　　　　　　　　　　　　　　| 基于 Shoelace 的横向媒体卡片组（图片/视频自适应宽度，支持点击跳转）。　　 |
 | `select-list-card`　| SelectListCard　　　　| `id?`、`title?`、`multiple?`、`confirmText?`、`options: {label, value, disabled?}[]`　　　　　　　　 | 可选择列表项组件（支持单选/多选），点击确认后会派发全局事件供业务层消费。 |
 | `input-form-card`　 | InputFormCard　　　　 | `id?`、`title?`、`placeholder?`、`submitText?`、`required?`、`requiredMessage?`、`clearAfterSubmit?` | 输入表单组件，支持必填校验，提交后会派发全局事件供业务层消费。　　　　　　|
+| `sources-card`　　 | SourcesCard　　　　　| `id?`、`title?`、`defaultExpanded?`、`items: {title?, url?, icon?}[]`　　　　　　　　　　　　　　 | 来源列表组件，默认折叠/展开来源条目，支持文本链接跳转，适合知识库来源、引用来源等场景。 |
+| `thinking-card`　　 | ThinkingCard　　　　 | `id?`、`title?`、`status?`（`running`/`done`）、`content?`　　　　　　　　　　　　　　　 | 思考过程组件。流式过程中显示 loading 且不可展开，完成后显示完成图标并支持展开/收起。　　 |
+| `tool-call`　　　　 | ToolCallCard　　　　 | `id?`、`name?`、`status?`（`running`/`done`）、`content?`、`icon?`　　　　　　　　　　　　 | 工具调用组件。流式过程中不可展开，完成后支持查看工具调用结果。　　　　　　　　　　　 |
 | 持续增加中...　　　 | 持续增加中..　　　　　| 持续增加中..　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 | 持续增加中...　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 |
 
 **如果你不了解shoelace组件库的功能可以前往官网体验**: [shoelace组件官网:https://shoelace.style](https://shoelace.style/)
@@ -769,6 +772,124 @@ Access-Control-Allow-Origin: *
   }
 },
 
+// sources-card 组件的数据块示例
+{
+  "code": 0,
+  "result": "[[~12]]", // 固定格式,其中的数字可以更改
+  "type": "custom-component",// 固定值,不可更改
+  "props": {
+    "type": "sources-card",// 组件类型
+    "data": {
+      "id": "12",
+      "title": "Used 3 sources",
+      "defaultExpanded": false,
+      "items": [
+        {
+          "title": "Data source from twitter",
+          "url": "https://x.ant.design/components/overview",
+          "icon": "📧"
+        },
+        {
+          "title": "Data source from youtube",
+          "url": "https://x.ant.design/components/overview",
+          "icon": "https://cdn.simpleicons.org/youtube/FF0000"
+        },
+        {
+          "title": "Data source from github",
+          "url": "https://x.ant.design/components/overview",
+          "icon": "⏰"
+        }
+      ]
+    }
+  }
+},
+
+// tool-call 组件的数据块示例
+{
+  "code": 0,
+  "result": "[[~100]]", // 首次创建时使用占位符
+  "type": "custom-component",
+  "props": {
+    "type": "tool-call",
+    "data": {
+      "id": "100",
+      "name": "daily_news",
+      "status": "running",
+      "content": "正在调用 daily_news 接口..."
+    }
+  }
+},
+
+// tool-call 组件完成后原位更新
+{
+  "code": 0,
+  "result": "", // 更新事件不要再次携带占位符
+  "type": "custom-component",
+  "props": {
+    "type": "tool-call",
+    "update": true,
+    "ccIndex": "100",
+    "data": {
+      "id": "100",
+      "name": "daily_news",
+      "status": "done",
+      "content": "调用成功，取回 5 条热点"
+    }
+  }
+},
+
+// thinking-card 组件的数据块示例
+{
+  "code": 0,
+  "result": "[[~90]]", // 首次创建时使用占位符
+  "type": "custom-component",
+  "props": {
+    "type": "thinking-card",
+    "data": {
+      "id": "90",
+      "title": "深度思考中",
+      "status": "running",
+      "content": ""
+    }
+  }
+},
+
+// thinking-card 组件流式更新思考内容
+{
+  "code": 0,
+  "result": "", // 更新事件使用 ccIndex 指定原组件
+  "type": "custom-component",
+  "props": {
+    "type": "thinking-card",
+    "update": true,
+    "ccIndex": "90",
+    "data": {
+      "id": "90",
+      "title": "深度思考中",
+      "status": "running",
+      "content": "正在分析用户问题..."
+    }
+  }
+},
+
+// thinking-card 组件完成更新
+{
+  "code": 0,
+  "result": "",
+  "type": "custom-component",
+  "props": {
+    "type": "thinking-card",
+    "update": true,
+    "ccIndex": "90",
+    "data": {
+      "id": "90",
+      "title": "深度思考过程",
+      "status": "done",
+      "content": "已完成问题分析。"
+    }
+  }
+},
+
 ``` 
 
 #### 📣 业务层如何接收 SelectListCard / InputFormCard 的提交结果
@@ -838,6 +959,19 @@ window.addEventListener('cc-input-form-submit', (e) => {
 ```javascript
 // node后端流式响应示例
 let mockDataArr = [
+  // 思考过程（组件协议）：[[~90]] 占位符渲染 thinking-card，内容和状态通过 update+ccIndex 原位更新
+  { "code": 0, "result": "[[~90]]", "type": "custom-component",
+    "props": { "type": "thinking-card", "data": { "id": "90", "status": "running", "title": "深度思考中", "content": "" } } },
+  { "code": 0, "result": "", "type": "custom-component",
+    "props": { "type": "thinking-card", "update": true, "ccIndex": "90", "data": { "id": "90", "status": "running", "title": "深度思考中", "content": "好的，因为用户输入太简短，无法确定具体需求。" } } },
+  { "code": 0, "result": "", "type": "custom-component",
+    "props": { "type": "thinking-card", "update": true, "ccIndex": "90", "data": { "id": "90", "status": "done", "title": "深度思考过程", "content": "好的，因为用户输入太简短，无法确定具体需求。直接回复请求更多信息即可。" } } },
+  // 工具调用（新协议）：[[~100]] 占位符渲染 tool-call 组件，running→done 通过 update+ccIndex 同位更新
+  { "code": 0, "result": "[[~100]]", "type": "custom-component",
+    "props": { "type": "tool-call", "data": { "id": "100", "name": "daily_news", "status": "running", "content": "正在调用 daily_news 接口...\n参数: { date: \"2026-09-04\" }" } } },
+  { "code": 0, "result": "", "type": "custom-component",
+    "props": { "type": "tool-call", "update": true, "ccIndex": "100", "data": { "id": "100", "name": "daily_news", "status": "done", "content": "调用成功，取回 5 条热点:\n1. 习近平出席2026年上合组织峰会\n2. 9月3日纪念抗战胜利81周年\n3. 《医疗保障法》将于2027年1月1日施行\n4. 前7月规模以上工业企业利润同比增长17.6%\n5. 国家为13周岁女孩免费补种HPV疫苗" } } },
+  // 正式内容
   {"code": 0, "result": "# Vue.js特点介绍\n\n", "is_end": false},
   {"code": 0, "result": "## 1. 渐进式框架\n", "is_end": false},
   {"code": 0, "result": "Vue.js采用渐进式设计，", "is_end": false},
@@ -991,9 +1125,9 @@ mockDataArr.forEach((data, index) => {
 }
 ```
 
-## 🔌 使用官方提供的AI接口
+## 🔌 使用官方免费提供的AI接口
 
-**如果你不希望自己去实现这个接口,您也可以选择官方提供的API接口**
+**如果你不希望自己去实现这个接口,您也可以选择官方免费提供的API接口**
 
 接口文档:[https://luckycola.com.cn/public/docs/shares/sdk/ai-assistant.html](https://luckycola.com.cn/public/docs/shares/sdk/ai-assistant.html)
 
@@ -1014,7 +1148,9 @@ mockDataArr.forEach((data, index) => {
       // 自定义的系统提示词
       systemPrompt: '你是一位精通各种编程语言的高级工程师,可以帮我用户解答各种编程问题.',
       // 官网(luckycola.com.cn)[用户中心]获取的AppKey
-      appKey: '643d*********a'
+      appKey: '643d*********a',
+      // 接口是否使用普通请求模式(非流式)
+      jsonMode: false,
     },
     requestParamProcessor: (baseParams, customParams) => {
       // ...
@@ -1754,7 +1890,7 @@ A: 如果需要支持解析mermaid语法请提前在你的项目中引入资源:
 
 ### Q: 组件是否支持“深度思考模式”？
 
-A: beta版本已支持“**独立协议的深度思考模式**”,如需使用请下载beta版本.主版本中将不支持“**独立协议的深度思考模式**”,但是你仍然可以通过后端流式响应的“思考过程内容”通过包裹`<details><summary >思考过程</summary>思考的内容</details>`这种方式间接实现“深度思考模式”的功能,下面附上实现的关键代码.
+A: beta版本已支持“**独立协议的深度思考模式**”,如需使用请下载beta版本.主版本中将不支持“**独立协议的深度思考模式**”,但是你仍然可以通过后端流式响应的“思考过程内容”通过包裹`<details><summary >思考过程</summary>思考的内容</details>`这种方式间接实现“深度思考模式”的功能(也可以使用自定义组件中的thinking-card组件实现),下面附上实现的关键代码.
 
 ```js
 export function escapeHtml(input) {
@@ -1783,9 +1919,9 @@ export function wrapThinkingClose() {
 
 A: 是的,当前有三个版本: 正式版、beta版本、alpha版本。他们的差异如下:
 
-- **正式版**: 稳定版,功能最新且齐全,但此版本不支持“**独立协议的深度思考模式**”,但是你可以通过后端将“思考内容”用`<details><summary >`包裹间接实现这个功能.
+- **正式版**: 稳定版,功能最新且齐全,但此版本不支持“**独立协议的深度思考模式**”,但是你可以通过后端将“思考内容”用`<details><summary >`包裹间接实现这个功能(也可以使用自定义组件中的thinking-card组件实现).
   
-- **beta版本**: 这是一个差异版本,对齐正式版90%的功能,支持“**独立协议的深度思考模式**”,但是此版本不支持“渲染自定义组件”等功能。
+- **beta版本**: 这是一个差异版本,对齐正式版90%的功能,支持“**独立协议的深度思考模式**”,但是此版本不支持“渲染自定义组件”等功能,具体参考 [beta版本文档🔗](https://www.npmjs.com/package/ai-suspended-ball-chat/v/0.3.68-beta.1)
   
 - **alpha版本**: 这是一个实验版本, 对齐正式版100%的功能, 唯一的差异是此版本已经将“对话列表虚拟化”了以提升性能,此版本和主版本一样不支持“**独立协议的深度思考模式**”, 可能存在一些未知Bug,谨慎使用.
 

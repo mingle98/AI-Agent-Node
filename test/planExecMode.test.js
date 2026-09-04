@@ -653,8 +653,51 @@ test("ProductionAgent: plan_exec mode emits stream events", async () => {
   );
   
   assert.ok(events.length > 0, "Should emit events");
-  const hasStatusOrDone = events.some(e => e.type === "status" || e.type === "done");
-  assert.ok(hasStatusOrDone, "Should have status or done events");
+  assert.ok(events.some((event) => event.type === "status-plan"), "Should emit plan lifecycle events");
+  assert.ok(events.some((event) => event.type === "done"), "Should emit a final done event");
+});
+
+test("ProductionAgent: plan_exec tool status events should share an ID across lifecycle", async () => {
+  const planResponse = new AIMessage({
+    content: JSON.stringify({
+      task_summary: "Tool protocol test",
+      estimated_steps: 1,
+      steps: [{ step_id: 1, description: "Use a tool", depends_on: [], expected_output: "done" }],
+      final_goal: "Complete",
+    }),
+  });
+  const toolResponse = new AIMessage({ content: "" });
+  toolResponse.tool_calls = [{
+    name: "render_mermaid",
+    id: "plan-tool-protocol",
+    args: { arg1: "flowchart", arg2: "A-->B" },
+  }];
+  const finalResponse = new AIMessage({ content: "tool done" });
+  const llm = new MockLLM([
+    { message: planResponse },
+    { message: toolResponse },
+    { message: finalResponse },
+  ]);
+  const agent = createAgentWithMockLLM(llm, {
+    taskMode: "plan_exec",
+    streamEnabled: true,
+    maxStepIterations: 2,
+  });
+
+  const events = [];
+  await agent.chat("tool protocol", (event) => {
+    if (event) events.push(event);
+  }, null, "plan-tool-protocol-test", {
+    taskMode: "plan_exec",
+    streamEnabled: true,
+  });
+
+  const toolEvents = events.filter((event) => event.type === "status" && event.content?.name === "render_mermaid");
+  assert.equal(toolEvents.length, 2);
+  assert.equal(toolEvents[0].content.status, "running");
+  assert.equal(toolEvents[1].content.status, "done");
+  assert.equal(toolEvents[0].content.id, toolEvents[1].content.id);
+  assert.match(toolEvents[1].content.result, /mermaid|graph/i);
 });
 
 test("ProductionAgent: auto mode switches based on complexity", async () => {

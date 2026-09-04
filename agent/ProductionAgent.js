@@ -14,6 +14,9 @@ import { getToolDivBox, formatToolDisplayName } from "../utils/streamRenderer.js
 import { LongTermMemory, LTM_INJECT_START, LTM_INJECT_END } from "./longTermMemory.js";
 import { selectActiveCapabilities, expandCapabilitiesToAll, searchCapabilities } from "./capabilityRouter.js";
 
+global.toolId = 1000;
+global.thinkId = 2000;
+
 const SEARCH_TOOLS_NAME = "search_tools";
 
 const KNOWLEDGE_CONTEXT_PREFIX = "【本轮知识库上下文】";
@@ -1256,6 +1259,8 @@ export class ProductionAgent {
 
           this.ensureRequestActive(session, requestState, sessionId);
 
+          global.thinkId += 1;
+          const currentThinkId = global.thinkId;
           const { message: aiResponse, streamedText } = await this.invokeLLMWithResilience(
             session,
             session.messages,
@@ -1266,7 +1271,12 @@ export class ProductionAgent {
                 ? (chunk) => {
                   if (this.isRequestAborted(session, requestState)) return;
                   if (chunk?.reasoning) {
-                    emitStreamEvent(chunkCallback, { type: "reasoning", content: chunk.reasoning });
+                    // emitStreamEvent(chunkCallback, { type: "reasoning", content: chunk.reasoning });
+                    emitStreamEvent(chunkCallback, { type: "reasoning", content: {
+                      id: currentThinkId,
+                      status: "running",
+                      result: chunk.reasoning,
+                    } });
                   }
                   if (chunk?.content) {
                     emitStreamEvent(chunkCallback, { type: "chunk", content: chunk.content });
@@ -1339,14 +1349,23 @@ export class ProductionAgent {
 
             const isInternalToolCall = toolCall?.name === SEARCH_TOOLS_NAME;
 
-            if (streamEnabled && !isInternalToolCall) {
+            // 为本次工具调用分配唯一 ID
+            const currentToolId = streamEnabled && !isInternalToolCall ? ++global.toolId : null;
+
+            if (currentToolId !== null) {
               const toolDisplayName = formatToolDisplayName(toolCall.name);
               emitStreamEvent(chunkCallback, {
                 type: "status",
-                content: getToolDivBox({
-                  text: `执行「${toolDisplayName}」工具`,
+                // content: getToolDivBox({
+                //   text: `执行「${toolDisplayName}」工具`,
+                //   status: "running",
+                // }),
+                content: {
+                  id: currentToolId,
+                  name: toolDisplayName,
                   status: "running",
-                }),
+                  result: "",
+                }
               });
             }
             const callable = this.callableDefinitions.get(toolCall.name);
@@ -1375,14 +1394,20 @@ export class ProductionAgent {
             }
             console.log(`【TOOL】执行 ${toolCall.name}结果:${JSON.stringify(result)}`)
             const content = formatToolResultForModel(result);
-            if (streamEnabled && !isInternalToolCall) {
+            if (currentToolId !== null) {
               const toolDisplayName = formatToolDisplayName(toolCall.name);
               emitStreamEvent(chunkCallback, {
                 type: "status",
-                content: getToolDivBox({
-                  text: `工具「${toolDisplayName}」完成`,
-                  status: "success",
-                }, 'end'),
+                // content: getToolDivBox({
+                //   text: `工具「${toolDisplayName}」完成`,
+                //   status: "success",
+                // }, 'end'),
+                content: {
+                  id: currentToolId,
+                  name: toolDisplayName,
+                  status: "done",
+                  result: content,
+                }
               });
             }
             session.messages.push(new ToolMessage({

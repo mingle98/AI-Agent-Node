@@ -374,6 +374,79 @@ test("ProductionAgent.chat: reasoning and content can appear in same chunk", asy
   assert.ok(reasoningEvents.length > 0 || chunkEvents.length > 0, "should handle mixed chunks");
 });
 
+test("ProductionAgent.chat: reasoning events should use thinking-card protocol fields", async () => {
+  const chunk = new AIMessage({
+    content: "Final answer",
+    additional_kwargs: {
+      __raw_response: {
+        choices: [{ delta: { reasoning_content: "Step 1..." } }],
+      },
+    },
+  });
+
+  const thinkingLlm = new MockLLMWithReasoning([{ chunks: [chunk] }]);
+  const agent = new ProductionAgent(new MockLLMWithReasoning([]), null, null, {
+    debug: false,
+    thinkingLlm,
+    maxIterations: 3,
+    contextStrategy: "trim",
+  });
+
+  const events = [];
+  await agent.chat(
+    "test",
+    (e) => events.push(e),
+    null,
+    "reasoning-protocol-test",
+    { streamEnabled: true, enableThinking: true }
+  );
+
+  const reasoningEvent = events.find((event) => event.type === "reasoning");
+  assert.ok(reasoningEvent, "should emit a reasoning event");
+  assert.equal(typeof reasoningEvent.content, "object");
+  assert.equal(typeof reasoningEvent.content.id, "number");
+  assert.equal(reasoningEvent.content.status, "running");
+  assert.equal(reasoningEvent.content.result, "Step 1...");
+});
+
+test("ProductionAgent.chat: reasoning events should allocate different IDs for separate requests", async () => {
+  const makeThinkingLlm = () => new MockLLMWithReasoning([{
+    chunks: [new AIMessage({
+      content: "answer",
+      additional_kwargs: {
+        __raw_response: {
+          choices: [{ delta: { reasoning_content: "thinking" } }],
+        },
+      },
+    })],
+  }]);
+
+  const agent = new ProductionAgent(new MockLLMWithReasoning([]), null, null, {
+    debug: false,
+    thinkingLlm: makeThinkingLlm(),
+    maxIterations: 3,
+    contextStrategy: "trim",
+  });
+
+  const firstEvents = [];
+  await agent.chat("first", (event) => firstEvents.push(event), null, "reasoning-id-first", {
+    streamEnabled: true,
+    enableThinking: true,
+  });
+
+  agent.thinkingLlm = makeThinkingLlm();
+  const secondEvents = [];
+  await agent.chat("second", (event) => secondEvents.push(event), null, "reasoning-id-second", {
+    streamEnabled: true,
+    enableThinking: true,
+  });
+
+  const firstReasoning = firstEvents.find((event) => event.type === "reasoning");
+  const secondReasoning = secondEvents.find((event) => event.type === "reasoning");
+  assert.ok(firstReasoning && secondReasoning);
+  assert.notEqual(firstReasoning.content.id, secondReasoning.content.id);
+});
+
 test("ProductionAgent.chat: multiple reasoning chunks should all be emitted", async () => {
   // For stability, validate that at least one reasoning event is emitted when reasoning_content exists.
   // (True multi-chunk concat behavior is exercised by langchain internals and can vary across versions.)

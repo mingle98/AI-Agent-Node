@@ -341,8 +341,36 @@ app.post("/api/chat", chatInfoCheckMiddleware, async (req, res, next) => {
     let pending = Promise.resolve();
     // 是否正在思考中
     let isThinking = false;
+    let curthinkID = 0;
+    let curPrethinkID = -1;
+    let thinkAllContent = '';
+
+    const resetAllThinkStatus = () => {
+      isThinking = false;
+      curthinkID = 0;
+      curPrethinkID = -1;
+      thinkAllContent = '';
+    };
 
     try {
+      const finishEndFn = () => {
+        if (!isThinking) {
+          return;
+        }
+        const endthinkChunk = {
+          type: 'thinking-card',
+          update: true,
+          ccIndex: curthinkID,
+          data: {
+            id: curthinkID,
+            status: 'done',
+            title: '深度思考过程',
+            content: thinkAllContent,
+          },
+        };
+        sendChunk({ code: 0, result: '', type: 'custom-component', props: endthinkChunk });
+        resetAllThinkStatus();
+      };
       const finalResponse = await agent.chat(
         userMessages,
         (chunk, toolExcResult) => {
@@ -362,19 +390,13 @@ app.post("/api/chat", chatInfoCheckMiddleware, async (req, res, next) => {
                 return;
               }
               if (chunk.type === "done") {
-                if (isThinking) {
-                  sendChunk({ code: 0, result: wrapThinkingClose(), is_end: false });
-                  isThinking = false;
-                }
+                finishEndFn();
                 await renderCustomComponents(toolExcResults, sendChunk, { sleepMs: 1000 });
                 emitTerminalEvent({ code: 0, result: chunk.content || "" });
                 return;
               }
               if (chunk.type === "error") {
-                if (isThinking) {
-                  sendChunk({ code: 0, result: wrapThinkingClose(), is_end: false });
-                  isThinking = false;
-                }
+                finishEndFn();
                 emitTerminalEvent({
                   code: 1,
                   result: chunk.message || "未知错误",
@@ -386,15 +408,84 @@ app.post("/api/chat", chatInfoCheckMiddleware, async (req, res, next) => {
                   if (!isThinking) {
                     console.log('=========思考内容=======');
                     isThinking = true;
-                    sendChunk({ code: 0, result: wrapThinkingOpen(), is_end: false });
+                    // sendChunk({ code: 0, result: wrapThinkingOpen(), is_end: false });
                   }
-                  sendChunk({ code: 0, result: escapeHtml(chunk.content), is_end: false });
+                  // sendChunk({ code: 0, result: escapeHtml(chunk.content), is_end: false });
+
+                  // { code: 0, result: "[[~90]]", type: "custom-component",
+                  //   props: { type: 'thinking-card', data: { id: '90', status: 'running', title: '深度思考中', content: '' } } },
+                  // { code: 0, result: "", type: "custom-component",
+                  //   props: { type: 'thinking-card', update: true, ccIndex: '90', data: { id: '90', status: 'running', title: '深度思考中', content: '好的，因为用户输入太简短，无法确定具体需求。' } } },
+                  // { code: 0, result: "", type: "custom-component",
+                  //   props: { type: 'thinking-card', update: true, ccIndex: '90', data: { id: '90', status: 'done', title: '深度思考过程', content: '好的，因为用户输入太简短，无法确定具体需求。直接回复请求更多信息即可。' } } },
+
+                  const thinkID = curthinkID = chunk?.content?.id || "20000";
+                  const isNewThinkingCard = curPrethinkID !== thinkID;
+                  curPrethinkID = thinkID;
+                  thinkAllContent += chunk?.content?.result || '';
+                  const thinkChunk = isNewThinkingCard
+                    ? {
+                      type: 'thinking-card',
+                      data: {
+                        id: thinkID,
+                        status: 'running',
+                        title: '正在深度思考',
+                        content: thinkAllContent,
+                      },
+                    }
+                    : {
+                      type: 'thinking-card',
+                      update: true,
+                      ccIndex: thinkID,
+                      data: {
+                        id: thinkID,
+                        status: 'running',
+                        title: '正在深度思考',
+                        content: thinkAllContent,
+                      },
+                    };
+                  sendChunk({
+                    code: 0,
+                    result: isNewThinkingCard ? `[[~${thinkID}]]` : '',
+                    type: "custom-component",
+                    props: thinkChunk,
+                  });
+                } else if (chunk.type === 'status') {
+                  // 结束思考
+                  finishEndFn();
+                  // 处理状态消息
+    //               { code: 0, result: "[[~100]]", type: "custom-component",
+    // props: { type: 'tool-call', data: { id: '100', name: 'daily_news', status: 'running', content: '正在调用 daily_news 接口...\n参数: { date: "2026-09-04" }' } } },
+  // { code: 0, result: "", type: "custom-component",
+  //   props: { type: 'tool-call', update: true, ccIndex: '100', data: { id: '100', name: 'daily_news', status: 'done', content: '调用成功，取回 5 条热点:\n1. 习近平出席2026年上合组织峰会\n2. 9月3日纪念抗战胜利81周年\n3. 《医疗保障法》将于2027年1月1日施行\n4. 前7月规模以上工业企业利润同比增长17.6%\n5. 国家为13周岁女孩免费补种HPV疫苗' } } },
+
+                  let toolID = chunk?.content?.id || "100000";
+                  let toolChunk = { type: 'tool-call', data: { id: toolID, name: chunk?.content?.name, status: 'running', content: chunk?.content?.result } };
+                  let resultPlaceholder = `[[~${toolID}]]`;  // 首次创建时插入占位符
+                  
+                  if (chunk?.content?.status === 'done') {
+                    // console.log('=========工具调用完成=======, chunk?.content', JSON.stringify(chunk?.content));
+                    // 截断过长的 content，避免 JSON 解析失败
+                    const maxContentLength = 500;
+                    const originalContent = chunk?.content?.result || '';
+                    const truncatedContent = originalContent.length > maxContentLength 
+                      ? originalContent.substring(0, maxContentLength) + '...\n[结果过多已省略]' 
+                      : originalContent;
+                    
+                    toolChunk = { type: 'tool-call', update: true, ccIndex: toolID, data: { id: toolID, name: chunk?.content?.name, status: 'done', content: truncatedContent } };
+                    resultPlaceholder = "";  // 更新时不再插入占位符，避免重复渲染
+                  }
+                  // console.log('=========工具调用状态=======, chunk?.content', JSON.stringify(chunk?.content));
+                  sendChunk({ code: 0, result: resultPlaceholder, type: "custom-component", props: toolChunk });
                 } else {
-                  if (isThinking) {
-                    console.log('=========🤔 思考模式-正式内容=======');
-                    sendChunk({ code: 0, result: wrapThinkingClose(), is_end: false });
-                  }
-                  isThinking = false;
+                  // if (isThinking) {
+                  //   console.log('=========🤔 思考模式-正式内容=======');
+                  //   sendChunk({ code: 0, result: wrapThinkingClose(), is_end: false });
+                  // }
+                  // isThinking = false;
+
+                  // 结束思考
+                  finishEndFn();
                   sendChunk({ code: 0, result: chunk.content, is_end: false });
                 }
               }
@@ -413,17 +504,11 @@ app.post("/api/chat", chatInfoCheckMiddleware, async (req, res, next) => {
       await pending;
       // 兼容旧行为：如果底层没有发 done 事件，兜底补发一次
       if (!hasSentEnd) {
-        if (isThinking) {
-          sendChunk({ code: 0, result: wrapThinkingClose(), is_end: false });
-          isThinking = false;
-        }
+        finishEndFn();
         emitTerminalEvent({ code: 0, result: '' });
       }
     } catch (error) {
-      if (isThinking) {
-        sendChunk({ code: 0, result: wrapThinkingClose(), is_end: false });
-        isThinking = false;
-      }
+      finishEndFn();
       const isAbortError = error instanceof AbortError;
       emitTerminalEvent({
         code: 1,

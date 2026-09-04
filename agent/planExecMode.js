@@ -163,7 +163,7 @@ async function generatePlan(agent, userInput, session, chunkCallback, streamEnab
 
   if (streamEnabled) {
     emitStreamEvent(chunkCallback, {
-      type: "status",
+      type: "status-plan",
       content: getPlanPhaseDivBox('📋 【PLAN】正在分析任务并生成执行计划', 'start')
     });
   }
@@ -186,7 +186,7 @@ async function generatePlan(agent, userInput, session, chunkCallback, streamEnab
 
     if (streamEnabled) {
       emitStreamEvent(chunkCallback, {
-        type: "status",
+        type: "status-plan",
         content: getPlanPhaseDivBox(`✅ 【PLAN】计划生成完成，共 ${plan.steps.length} 个步骤`, 'end')
       });
     }
@@ -196,7 +196,7 @@ async function generatePlan(agent, userInput, session, chunkCallback, streamEnab
     console.error(`❌ [Plan+Exec] 计划生成失败: ${error.message}`);
     if (streamEnabled) {
       emitStreamEvent(chunkCallback, {
-        type: "status",
+        type: "status-plan",
         content: getPlanPhaseDivBox(`⚠️ 【PLAN】计划生成失败，将使用传统模式: ${error.message}`, 'end')
       });
     }
@@ -220,7 +220,7 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
 
   if (streamEnabled) {
     emitStreamEvent(chunkCallback, {
-      type: "status",
+      type: "status-plan",
       content: getPlanStepDivBox(`🔹 【步骤 ${stepId}】${description}`, 'start')
     });
   }
@@ -238,6 +238,8 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
 
     agent.ensureRequestActive(session, requestState, session.id);
 
+    global.thinkId += 1;
+    const currentThinkId = global.thinkId;
     const { message: aiResponse } = await agent.invokeLLMWithResilience(
       session,
       session.messages,
@@ -246,7 +248,12 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
         onChunk: streamEnabled ? (chunk) => {
           if (agent.isRequestAborted(session, requestState)) return;
           if (chunk?.reasoning) {
-            emitStreamEvent(chunkCallback, { type: "reasoning", content: chunk.reasoning });
+            // emitStreamEvent(chunkCallback, { type: "reasoning", content: chunk.reasoning });
+            emitStreamEvent(chunkCallback, { type: "reasoning", content: {
+              id: currentThinkId,
+              status: "running",
+              result: chunk.reasoning,
+            } });
           }
           if (chunk?.content) {
             emitStreamEvent(chunkCallback, { type: "chunk", content: chunk.content });
@@ -274,15 +281,24 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
 
       const isInternalToolCall = INTERNAL_TOOL_NAMES.has(toolCall?.name);
 
-      if (streamEnabled && !isInternalToolCall) {
+      // 为本次工具调用分配唯一 ID
+      const currentToolId = streamEnabled && !isInternalToolCall ? ++global.toolId : null;
+
+      if (currentToolId !== null) {
         const toolDisplayName = formatToolDisplayName(toolCall.name);
         emitStreamEvent(chunkCallback, {
           type: "status",
-          content: getToolDivBox({
-            label: `STEP ${stepId}`,
-            text: `执行「${toolDisplayName}」工具`,
+          // content: getToolDivBox({
+          //   label: `STEP ${stepId}`,
+          //   text: `执行「${toolDisplayName}」工具`,
+          //   status: "running",
+          // })
+          content: {
+            id: currentToolId,
+            name: toolDisplayName,
             status: "running",
-          })
+            result: "",
+          }
         });
       }
 
@@ -315,15 +331,21 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
 
       const content = typeof result === "string" ? result : JSON.stringify(result, null, 2);
 
-      if (streamEnabled && !isInternalToolCall) {
+      if (currentToolId !== null) {
         const toolDisplayName = formatToolDisplayName(toolCall.name);
         emitStreamEvent(chunkCallback, {
           type: "status",
-          content: getToolDivBox({
-            label: `STEP ${stepId}`,
-            text: `工具「${toolDisplayName}」完成`,
-            status: "success",
-          }, 'end')
+          // content: getToolDivBox({
+          //   label: `STEP ${stepId}`,
+          //   text: `工具「${toolDisplayName}」完成`,
+          //   status: "success",
+          // }, 'end')
+          content: {
+            id: currentToolId,
+            name: toolDisplayName,
+            status: "done",
+            result: content,
+          }
         });
       }
 
@@ -337,7 +359,7 @@ async function executePlanStep(agent, session, step, stepContext, chunkCallback,
   console.log(`✅ [Plan+Exec] 步骤 ${stepId} 完成`);
   if (streamEnabled) {
     emitStreamEvent(chunkCallback, {
-      type: "status",
+      type: "status-plan",
       content: getPlanStepDivBox(`✅ 【步骤 ${stepId}】完成`, 'end')
     });
   }
@@ -366,7 +388,7 @@ async function executePlan(agent, plan, session, chunkCallback, streamEnabled, r
 
   if (streamEnabled) {
     emitStreamEvent(chunkCallback, {
-      type: "status",
+      type: "status-plan",
       content: getPlanPhaseDivBox(`🚀 【PLAN】开始执行计划，共 ${steps.length} 个步骤`, 'start')
     });
   }
@@ -413,7 +435,7 @@ async function executePlan(agent, plan, session, chunkCallback, streamEnabled, r
 
   if (streamEnabled) {
     emitStreamEvent(chunkCallback, {
-      type: "status",
+      type: "status-plan",
       content: getPlanPhaseDivBox(`🎉 【PLAN】计划执行完成！`, 'end')
     });
   }

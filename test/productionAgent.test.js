@@ -168,19 +168,34 @@ test("ProductionAgent.setContextStrategy: should change strategy for all session
   assert.equal(agent.options.contextStrategy, "summarize");
 });
 
-test("ProductionAgent.chat: should emit status events for tool calls", async () => {
+test("ProductionAgent.chat: tool status events should carry running and done payloads", async () => {
   const aiTool = new AIMessage({ content: "" });
-  aiTool.tool_calls = [{ name: "render_mermaid", id: "t3", args: { arg1: "flowchart", arg2: "A-->B" } }];
+  aiTool.tool_calls = [{
+    name: "render_mermaid",
+    id: "protocol-tool-1",
+    args: { arg1: "flowchart", arg2: "A-->B" },
+  }];
   const aiFinal = new AIMessage({ content: "done" });
   const llm = new MockLLM([{ chunks: [aiTool] }, { chunks: [aiFinal] }]);
   const agent = createAgentWithMockLLM(llm);
 
   const events = [];
-  await agent.chat("draw diagram", (e) => events.push(e), null, "status-test");
+  await agent.chat("draw diagram", (event) => {
+    if (event) events.push(event);
+  }, null, "tool-protocol-test");
 
-  // Should have chunk, status (tool), status (done) events
-  assert.ok(events.some((e) => e.type === "chunk" || e.type === "status"));
+  const statusEvents = events.filter((event) => event.type === "status");
+  assert.equal(statusEvents.length, 2);
+  const [running, done] = statusEvents;
+  assert.equal(typeof running.content, "object");
+  assert.equal(running.content.status, "running");
+  assert.equal(typeof running.content.id, "number");
+  assert.equal(running.content.name, "render_mermaid");
+  assert.equal(done.content.id, running.content.id);
+  assert.equal(done.content.status, "done");
+  assert.match(done.content.result, /mermaid|graph/i);
 });
+
 
 test("ProductionAgent: should handle multiple sessions", async () => {
   const llm = new MockLLM([
