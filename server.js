@@ -344,6 +344,11 @@ app.post("/api/chat", chatInfoCheckMiddleware, async (req, res, next) => {
     let curthinkID = 0;
     let curPrethinkID = -1;
     let thinkAllContent = '';
+    // 是否正在调用工具
+    let isToolCalling = false;
+    // 本次工具调用的 ID
+    let curToolCallID = -1;
+    let curToolCallName = '';
 
     const resetAllThinkStatus = () => {
       isThinking = false;
@@ -351,6 +356,12 @@ app.post("/api/chat", chatInfoCheckMiddleware, async (req, res, next) => {
       curPrethinkID = -1;
       thinkAllContent = '';
     };
+
+    const resetAllToolCallStatus = () => {
+      isToolCalling = false;
+      curToolCallID = -1;
+      curToolCallName = '';
+    }
 
     try {
       const finishEndFn = () => {
@@ -371,6 +382,14 @@ app.post("/api/chat", chatInfoCheckMiddleware, async (req, res, next) => {
         sendChunk({ code: 0, result: '', type: 'custom-component', props: endthinkChunk });
         resetAllThinkStatus();
       };
+      // 兜底结束工具调用函数
+      const finishToolCall = () => {
+        if (!isToolCalling || curToolCallID === -1 || !curToolCallName) {
+          return;
+        }
+        sendChunk({ code: 0, result: "", type: "custom-component", props: { type: 'tool-call', update: true, ccIndex: curToolCallID, data: { id: curToolCallID, name: curToolCallName, status: 'done', content: "暂无细节" } }});
+        resetAllToolCallStatus();
+      }
       const finalResponse = await agent.chat(
         userMessages,
         (chunk, toolExcResult) => {
@@ -391,12 +410,14 @@ app.post("/api/chat", chatInfoCheckMiddleware, async (req, res, next) => {
               }
               if (chunk.type === "done") {
                 finishEndFn();
+                finishToolCall();
                 await renderCustomComponents(toolExcResults, sendChunk, { sleepMs: 1000 });
                 emitTerminalEvent({ code: 0, result: chunk.content || "" });
                 return;
               }
               if (chunk.type === "error") {
                 finishEndFn();
+                finishToolCall();
                 emitTerminalEvent({
                   code: 1,
                   result: chunk.message || "未知错误",
@@ -405,6 +426,7 @@ app.post("/api/chat", chatInfoCheckMiddleware, async (req, res, next) => {
               }
               if (chunk?.content) {
                 if (chunk.type === "reasoning") {
+                   finishToolCall();
                   if (!isThinking) {
                     console.log('=========思考内容=======');
                     isThinking = true;
@@ -459,9 +481,11 @@ app.post("/api/chat", chatInfoCheckMiddleware, async (req, res, next) => {
   // { code: 0, result: "", type: "custom-component",
   //   props: { type: 'tool-call', update: true, ccIndex: '100', data: { id: '100', name: 'daily_news', status: 'done', content: '调用成功，取回 5 条热点:\n1. 习近平出席2026年上合组织峰会\n2. 9月3日纪念抗战胜利81周年\n3. 《医疗保障法》将于2027年1月1日施行\n4. 前7月规模以上工业企业利润同比增长17.6%\n5. 国家为13周岁女孩免费补种HPV疫苗' } } },
 
-                  let toolID = chunk?.content?.id || "100000";
-                  let toolChunk = { type: 'tool-call', data: { id: toolID, name: chunk?.content?.name, status: 'running', content: chunk?.content?.result } };
+                  let toolID = curToolCallID = chunk?.content?.id || "100000";
+                  let curtoolName = curToolCallName = chunk?.content?.name || "拓展工具";
+                  let toolChunk = { type: 'tool-call', data: { id: toolID, name: curtoolName, status: 'running', content: chunk?.content?.result } };
                   let resultPlaceholder = `[[~${toolID}]]`;  // 首次创建时插入占位符
+                  isToolCalling = true;
                   
                   if (chunk?.content?.status === 'done') {
                     // console.log('=========工具调用完成=======, chunk?.content', JSON.stringify(chunk?.content));
@@ -472,8 +496,9 @@ app.post("/api/chat", chatInfoCheckMiddleware, async (req, res, next) => {
                       ? originalContent.substring(0, maxContentLength) + '...\n[结果过多已省略]' 
                       : originalContent;
                     
-                    toolChunk = { type: 'tool-call', update: true, ccIndex: toolID, data: { id: toolID, name: chunk?.content?.name, status: 'done', content: truncatedContent } };
+                    toolChunk = { type: 'tool-call', update: true, ccIndex: toolID, data: { id: toolID, name: curtoolName, status: 'done', content: truncatedContent } };
                     resultPlaceholder = "";  // 更新时不再插入占位符，避免重复渲染
+                    resetAllToolCallStatus();
                   }
                   // console.log('=========工具调用状态=======, chunk?.content', JSON.stringify(chunk?.content));
                   sendChunk({ code: 0, result: resultPlaceholder, type: "custom-component", props: toolChunk });
@@ -486,6 +511,7 @@ app.post("/api/chat", chatInfoCheckMiddleware, async (req, res, next) => {
 
                   // 结束思考
                   finishEndFn();
+                  finishToolCall();
                   sendChunk({ code: 0, result: chunk.content, is_end: false });
                 }
               }
@@ -505,10 +531,12 @@ app.post("/api/chat", chatInfoCheckMiddleware, async (req, res, next) => {
       // 兼容旧行为：如果底层没有发 done 事件，兜底补发一次
       if (!hasSentEnd) {
         finishEndFn();
+        finishToolCall();
         emitTerminalEvent({ code: 0, result: '' });
       }
     } catch (error) {
       finishEndFn();
+      finishToolCall();
       const isAbortError = error instanceof AbortError;
       emitTerminalEvent({
         code: 1,
